@@ -1,0 +1,232 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Core Agents class for CXAS Scrapi."""
+
+from typing import Dict, Any, Optional, List, Union
+import uuid
+import json
+import requests
+from google.protobuf import field_mask_pb2
+from google.protobuf import json_format
+from google.cloud.ces_v1beta import AgentServiceClient, types
+from cxas_scrapi.core.common import Common
+from cxas_scrapi.core.workflows import WorkflowAgent
+
+class Agents(Common):
+    def __init__(self, app_id: str, env: str = "PROD"):
+        """Initializes the Agents client.
+        
+        Args:
+            app_id: CXAS App ID (projects/{project}/locations/{location}/apps/{app}).
+            env: Environment override (default: PROD).
+        """
+        # Pass app_id to Common for client_options determination
+        super().__init__(agent_id=app_id)
+        
+        self.app_id = app_id
+        
+        # Parse project and location from app_id
+        try:
+            # Expected format: projects/{project}/locations/{location}/apps/{app}
+            parts = app_id.split("/")
+            if len(parts) >= 4 and parts[0] == "projects" and parts[2] == "locations":
+                self.project_id = parts[1]
+                self.location = parts[3]
+            else:
+                 # Attempt simple parsing or default
+                 self.project_id = None
+                 self.location = None
+        except Exception:
+            self.project_id = None
+            self.location = None
+        
+        # Initialize SDK Client
+        self.client = AgentServiceClient(   
+            credentials=self.creds,
+            client_options=self.client_options
+        )
+        self.resource_type = "agents"
+
+    def list_agents(self, app_id: Optional[str] = None) -> List[types.Agent]:
+        """Lists agents within a specific app.
+        
+        Args:
+            app_id: Parent App ID. Defaults to self.app_id.
+        """
+        app_id = app_id or self.app_id
+        if not app_id:
+            raise ValueError("app_id is required.")
+            
+        request = types.ListAgentsRequest(parent=app_id)
+        response = self.client.list_agents(request=request)
+        return list(response.agents)
+
+    def get_agents_map(self, app_id: Optional[str] = None, reverse: bool = False) -> Dict[str, str]:
+        """Creates a map of Agent full names to display names.
+        
+        Args:
+            app_id: Parent App ID. Defaults to self.app_id.
+            reverse: If True, map display_name -> name.
+        """
+        app_id = app_id or self.app_id
+        # list_agents check will handle empty app_id check, but good to be safe if reusing logic
+        
+        agents = self.list_agents(app_id)
+        agents_dict: Dict[str, str] = {}
+
+        for agent in agents:
+            display_name = agent.display_name
+            name = agent.name
+            if display_name and name:
+                if reverse:
+                    agents_dict[display_name] = name
+                else:
+                    agents_dict[name] = display_name
+        return agents_dict
+
+    def get_agent(self, agent_id: str) -> types.Agent:
+        """Gets a specific agent."""
+        request = types.GetAgentRequest(name=agent_id)
+        return self.client.get_agent(request=request)
+
+    def create_agent(
+        self, 
+        display_name: str,
+        app_id: Optional[str] = None, 
+        agent_type: str = "llm", # llm, dfcx, workflow
+        model: Optional[str] = "gemini-pro",
+        instruction: Optional[str] = None,
+        timeout: Optional[float] = None,
+        dfcx_agent_resource: Optional[str] = None,
+        workflow_config: Union[Dict[str, Any], WorkflowAgent, None] = None,
+        **kwargs: Any
+    ) -> types.Agent:
+        """Creates a new agent of the specified type.
+        
+        Args:
+            display_name: Human readable name.
+            app_id: Parent App ID. Defaults to self.app_id if initialized.
+            agent_type: One of 'llm', 'dfcx', 'workflow'.
+            model: (LLM) Model name to use.
+            instruction: (LLM) System instruction.
+            timeout: (LLM) Timeout (not standard field yet? ignoring for now or mapping to model_settings).
+            dfcx_agent_resource: (DFCX) Full resource name of DFCX agent.
+            workflow_config: (Workflow) Dict config or WorkflowAgent object.
+            **kwargs: Additional fields for types.Agent.
+        """
+        # Resolve App ID
+        app_id = app_id or self.app_id
+        if not app_id:
+            raise ValueError("app_id is required (passed to create_agent or set in Agents init).")
+
+        agent_data = {
+            "display_name": display_name,
+            **kwargs
+        }
+
+        if agent_type == "llm":
+            # Construct LLM Agent
+            # Note: based on inspection, LLMAgent field key is likely 'llm_agent'
+            # and 'instruction' / 'model_settings' are top level on Agent (based on inspection output).
+            # Agent fields: [..., 'llm_agent', ..., 'model_settings', 'instruction', ...]
+            
+            if instruction:
+                agent_data["instruction"] = instruction
+            
+            # If model is provided, check where it goes. 
+            # Usually model_settings = {'model': '...'}
+            if model:
+                # Assuming top-level model_settings
+                agent_data["model_settings"] = types.ModelSettings(model=model)
+            
+            # Explicitly set llm_agent to indicate this is an LLM Agent
+            agent_data["llm_agent"] = types.Agent.LlmAgent()
+
+        elif agent_type == "dfcx":
+            if not dfcx_agent_resource:
+                raise ValueError("dfcx_agent_resource is required for DFCX agents.")
+            
+            agent_data["remote_dialogflow_agent"] = types.Agent.RemoteDialogflowAgent(
+                agent=dfcx_agent_resource
+            )
+
+        elif agent_type == "workflow":
+            if workflow_config:
+                if isinstance(workflow_config, WorkflowAgent):
+                    agent_data["workflow_agent"] = workflow_config.to_dict()
+                else:
+                    agent_data["workflow_agent"] = workflow_config
+            else:
+                # Maybe empty workflow?
+                agent_data["workflow_agent"] = {}
+
+        else:
+            raise ValueError(f"Unknown agent_type: {agent_type}")
+
+        if agent_type == "workflow":
+            # REST Fallback for Workflow Agents to bypass local proto descriptor check
+            # internal "workflow_agent" field might be missing in local descriptors
+             
+            # Construct URL
+            # Endpoint from self.client.transport.host works but standard is usually ces.googleapis.com
+            # We can use Common logic or just standard "https://ces.googleapis.com"
+            api_endpoint = "https://ces.googleapis.com"
+            url = f"{api_endpoint}/v1beta/{app_id}/agents"
+            
+            # Refresh token just in case
+            if self.creds.expired:
+                from google.auth.transport.requests import Request as GoogleAuthRequest
+                self.creds.refresh(GoogleAuthRequest())
+
+            headers = {
+                "Authorization": f"Bearer {self.creds.token}",
+                "Content-Type": "application/json",
+                "x-goog-user-project": self.project_id or "" # Best effort
+            }
+            
+            response = requests.post(url, headers=headers, json=agent_data)
+            
+            if response.status_code != 200:
+                raise RuntimeError(f"Failed to create workflow agent via REST: {response.text}")
+            
+            # Convert response JSON back to Agent object
+            # We use ignore_unknown_fields=True just in case response contains workflow_agent
+            # and we still can't parse it into the local object, but at least we return a valid base object.
+            return json_format.ParseDict(response.json(), types.Agent(), ignore_unknown_fields=True)
+
+        request = types.CreateAgentRequest(parent=app_id, agent=agent_data)
+        return self.client.create_agent(request=request)
+
+    def update_agent(self, agent_id: str, **kwargs: Any) -> types.Agent:
+        """Updates specific fields using PATCH behavior."""
+        if not kwargs:
+            return self.get_agent(agent_id)
+
+        # Construct Agent object with only updated fields (for the body)
+        agent_data = kwargs.copy()
+        agent_data["name"] = agent_id
+
+        # Update Mask
+        paths = list(kwargs.keys())
+        mask = field_mask_pb2.FieldMask(paths=paths)
+
+        request = types.UpdateAgentRequest(agent=agent_data, update_mask=mask)
+        return self.client.update_agent(request=request)
+
+    def delete_agent(self, agent_id: str):
+        """Deletes an agent."""
+        request = types.DeleteAgentRequest(name=agent_id)
+        self.client.delete_agent(request=request)
+

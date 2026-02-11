@@ -1,0 +1,8 @@
+pytest
+pytest-asyncio
+black
+flake8
+requests
+google-cloud-secret-manager
+google-genai
+pylint
