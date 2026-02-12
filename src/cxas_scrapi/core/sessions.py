@@ -48,18 +48,80 @@ class Sessions(Common):
 
         return {"mime_type": mime_type, "data": raw_bytes}
 
-    @staticmethod
-    def render_output(res: Any):
-        """process the results and print the output"""
+    def parse_result(self, res: Any):
+        """
+        Parses the CX Agent Studio session response to extract and print
+        turn-by-turn interactions including User Queries, Agent Responses,
+        Tool Calls, Tool Results, and Agent Transfers.
+        Requires Jupyter Notebook or IPython environment for HTML rendering.
+        """
+        try:
+            from IPython.display import display, HTML
+        except ImportError:
+            print("parse_result requires IPython.display.HTML. Please run this in a Jupyter/Colab environment.")
+            return
+
+        tool_call_font = "<font color='darkred'><b>TOOL CALL:</b></font>"
+        tool_res_font = "<font color='goldenrod'><b>TOOL RESULT:</b></font>"
+        query_font = "<font color='darkgreen'><b>USER QUERY:</b></font>"
+        response_font = "<font color='purple'><b>AGENT RESPONSE:</b></font>"
+        transfer_font = "<font color='darkorange'><b>AGENT TRANSFER:</b></font>"
+
         outputs = getattr(res, "outputs", [])
-        if outputs:
-            for turn in outputs:
-                text = getattr(turn, "text", None)
+        if not outputs:
+            return
+
+        for output in outputs:
+            diagnostic_info = getattr(output, "diagnostic_info", None)
+            
+            # If diagnostic_info is available, use it for a rich turn-by-turn trace
+            if diagnostic_info and hasattr(diagnostic_info, "messages"):
+                messages = getattr(diagnostic_info, "messages", [])
+                for message in messages:
+                    role = getattr(message, "role", "")
+                    chunks = getattr(message, "chunks", [])
+                    
+                    for chunk in chunks:
+                        # Depending on the generated class, WhichOneof is available on the internal _pb message
+                        chunk_type = chunk._pb.WhichOneof("data") if hasattr(chunk, "_pb") else None
+                        
+                        if chunk_type == "text":
+                            if role.lower() == "user":
+                                display(HTML(f"{query_font} {chunk.text}"))
+                            else:
+                                display(HTML(f"{response_font} [{role}] {chunk.text}"))
+                                
+                        elif chunk_type == "tool_call":
+                            tc = chunk.tool_call
+                            tool_name = tc.tool or tc.display_name
+                            display(HTML(f"{tool_call_font} [{role}] {tool_name} -- Args: {tc.args}"))
+                            
+                        elif chunk_type == "tool_response":
+                            tr = chunk.tool_response
+                            tool_name = tr.tool or tr.display_name
+                            display(HTML(f"{tool_res_font} [{role}] {tool_name} -- Result: {tr.response}"))
+                            
+                        elif chunk_type == "agent_transfer":
+                            at = chunk.agent_transfer
+                            display(HTML(f"{transfer_font} [{role}] Transferred to {at.display_name}"))
+                            
+                        elif chunk_type == "payload":
+                            display(HTML(f"<font color='brown'><b>CUSTOM PAYLOAD:</b></font> [{role}] {chunk.payload}"))
+
+            else:
+                # Fallback to high-level outputs if no diagnostic trace is available
+                text = getattr(output, "text", None)
                 if text:
-                    print(f"AGENT: {text}")
-                payload = getattr(turn, "payload", None)
+                    display(HTML(f"{response_font} {text}"))
+                payload = getattr(output, "payload", None)
                 if payload:
-                    print(f"CUSTOM PAYLOAD: {payload}")
+                    display(HTML(f"<font color='brown'><b>CUSTOM PAYLOAD:</b></font> {payload}"))
+                
+                tool_calls_msg = getattr(output, "tool_calls", None)
+                if tool_calls_msg and hasattr(tool_calls_msg, "tool_calls"):
+                    for tc in tool_calls_msg.tool_calls:
+                         tool_name = tc.tool or tc.display_name
+                         display(HTML(f"{tool_call_font} {tool_name} -- Args: {tc.args}"))
 
     def session_id_setup(self, session_id: str, restart_session: bool) -> str:
         """Manage the setup of new or existing session IDs."""

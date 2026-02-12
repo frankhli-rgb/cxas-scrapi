@@ -1,7 +1,10 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from cxas_scrapi.core.sessions import Sessions
+from google.cloud.ces_v1beta import types
 import os
+import sys
+import IPython.display
 
 @patch("cxas_scrapi.core.sessions.SessionServiceClient")
 def test_sessions_init(mock_client_cls):
@@ -89,3 +92,58 @@ def test_session_id_setup(mock_client_cls):
     s3 = sessions.session_id_setup("uid_123", restart_session=False)
     assert s3 == "projects/p/locations/l/apps/a/sessions/uid_123"
 
+
+@patch("cxas_scrapi.core.sessions.SessionServiceClient")
+def test_parse_result_with_diagnostic_info(mock_client_cls):
+    """Test parse_result with a full diagnostic trace ensures no crash."""
+    mock_display = MagicMock()
+    mock_html = MagicMock(side_effect=lambda x: x)
+    sys.modules['IPython'] = MagicMock()
+    sys.modules['IPython.display'] = MagicMock(display=mock_display, HTML=mock_html)
+    
+    session = Sessions(app_id="projects/p/locations/l/apps/a")
+    
+    response = types.RunSessionResponse(outputs=[
+        {
+            "diagnostic_info": {
+                "messages": [
+                    {"role": "user", "chunks": [{"text": "Hello user"}]},
+                    {"role": "agent", "chunks": [
+                        {"text": "Hi back"},
+                        {"tool_call": {"tool": "my_tool", "args": {"k": "v"}}}
+                    ]}
+                ]
+            }
+        }
+    ])
+    
+    session.parse_result(response)
+    
+    # Cleanup
+    del sys.modules['IPython']
+    del sys.modules['IPython.display']
+
+@patch("cxas_scrapi.core.sessions.SessionServiceClient")
+def test_parse_result_fallback(mock_client_cls):
+    """Test parse_result without diagnostic info but with basic and tool responses ensures no crash."""
+    mock_display = MagicMock()
+    mock_html = MagicMock(side_effect=lambda x: x)
+    sys.modules['IPython'] = MagicMock()
+    sys.modules['IPython.display'] = MagicMock(display=mock_display, HTML=mock_html)
+    
+    session = Sessions(app_id="projects/p/locations/l/apps/a")
+    
+    response = types.RunSessionResponse(outputs=[
+        {
+            "text": "Fallback text",
+            "tool_calls": {
+                "tool_calls": [{"tool": "basic_tool", "args": {"foo": "bar"}}]
+            }
+        }
+    ])
+    
+    session.parse_result(response)
+    
+    # Cleanup
+    del sys.modules['IPython']
+    del sys.modules['IPython.display']
