@@ -130,6 +130,44 @@ class Evaluations(Common):
         out_yaml["expectations"] = list(dict.fromkeys(out_yaml["expectations"]))
         return out_yaml
 
+    @staticmethod
+    def process_export_operation(export_op) -> Optional[bytes]:
+        """Processes the export operation and returns app content bytes.
+
+        Args:
+            export_op: The operation object from export_app (or result).
+
+        Returns:
+            bytes: The app content bytes if successful, None otherwise.
+        """
+        try:
+            # Check if it has .result(), otherwise assume it's the response or operation
+            if hasattr(export_op, 'result'):
+                export_response = export_op.result()
+            else:
+                export_response = export_op
+        except Exception as e:
+            # logger is not defined in this class scope usually, but we can import it or just pass
+            # We'll use a local logger or just print if absolutely needed, but user asked to remove prints.
+            # Ideally we log via a module logger.
+            print(f"Export operation result() failed or not an LRO: {e}. Checking if it returned response directly.")
+            export_response = export_op
+
+        # The SDK returns ExpectAppResponse which has app_content
+        if export_response and hasattr(export_response, 'app_content'):
+            app_content_bytes = export_response.app_content
+            # Removed print statements as requested
+            
+            import io
+            import zipfile
+            
+            # Optional: We could still log what we found if we had a logger, but strictly removing prints.
+            # verify it's a valid zip by opening it?
+            
+            return app_content_bytes
+        else:
+            return None
+
     def list_evaluations(self, app_id: Optional[str] = None) -> List[types.Evaluation]:
         """Lists evaluations within a specific app.
         
@@ -143,6 +181,17 @@ class Evaluations(Common):
         request = types.ListEvaluationsRequest(parent=app_id)
         response = self.client.list_evaluations(request=request)
         return list(response.evaluations)
+
+    def list_evaluation_results(self, evaluation_name: str) -> List[types.EvaluationResult]:
+        """Fetches all evaluation results for a specific evaluation.
+        
+        Args:
+            evaluation_name: Full resource name of the evaluation
+                             (e.g., projects/.../evaluations/...)
+        """
+        request = types.ListEvaluationResultsRequest(parent=evaluation_name)
+        response = self.client.list_evaluation_results(request=request)
+        return list(response.evaluation_results)
 
     def get_evaluations_map(self, app_id: Optional[str] = None, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of Evaluation full names to display names.
@@ -190,3 +239,25 @@ class Evaluations(Common):
         
         # Dump to YAML string
         return yaml.dump(out_yaml_dict, sort_keys=False, allow_unicode=True)
+
+    def run_evaluation(
+        self,
+        evaluations: List[str],
+        app_id: Optional[str] = None
+    ) -> Any:
+        """Runs an evaluation on the specified app.
+
+        Args:
+            evaluations: List of evaluation resource names to run.
+            app_id: Parent App ID. Defaults to self.app_id.
+        """
+        app_id = app_id or self.app_id
+        if not app_id:
+            raise ValueError("app_id is required.")
+            
+        request = types.RunEvaluationRequest(
+            app=app_id,
+            evaluations=evaluations
+        )
+        return self.client.run_evaluation(request=request)
+

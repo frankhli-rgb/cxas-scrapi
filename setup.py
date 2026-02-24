@@ -50,8 +50,10 @@ setup(
     install_requires=[
         'google-cloud-ces', 
         'google-auth',
-        'requests', # Used by google-auth transport often, and maybe common.py utils if extended
+        'requests',
         'protobuf',
         'google-cloud-secret-manager',
+        'pydantic',
+        'jsonpath-ng',
     ]
 )

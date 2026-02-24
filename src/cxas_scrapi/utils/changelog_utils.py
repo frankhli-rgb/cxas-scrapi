@@ -3,9 +3,9 @@ import json
 import datetime
 from typing import Dict, List, Any
 
-# Assuming google.generativeai is available in the environment if the user uses this
+# Assuming google.genai is available in the environment if the user uses this
 try:
-    import google.generativeai as genai
+    from google import genai
 except ImportError:
     pass
 

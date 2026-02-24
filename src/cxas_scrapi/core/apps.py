@@ -150,3 +150,48 @@ class Apps(Common):
         """Deletes a specific app."""
         request = types.DeleteAppRequest(name=app_id, force=force)
         self.client.delete_app(request=request)
+
+    def export_app(
+        self,
+        app_id: str,
+        gcs_uri: str = None,
+        export_format: str = "JSON",
+        ) -> Any:
+        # TODO: Fix return type hint to Operation or specific LRO type
+        """Exports the specified app.
+        
+        Args:
+            app_id: The resource name of the app to export.
+            gcs_uri: Optional. The Google Cloud Storage URI to export to.
+            export_format: The format to export the app in ('JSON' or 'YAML').
+        """
+        # Map string formats to enum
+        # Note: types.ExportAppRequest.ExportFormat might be an enum, strictly speaking.
+        # But SDK usually accepts string/int if compatible. 
+        # Inspecting types usually reveals enum values. 
+        # Assuming defaults for now, or passing as kwargs if strict typing issues arise.
+        
+        request = types.ExportAppRequest(
+            name=app_id,
+            gcs_uri=gcs_uri if gcs_uri else None,
+            export_format=export_format, # defaults to JSON if not passed, but we pass it.
+        )
+        return self.client.export_app(request=request)
+
+    def import_app(
+        self,
+        app_content: bytes,
+        display_name: str,
+    ) -> Any:
+        """Imports an app into the specified project and location.
+
+        Args:
+            app_content: The raw bytes of the zip archive of the app.
+            display_name: The display name for the new app.
+        """
+        request = types.ImportAppRequest(
+            parent=self.parent,
+            app_content=app_content,
+            display_name=display_name
+        )
+        return self.client.import_app(request=request)

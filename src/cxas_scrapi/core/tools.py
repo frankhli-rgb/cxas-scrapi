@@ -14,11 +14,14 @@
 
 """Core Tools class for CXAS Scrapi."""
 
-from typing import Dict, List, Any
-from google.cloud.ces_v1beta import types
-from google.protobuf import field_mask_pb2
+from typing import Dict, List, Any, Optional
+from google.protobuf import struct_pb2, json_format, field_mask_pb2
+from google.cloud.ces_v1beta import types, ToolServiceClient, AgentServiceClient
+from google.protobuf.json_format import MessageToDict
 
 from cxas_scrapi.core.apps import Apps
+from cxas_scrapi.core.variables import Variables
+
 
 class Tools(Apps):
     """Core Class for managing Tool and Toolset Resources."""
@@ -42,6 +45,22 @@ class Tools(Apps):
             scope=scope,
         )
         self.resource_type = "tools"
+        self.client = AgentServiceClient(
+            credentials=self.creds,
+            client_options=self.client_options
+        )
+        self.tool_client = ToolServiceClient(
+            credentials=self.creds,
+            client_options=self.client_options
+        )
+        self.var_client = Variables(
+            project_id=project_id,
+            location=location,
+            creds_path=creds_path,
+            creds_dict=creds_dict,
+            creds=creds,
+            scope=scope,
+        )
 
     def _is_toolset(self, tool_id: str) -> bool:
         """Helper to determine if a full resource name refers to a Toolset."""
@@ -168,3 +187,98 @@ class Tools(Apps):
         else:
             request = types.DeleteToolRequest(name=tool_id)
             self.client.delete_tool(request=request)
+
+    def execute_tool(
+        self,
+        app_id: str,
+        tool_display_name: str,
+        args: Dict[str, Any],
+        variables: Optional[Any] = None # Accepts Dict, List[str], or None
+    ) -> Any:
+        """Executes a tool directly via the CES API.
+        
+        Args:
+            app_id: The full App resource name (e.g. projects/.../apps/...).
+            tool_display_name: The display name of the tool (or toolset key).
+            args: Dictionary of arguments for the tool.
+            variables: Can be:
+                - None: Fetches and passes ALL variables from the app.
+                - List[str]: Fetches variables from the app and filters by this list of names.
+                - Dict[str, Any]: Uses the provided dictionary directly (e.g. from Evals).
+            
+        Returns:
+            The tool execution response (JSON or Object).
+        """
+        # Use HTTP REST request instead of SDK because the current SDK version 
+        # is missing the 'variables' field in ExecuteToolRequest proto
+        import requests
+        
+        url = f"https://ces.googleapis.com/v1beta/{app_id}:executeTool"
+        
+        headers = {
+            "Authorization": f"Bearer {self.creds.token}",
+            "Content-Type": "application/json",
+            "x-goog-user-project": self.project_id
+        }
+        
+        payload = {}
+
+        tools_map = self.get_tools_map(app_id, reverse=True)
+        tool_id = tools_map.get(tool_display_name)
+        
+        if "toolsets/" in tool_id:
+            payload["toolsetTool"] = {
+                "toolset": tool_id,
+                "toolId": tool_display_name
+            }
+        else:
+            payload["tool"] = tool_id
+            
+        if args:
+            payload["args"] = args
+
+        # Variables logic
+        final_variables = {}
+
+        if isinstance(variables, dict):
+            final_variables = variables
+
+        elif variables is None or isinstance(variables, list):
+            # Fetch variables from the app and filter by this list of names.
+            raw_app_vars = self.var_client.list_variables(app_id)
+
+            app_vars_cache = {}
+            for var in raw_app_vars:
+                try:
+                    var_dict = MessageToDict(var._pb)
+                except AttributeError:
+                    var_dict = MessageToDict(var)
+
+                schema = var_dict.get("schema", {})
+                actual_data = schema.get("default") or var_dict.get("value") or {}
+                app_vars_cache[var.name] = actual_data
+            
+            if variables is None:
+                final_variables = app_vars_cache
+            else:
+                for var_name in variables:
+                    if var_name in app_vars_cache:
+                        final_variables[var_name] = app_vars_cache[var_name]
+                    else:
+                        print(f"[WARNING] App variable '{var_name}' requested but not found in app.")
+            
+        if final_variables:
+            payload["variables"] = final_variables
+            
+        print(f"[DEBUG_TOOLS] Executing against app_id: {app_id} with request: {payload.get('tool') or payload.get('toolsetTool')} ")
+        
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        
+        resp_dict = response.json()
+        
+        # Make consistent with what the helper script expects
+        # variables might naturally be inside resp_dict from the API now
+        if final_variables:
+            resp_dict["variables"] = final_variables
+        return resp_dict

@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from cxas_scrapi.core.tools import Tools
 
-@patch("cxas_scrapi.core.apps.AgentServiceClient")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
 def test_list_tools(mock_client_cls):
     mock_client = mock_client_cls.return_value
     
@@ -24,7 +24,7 @@ def test_list_tools(mock_client_cls):
     assert res[0].name == "t1"
     assert res[1].name == "ts1"
 
-@patch("cxas_scrapi.core.apps.AgentServiceClient")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
 def test_get_tools_map(mock_client_cls):
     mock_client = mock_client_cls.return_value
     
@@ -49,7 +49,7 @@ def test_get_tools_map(mock_client_cls):
 
 @patch("cxas_scrapi.core.tools.types.GetToolRequest")
 @patch("cxas_scrapi.core.tools.types.GetToolsetRequest")
-@patch("cxas_scrapi.core.apps.AgentServiceClient")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
 def test_get_tool(mock_client_cls, mock_ts_req_cls, mock_t_req_cls):
     mock_client = mock_client_cls.return_value
     
@@ -76,7 +76,7 @@ def test_get_tool(mock_client_cls, mock_ts_req_cls, mock_t_req_cls):
 
 @patch("cxas_scrapi.core.tools.types.Tool")
 @patch("cxas_scrapi.core.tools.types.CreateToolRequest")
-@patch("cxas_scrapi.core.apps.AgentServiceClient")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
 def test_create_tool(mock_client_cls, mock_req_cls, mock_tool_cls):
     mock_client = mock_client_cls.return_value
     
@@ -106,7 +106,7 @@ def test_create_tool(mock_client_cls, mock_req_cls, mock_tool_cls):
 
 @patch("cxas_scrapi.core.tools.types.Toolset")
 @patch("cxas_scrapi.core.tools.types.CreateToolsetRequest")
-@patch("cxas_scrapi.core.apps.AgentServiceClient")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
 def test_create_toolset(mock_client_cls, mock_req_cls, mock_tool_cls):
     mock_client = mock_client_cls.return_value
     
@@ -137,7 +137,7 @@ def test_create_toolset(mock_client_cls, mock_req_cls, mock_tool_cls):
 
 @patch("cxas_scrapi.core.tools.types.Tool")
 @patch("cxas_scrapi.core.tools.types.UpdateToolRequest")
-@patch("cxas_scrapi.core.apps.AgentServiceClient")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
 def test_update_tool(mock_client_cls, mock_req_cls, mock_tool_cls):
     mock_client = mock_client_cls.return_value
     
@@ -158,7 +158,7 @@ def test_update_tool(mock_client_cls, mock_req_cls, mock_tool_cls):
 
 @patch("cxas_scrapi.core.tools.types.Toolset")
 @patch("cxas_scrapi.core.tools.types.UpdateToolsetRequest")
-@patch("cxas_scrapi.core.apps.AgentServiceClient")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
 def test_update_toolset(mock_client_cls, mock_req_cls, mock_ts_cls):
     mock_client = mock_client_cls.return_value
     
@@ -179,7 +179,7 @@ def test_update_toolset(mock_client_cls, mock_req_cls, mock_ts_cls):
 
 @patch("cxas_scrapi.core.tools.types.DeleteToolRequest")
 @patch("cxas_scrapi.core.tools.types.DeleteToolsetRequest")
-@patch("cxas_scrapi.core.apps.AgentServiceClient")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
 def test_delete_tool(mock_client_cls, mock_ts_req_cls, mock_t_req_cls):
     mock_client = mock_client_cls.return_value
     
@@ -201,3 +201,67 @@ def test_delete_tool(mock_client_cls, mock_ts_req_cls, mock_t_req_cls):
     mock_client.delete_toolset.assert_called_once()
     args2 = mock_client.delete_toolset.call_args[1]["request"]
     assert args2.name == "apps/A/toolsets/TS"
+
+@patch("requests.post")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
+def test_execute_tool(mock_client_cls, mock_post):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+        def json(self):
+            return {"result": "fake", "variables": {"var1": "val1"}}
+            
+    mock_post.return_value = FakeResponse()
+    
+    t = Tools("p", "l")
+    t.creds = MagicMock()
+    t.creds.token = "token"
+    
+    res = t.execute_tool(
+        app_id="apps/app1",
+        tool_id="apps/app1/tools/t1",
+        tool_display_name="my_tool",
+        args={"query": "test"},
+        variables={"var1": "val1"}
+    )
+    
+    mock_post.assert_called_once()
+    args, kwargs = mock_post.call_args
+    assert args[0] == "https://ces.googleapis.com/v1beta/apps/app1:executeTool"
+    assert kwargs["json"]["tool"] == "apps/app1/tools/t1"
+    assert kwargs["json"]["args"] == {"query": "test"}
+    assert kwargs["json"]["variables"] == {"var1": "val1"}
+    
+    # Verify response formatting
+    assert res["result"] == "fake"
+    assert res["variables"]["var1"] == "val1"
+
+@patch("requests.post")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
+def test_execute_toolset(mock_client_cls, mock_post):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+        def json(self):
+            return {"result": "fake"}
+            
+    mock_post.return_value = FakeResponse()
+    
+    t = Tools("p", "l")
+    t.creds = MagicMock()
+    t.creds.token = "token"
+    
+    res = t.execute_tool(
+        app_id="apps/app1",
+        tool_id="apps/app1/toolsets/ts1",
+        tool_display_name="my_tool_in_toolset",
+        args={"query": "test"}
+    )
+    
+    mock_post.assert_called_once()
+    args, kwargs = mock_post.call_args
+    assert args[0] == "https://ces.googleapis.com/v1beta/apps/app1:executeTool"
+    assert kwargs["json"]["toolsetTool"]["toolset"] == "apps/app1/toolsets/ts1"
+    assert kwargs["json"]["toolsetTool"]["toolId"] == "my_tool_in_toolset"
+    assert kwargs["json"]["args"] == {"query": "test"}
+    assert "variables" not in res

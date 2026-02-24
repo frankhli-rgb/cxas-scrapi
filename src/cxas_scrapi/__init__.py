@@ -12,6 +12,11 @@ from cxas_scrapi.core.versions import Versions
 from cxas_scrapi.core.changelogs import Changelogs
 from cxas_scrapi.core.callbacks import Callbacks
 
+# Utilities
+from cxas_scrapi.utils.eval_utils import EvalUtils
+from cxas_scrapi.utils.secret_manager_utils import SecretManagerUtils
+from cxas_scrapi.utils.changelog_utils import ChangelogUtils
+
 __all__ = [
     "Common",
     "Apps",
@@ -26,4 +31,7 @@ __all__ = [
     "Versions",
     "Changelogs",
     "Callbacks",
+    "EvalUtils",
+    "SecretManagerUtils",
+    "ChangelogUtils",
 ]
