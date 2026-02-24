@@ -17,7 +17,7 @@
 import logging
 import re
 import yaml
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from google.auth import default
 from google.oauth2 import service_account
 from google.auth.transport.requests import Request
@@ -64,7 +64,7 @@ class Common:
             self.token = self.creds.token
 
         else:
-            self.creds, _ = default()
+            self.creds, _ = default(scopes=self.scopes)
             self.creds.refresh(Request())
             self.token = self.creds.token
 
@@ -263,3 +263,22 @@ class Common:
             new_dict[k] = v
 
         return new_dict
+        
+    @staticmethod
+    def get_agent_text_from_outputs(outputs: List[Any], separator: str = "\n") -> str:
+        """Extracts and concatenates text responses from a list of output objects.
+        
+        Args:
+            outputs: A list of output objects (dict or protobuf) from a Session flow execution.
+            separator: String used to join multiple text responses.
+            
+        Returns:
+            A string containing the concatenated text from all outputs.
+        """
+        agent_texts = []
+        for output in outputs:
+            if hasattr(output, "text") and getattr(output, "text", ""):
+                agent_texts.append(output.text)
+            elif isinstance(output, dict) and "text" in output and output["text"]:
+                agent_texts.append(output["text"])
+        return separator.join(agent_texts)

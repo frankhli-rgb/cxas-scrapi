@@ -55,5 +55,8 @@ setup(
         'google-cloud-secret-manager',
         'pydantic',
         'jsonpath-ng',
+        'pandas',
+        'gspread',
+        'gspread-dataframe',
     ]
 )

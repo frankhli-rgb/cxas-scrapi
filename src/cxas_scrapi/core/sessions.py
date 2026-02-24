@@ -125,13 +125,13 @@ class Sessions(Common):
 
     def session_id_setup(self, session_id: str, restart_session: bool) -> str:
         """Manage the setup of new or existing session IDs."""
-        if restart_session:
+        if session_id:
+            # Honor explicitly provided session IDs
+            session_id = self.create_session_id(unique_id=session_id)
+        elif restart_session or not self.current_session_id:
             session_id = self.create_session_id()
         else:
-            if not session_id and not self.current_session_id:
-                session_id = self.create_session_id()
-            elif session_id:
-                session_id = self.create_session_id(unique_id=session_id)
+            session_id = self.current_session_id
         return session_id
 
     def create_session_id(self, unique_id: str = None):
