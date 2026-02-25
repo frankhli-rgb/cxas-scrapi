@@ -38,7 +38,7 @@ class Common:
         creds_dict: Dict[str, str] = None,
         creds: service_account.Credentials = None,
         scope: List[str] = None,
-        agent_id: str = None, # Optional: used to determine client_options
+        agent_id: str = None,  # Optional: used to determine client_options
     ):
         self.scopes = GLOBAL_SCOPES
         if scope:
@@ -69,11 +69,11 @@ class Common:
             self.token = self.creds.token
 
         self.agent_id = agent_id
-        
+
         # Calculate standard client options if agent_id/resource provided
         self.client_options = None
         if agent_id:
-             self.client_options = self._get_client_options(agent_id)
+            self.client_options = self._get_client_options(agent_id)
 
     @staticmethod
     def _get_client_options(resource_id: str) -> Dict[str, str]:
@@ -83,7 +83,7 @@ class Common:
 
         try:
             # projects/<PROJECT>/locations/<LOCATION>/...
-            # Attempt to find location 
+            # Attempt to find location
             if "locations/" in resource_id:
                 location = resource_id.split("locations/")[1].split("/")[0]
             else:
@@ -92,9 +92,9 @@ class Common:
                 if len(parts) > 3 and parts[2] == "locations":
                     location = parts[3]
                 else:
-                    return {} 
+                    return {}
         except IndexError:
-             return {}
+            return {}
 
         # Using global endpoint mapping for CXAS v1beta
         api_endpoint = "ces.googleapis.com"
@@ -132,16 +132,16 @@ class Common:
     def tokenize(text):
         token_pattern = re.compile(
             r'(?P<STRING>"(?:\\.|[^"\\])*")|'
-            r'(?P<ID>[a-zA-Z_][a-zA-Z0-9_]*)|'
-            r'(?P<NUMBER>-?\d+(?:\.\d+)?)|'
-            r'(?P<LBRACE>\{)|'
-            r'(?P<RBRACE>\})|'
-            r'(?P<COLON>:)|'
-            r'(?P<WHITESPACE>\s+)'
+            r"(?P<ID>[a-zA-Z_][a-zA-Z0-9_]*)|"
+            r"(?P<NUMBER>-?\d+(?:\.\d+)?)|"
+            r"(?P<LBRACE>\{)|"
+            r"(?P<RBRACE>\})|"
+            r"(?P<COLON>:)|"
+            r"(?P<WHITESPACE>\s+)"
         )
         for match in token_pattern.finditer(text):
             kind = match.lastgroup
-            if kind == 'WHITESPACE':
+            if kind == "WHITESPACE":
                 continue
             value = match.group()
             yield kind, value
@@ -150,43 +150,50 @@ class Common:
     def parse(tokens):
         obj = {}
         current_key = None
-        
+
         while True:
             try:
                 kind, value = next(tokens)
             except StopIteration:
                 break
-                
-            if kind == 'RBRACE':
+
+            if kind == "RBRACE":
                 return obj
-                
-            if kind == 'ID':
+
+            if kind == "ID":
                 current_key = value
                 try:
                     next_kind, next_value = next(tokens)
                 except StopIteration:
                     break
-                    
-                if next_kind == 'COLON':
+
+                if next_kind == "COLON":
                     val_kind, val_value = next(tokens)
                     actual_val = None
-                    if val_kind == 'STRING':
-                        actual_val = val_value[1:-1].replace('\\n', '\n').replace('\\"', '"').replace("\\'", "'")
-                    elif val_kind in ('NUMBER', 'ID'):
+                    if val_kind == "STRING":
+                        actual_val = (
+                            val_value[1:-1]
+                            .replace("\\n", "\n")
+                            .replace('\\"', '"')
+                            .replace("\\'", "'")
+                        )
+                    elif val_kind in ("NUMBER", "ID"):
                         actual_val = val_value
-                        if actual_val == 'true': actual_val = True
-                        elif actual_val == 'false': actual_val = False
-                    elif val_kind == 'LBRACE':
+                        if actual_val == "true":
+                            actual_val = True
+                        elif actual_val == "false":
+                            actual_val = False
+                    elif val_kind == "LBRACE":
                         actual_val = Common.parse(tokens)
-                    
+
                     if current_key in obj:
                         if not isinstance(obj[current_key], list):
                             obj[current_key] = [obj[current_key]]
                         obj[current_key].append(actual_val)
                     else:
                         obj[current_key] = actual_val
-                        
-                elif next_kind == 'LBRACE':
+
+                elif next_kind == "LBRACE":
                     child_obj = Common.parse(tokens)
                     if current_key in obj:
                         if not isinstance(obj[current_key], list):
@@ -196,7 +203,7 @@ class Common:
                         obj[current_key] = child_obj
                 else:
                     continue
-                    
+
         return obj
 
     @staticmethod
@@ -208,33 +215,41 @@ class Common:
     def unwrap_value(val):
         if not isinstance(val, dict):
             return val
-            
-        if 'string_value' in val: return str(val['string_value'])
-        if 'number_value' in val: return float(val['number_value']) if '.' in str(val['number_value']) else int(val['number_value'])
-        if 'bool_value' in val: return True if val['bool_value'] in (True, 'true') else False
-        if 'list_value' in val:
-            values = val['list_value'].get('values', [])
-            if not isinstance(values, list): values = [values]
+
+        if "string_value" in val:
+            return str(val["string_value"])
+        if "number_value" in val:
+            return (
+                float(val["number_value"])
+                if "." in str(val["number_value"])
+                else int(val["number_value"])
+            )
+        if "bool_value" in val:
+            return True if val["bool_value"] in (True, "true") else False
+        if "list_value" in val:
+            values = val["list_value"].get("values", [])
+            if not isinstance(values, list):
+                values = [values]
             return [Common.unwrap_value(v) for v in values]
-        if 'struct_value' in val:
-            return Common.unwrap_struct(val['struct_value'])
-            
+        if "struct_value" in val:
+            return Common.unwrap_struct(val["struct_value"])
+
         return val
 
     @staticmethod
     def unwrap_struct(struct):
-        if 'fields' not in struct:
+        if "fields" not in struct:
             return {}
-            
-        fields = struct['fields']
+
+        fields = struct["fields"]
         if not isinstance(fields, list):
             fields = [fields]
-            
+
         res = {}
         for f in fields:
-            if 'key' in f and 'value' in f:
-                res[f['key']] = Common.unwrap_value(f['value'])
-                
+            if "key" in f and "value" in f:
+                res[f["key"]] = Common.unwrap_value(f["value"])
+
         return res
 
     def recurse_proto_repeated_composite(self, repeated_object):
@@ -263,15 +278,15 @@ class Common:
             new_dict[k] = v
 
         return new_dict
-        
+
     @staticmethod
     def get_agent_text_from_outputs(outputs: List[Any], separator: str = "\n") -> str:
         """Extracts and concatenates text responses from a list of output objects.
-        
+
         Args:
             outputs: A list of output objects (dict or protobuf) from a Session flow execution.
             separator: String used to join multiple text responses.
-            
+
         Returns:
             A string containing the concatenated text from all outputs.
         """

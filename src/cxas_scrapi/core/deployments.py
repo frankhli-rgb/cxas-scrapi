@@ -21,12 +21,28 @@ from google.protobuf import field_mask_pb2
 
 from cxas_scrapi.core.apps import Apps
 
+
 class Deployments(Apps):
     """Core Class for managing Deployment Resources."""
 
-    def __init__(self, project_id: str, location: str, creds_path: str = None, creds_dict: Dict[str, str] = None, creds: Any = None, scope: List[str] = None):
+    def __init__(
+        self,
+        project_id: str,
+        location: str,
+        creds_path: str = None,
+        creds_dict: Dict[str, str] = None,
+        creds: Any = None,
+        scope: List[str] = None,
+    ):
         """Initializes the Deployments client."""
-        super().__init__(project_id=project_id, location=location, creds_path=creds_path, creds_dict=creds_dict, creds=creds, scope=scope)
+        super().__init__(
+            project_id=project_id,
+            location=location,
+            creds_path=creds_path,
+            creds_dict=creds_dict,
+            creds=creds,
+            scope=scope,
+        )
         self.resource_type = "deployments"
         self.app_id = None
 
@@ -38,7 +54,7 @@ class Deployments(Apps):
 
     def get_deployments_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of Deployment full names to display names.
-        
+
         Args:
             app_id: Parent App ID.
             reverse: If True, map display_name -> name.
@@ -67,15 +83,14 @@ class Deployments(Apps):
         deployment_id: str,
         display_name: str,
         app_version: str,
-        channel_profile: str = "WEB_AND_MOBILE"
+        channel_profile: str = "WEB_AND_MOBILE",
     ) -> types.Deployment:
         """Creates a new deployment."""
         # channel_profile can also simply not be passed if not mapped in SDK, but assuming string works
         deployment = types.Deployment(
-            display_name=display_name,
-            app_version=app_version
+            display_name=display_name, app_version=app_version
         )
-        
+
         # Optionally set channel profile if we want to be explicit
         if channel_profile:
             deployment.channel_profile.channel_type = getattr(
@@ -83,9 +98,7 @@ class Deployments(Apps):
             )
 
         request = types.CreateDeploymentRequest(
-            parent=app_id,
-            deployment_id=deployment_id,
-            deployment=deployment
+            parent=app_id, deployment_id=deployment_id, deployment=deployment
         )
         return self.client.create_deployment(request=request)
 
@@ -100,7 +113,7 @@ class Deployments(Apps):
 
         request = types.UpdateDeploymentRequest(
             deployment=deployment,
-            update_mask=field_mask_pb2.FieldMask(paths=mask_paths)
+            update_mask=field_mask_pb2.FieldMask(paths=mask_paths),
         )
         return self.client.update_deployment(request=request)
 

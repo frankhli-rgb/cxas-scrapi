@@ -20,6 +20,7 @@ from google.cloud.ces_v1beta import types
 
 from cxas_scrapi.core.apps import Apps
 
+
 class Variables(Apps):
     """Core Class for managing Variables (App Resources)."""
 
@@ -85,7 +86,7 @@ class Variables(Apps):
         self._check_schema_type(variable_type)
         app = self.get_app(app_id)
         vars_list = list(app.variable_declarations)
-        
+
         for var in vars_list:
             if var.name == variable_name:
                 logging.warning(f"Variable '{variable_name}' already exists.")
@@ -93,9 +94,9 @@ class Variables(Apps):
 
         new_var = types.App.VariableDeclaration(
             name=variable_name,
-            schema={"type_": variable_type.upper(), "default": variable_value}
+            schema={"type_": variable_type.upper(), "default": variable_value},
         )
-        
+
         vars_list.append(new_var)
         self.update_app(app_id, variable_declarations=vars_list)
         logging.info(f"Variable '{variable_name}' created successfully.")
@@ -114,19 +115,21 @@ class Variables(Apps):
         self._check_schema_type(variable_type)
         app = self.get_app(app_id)
         vars_list = list(app.variable_declarations)
-        
+
         updated = False
         for i, var in enumerate(vars_list):
             if var.name == variable_name:
-                var.schema.type_ = getattr(types.App.VariableDeclaration.Schema.Type, variable_type.upper())
+                var.schema.type_ = getattr(
+                    types.App.VariableDeclaration.Schema.Type, variable_type.upper()
+                )
                 var.schema.default = variable_value
                 updated = True
                 break
-                
+
         if not updated:
             new_var = types.App.VariableDeclaration(
                 name=variable_name,
-                schema={"type_": variable_type.upper(), "default": variable_value}
+                schema={"type_": variable_type.upper(), "default": variable_value},
             )
             vars_list.append(new_var)
 
@@ -137,10 +140,10 @@ class Variables(Apps):
         """Deletes a specific variable within a specified app."""
         app = self.get_app(app_id)
         vars_list = list(app.variable_declarations)
-        
+
         original_len = len(vars_list)
         vars_list = [v for v in vars_list if v.name != variable_name]
-        
+
         if len(vars_list) < original_len:
             self.update_app(app_id, variable_declarations=vars_list)
             logging.info(f"Variable '{variable_name}' deleted successfully.")

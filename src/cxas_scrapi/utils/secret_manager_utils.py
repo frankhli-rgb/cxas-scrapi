@@ -16,6 +16,7 @@
 
 from google.cloud import secretmanager
 
+
 class SecretManagerUtils:
     """Utility Class for Creating and Retrieving Secret Manager Secrets."""
 
@@ -37,11 +38,11 @@ class SecretManagerUtils:
         """
         parent = f"projects/{self.project_id}"
         full_secret_name = f"{parent}/secrets/{secret_id}"
-        
+
         # Check if secret already exists
         request = {"parent": parent}
         secrets = self.client.list_secrets(request=request)
-        
+
         for secret in secrets:
             display_name = secret.name.split("/")[-1]
             if display_name == secret_id:
@@ -50,7 +51,9 @@ class SecretManagerUtils:
 
         # Secret doesn't exist, create it
         if payload is None:
-            raise ValueError("Secret does not exist and no payload was provided to create one.")
+            raise ValueError(
+                "Secret does not exist and no payload was provided to create one."
+            )
 
         print(f"Creating new secret: {secret_id}")
         created_secret = self.client.create_secret(
@@ -64,10 +67,7 @@ class SecretManagerUtils:
         # Add the initial version (payload)
         payload_bytes = payload.encode("UTF-8")
         self.client.add_secret_version(
-            request={
-                "parent": created_secret.name, 
-                "payload": {"data": payload_bytes}
-            }
+            request={"parent": created_secret.name, "payload": {"data": payload_bytes}}
         )
 
         return f"{created_secret.name}/versions/latest"

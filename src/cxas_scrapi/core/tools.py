@@ -46,12 +46,10 @@ class Tools(Apps):
         )
         self.resource_type = "tools"
         self.client = AgentServiceClient(
-            credentials=self.creds,
-            client_options=self.client_options
+            credentials=self.creds, client_options=self.client_options
         )
         self.tool_client = ToolServiceClient(
-            credentials=self.creds,
-            client_options=self.client_options
+            credentials=self.creds, client_options=self.client_options
         )
         self.var_client = Variables(
             project_id=project_id,
@@ -70,15 +68,15 @@ class Tools(Apps):
         """Lists both tools and toolsets within a specific app."""
         tools_request = types.ListToolsRequest(parent=app_id)
         tools_response = self.client.list_tools(request=tools_request)
-        
+
         toolsets_request = types.ListToolsetsRequest(parent=app_id)
         toolsets_response = self.client.list_toolsets(request=toolsets_request)
-        
+
         return list(tools_response.tools) + list(toolsets_response.toolsets)
 
     def get_tools_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of Tool and Toolset full names to display names.
-        
+
         Args:
             app_id: Parent App ID.
             reverse: If True, map display_name -> name.
@@ -112,70 +110,63 @@ class Tools(Apps):
         display_name: str,
         payload: Dict[str, Any],
         tool_type: str = "python_function",
-        description: str = ""
+        description: str = "",
     ) -> Any:
         """Creates a new tool or toolset.
-        
+
         If tool_type implies a toolset, it creates a Toolset wrapper (e.g. open_api_toolset).
         Otherwise it creates a standard Tool wrapper (e.g. python_function).
         """
-        is_toolset = tool_type in ["open_api_toolset", "connector_toolset", "mcp_toolset"]
-        
+        is_toolset = tool_type in [
+            "open_api_toolset",
+            "connector_toolset",
+            "mcp_toolset",
+        ]
+
         payload_copy = payload.copy()
         payload_copy.pop("display_name", None)
-        
+
         if is_toolset:
             desc = payload_copy.pop("description", description)
             kwargs = {
                 "display_name": display_name,
                 "description": desc,
-                tool_type: payload_copy
+                tool_type: payload_copy,
             }
             toolset = types.Toolset(**kwargs)
             request = types.CreateToolsetRequest(
-                parent=app_id,
-                toolset_id=tool_id,
-                toolset=toolset
+                parent=app_id, toolset_id=tool_id, toolset=toolset
             )
             return self.client.create_toolset(request=request)
         else:
             if description and "description" not in payload_copy:
                 payload_copy["description"] = description
-                
-            kwargs = {
-                "display_name": display_name,
-                tool_type: payload_copy
-            }
+
+            kwargs = {"display_name": display_name, tool_type: payload_copy}
             tool = types.Tool(**kwargs)
-            request = types.CreateToolRequest(
-                parent=app_id,
-                tool_id=tool_id,
-                tool=tool
-            )
+            request = types.CreateToolRequest(parent=app_id, tool_id=tool_id, tool=tool)
             return self.client.create_tool(request=request)
 
     def update_tool(self, tool_id: str, **kwargs) -> Any:
         """Updates specific fields of an existing Tool or Toolset."""
         mask_paths = list(kwargs.keys())
-        
+
         if self._is_toolset(tool_id):
             toolset = types.Toolset(name=tool_id)
             for key, value in kwargs.items():
                 setattr(toolset, key, value)
-            
+
             request = types.UpdateToolsetRequest(
-                toolset=toolset,
-                update_mask=field_mask_pb2.FieldMask(paths=mask_paths)
+                toolset=toolset, update_mask=field_mask_pb2.FieldMask(paths=mask_paths)
             )
             return self.client.update_toolset(request=request)
         else:
             tool = types.Tool(name=tool_id)
             for key, value in kwargs.items():
                 setattr(tool, key, value)
-                
+
             request = types.UpdateToolRequest(
-                tool=tool,
-                update_mask=field_mask_pb2.FieldMask(paths=mask_paths)
+                tool=tool, update_mask=field_mask_pb2.FieldMask(paths=mask_paths)
             )
             return self.client.update_tool(request=request)
 
@@ -193,10 +184,10 @@ class Tools(Apps):
         app_id: str,
         tool_display_name: str,
         args: Dict[str, Any],
-        variables: Optional[Any] = None # Accepts Dict, List[str], or None
+        variables: Optional[Any] = None,  # Accepts Dict, List[str], or None
     ) -> Any:
         """Executes a tool directly via the CES API.
-        
+
         Args:
             app_id: The full App resource name (e.g. projects/.../apps/...).
             tool_display_name: The display name of the tool (or toolset key).
@@ -205,35 +196,32 @@ class Tools(Apps):
                 - None: Fetches and passes ALL variables from the app.
                 - List[str]: Fetches variables from the app and filters by this list of names.
                 - Dict[str, Any]: Uses the provided dictionary directly (e.g. from Evals).
-            
+
         Returns:
             The tool execution response (JSON or Object).
         """
-        # Use HTTP REST request instead of SDK because the current SDK version 
+        # Use HTTP REST request instead of SDK because the current SDK version
         # is missing the 'variables' field in ExecuteToolRequest proto
         import requests
-        
+
         url = f"https://ces.googleapis.com/v1beta/{app_id}:executeTool"
-        
+
         headers = {
             "Authorization": f"Bearer {self.creds.token}",
             "Content-Type": "application/json",
-            "x-goog-user-project": self.project_id
+            "x-goog-user-project": self.project_id,
         }
-        
+
         payload = {}
 
         tools_map = self.get_tools_map(app_id, reverse=True)
         tool_id = tools_map.get(tool_display_name)
-        
+
         if "toolsets/" in tool_id:
-            payload["toolsetTool"] = {
-                "toolset": tool_id,
-                "toolId": tool_display_name
-            }
+            payload["toolsetTool"] = {"toolset": tool_id, "toolId": tool_display_name}
         else:
             payload["tool"] = tool_id
-            
+
         if args:
             payload["args"] = args
 
@@ -257,7 +245,7 @@ class Tools(Apps):
                 schema = var_dict.get("schema", {})
                 actual_data = schema.get("default") or var_dict.get("value") or {}
                 app_vars_cache[var.name] = actual_data
-            
+
             if variables is None:
                 final_variables = app_vars_cache
             else:
@@ -265,18 +253,22 @@ class Tools(Apps):
                     if var_name in app_vars_cache:
                         final_variables[var_name] = app_vars_cache[var_name]
                     else:
-                        print(f"[WARNING] App variable '{var_name}' requested but not found in app.")
-            
+                        print(
+                            f"[WARNING] App variable '{var_name}' requested but not found in app."
+                        )
+
         if final_variables:
             payload["variables"] = final_variables
-            
-        print(f"[DEBUG_TOOLS] Executing against app_id: {app_id} with request: {payload.get('tool') or payload.get('toolsetTool')} ")
-        
+
+        print(
+            f"[DEBUG_TOOLS] Executing against app_id: {app_id} with request: {payload.get('tool') or payload.get('toolsetTool')} "
+        )
+
         response = requests.post(url, headers=headers, json=payload)
         response.raise_for_status()
-        
+
         resp_dict = response.json()
-        
+
         # Make consistent with what the helper script expects
         # variables might naturally be inside resp_dict from the API now
         if final_variables:

@@ -18,6 +18,7 @@ from typing import List, Optional
 from google.cloud.ces_v1beta import types
 from cxas_scrapi.core.agents import Agents
 
+
 class Changelogs(Agents):
     """Core Class for managing Changelog Resources."""
 
@@ -33,14 +34,14 @@ class Changelogs(Agents):
 
     def list_changelogs(self, app_id: Optional[str] = None) -> List[types.Changelog]:
         """Lists changelogs within a specific app.
-        
+
         Args:
             app_id: Parent App ID. Defaults to self.app_id.
         """
         app_id = app_id or self.app_id
         if not app_id:
             raise ValueError("app_id is required.")
-            
+
         request = types.ListChangelogsRequest(parent=app_id)
         response = self.client.list_changelogs(request=request)
         return list(response.changelogs)
@@ -49,4 +50,3 @@ class Changelogs(Agents):
         """Gets a specific changelog."""
         request = types.GetChangelogRequest(name=changelog_id)
         return self.client.get_changelog(request=request)
-

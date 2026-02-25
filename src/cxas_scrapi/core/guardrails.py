@@ -21,6 +21,7 @@ from google.protobuf import field_mask_pb2
 
 from cxas_scrapi.core.apps import Apps
 
+
 class Guardrails(Apps):
     """Core Class for managing Guardrail Resources."""
 
@@ -52,7 +53,7 @@ class Guardrails(Apps):
 
     def get_guardrails_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of Guardrail full names to display names.
-        
+
         Args:
             app_id: Parent App ID.
             reverse: If True, map display_name -> name.
@@ -83,10 +84,10 @@ class Guardrails(Apps):
         payload: Dict[str, Any],
         action: str = "DENY",
         description: str = "",
-        enabled: bool = True
+        enabled: bool = True,
     ) -> types.Guardrail:
         """Creates a new guardrail given a specific payload dictionary.
-        
+
         The payload controls which of the 5 mutually exclusive guardrail types is instantiated
         (content_filter, llm_policy, llm_prompt_security, model_safety, code_callback).
         """
@@ -105,9 +106,7 @@ class Guardrails(Apps):
         )
 
         request = types.CreateGuardrailRequest(
-            parent=app_id,
-            guardrail_id=guardrail_id,
-            guardrail=guardrail
+            parent=app_id, guardrail_id=guardrail_id, guardrail=guardrail
         )
         return self.client.create_guardrail(request=request)
 
@@ -121,8 +120,7 @@ class Guardrails(Apps):
             mask_paths.append(key)
 
         request = types.UpdateGuardrailRequest(
-            guardrail=guardrail,
-            update_mask=field_mask_pb2.FieldMask(paths=mask_paths)
+            guardrail=guardrail, update_mask=field_mask_pb2.FieldMask(paths=mask_paths)
         )
         return self.client.update_guardrail(request=request)
 

@@ -19,6 +19,7 @@ from google.cloud.ces_v1beta import types
 
 from cxas_scrapi.core.apps import Apps
 
+
 class Versions(Apps):
     """Core Class for managing AppVersion Resources."""
 
@@ -50,7 +51,7 @@ class Versions(Apps):
 
     def get_versions_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
         """Returns a map of version display names to full resource names.
-        
+
         Args:
             app_id: Parent App ID.
             reverse: If True, map display_name -> name.

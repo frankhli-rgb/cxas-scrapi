@@ -19,6 +19,7 @@ from google.cloud.ces_v1beta import AgentServiceClient, types
 import yaml
 from cxas_scrapi.core.common import Common
 
+
 class ConversationHistory(Common):
     """Core Class for managing Conversation History."""
 
@@ -50,69 +51,66 @@ class ConversationHistory(Common):
     @staticmethod
     def parse_conversation_to_yaml(filepath):
         """Parses a direct CXAS Conversation History textproto into the target FDE YAML format."""
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             text = f.read()
-            
+
         parsed = Common.parse_textproto(text)
         return ConversationHistory.conversation_dict_to_yaml(parsed)
 
     @staticmethod
     def conversation_dict_to_yaml(conv_dict):
         """Parses a direct CXAS Conversation History dictionary into the target FDE YAML format."""
-        turns = conv_dict.get('turns', [])
+        turns = conv_dict.get("turns", [])
         if not isinstance(turns, list):
             turns = [turns]
 
         out_yaml = {
             "name": "Converted_Conversation",
             "turns": [],
-            "expectations": [], 
-            "mocks": []
+            "expectations": [],
+            "mocks": [],
         }
-        
+
         id_to_tool = {}
-        
+
         for turn in turns:
-            if 'user_utterance' in turn:
-                ui = turn['user_utterance']
-                if 'text' in ui:
-                    out_yaml["turns"].append({"user": ui['text']})
-                elif 'event' in ui:
-                    out_yaml["turns"].append({"user_event": str(ui['event'])})
-                    
-            if 'agent_utterance' in turn:
-                au = turn['agent_utterance']
-                chunks = au.get('messages', []) 
-                if not isinstance(chunks, list): chunks = [chunks]
-                text = " ".join([c.get('text', '') for c in chunks if 'text' in c])
+            if "user_utterance" in turn:
+                ui = turn["user_utterance"]
+                if "text" in ui:
+                    out_yaml["turns"].append({"user": ui["text"]})
+                elif "event" in ui:
+                    out_yaml["turns"].append({"user_event": str(ui["event"])})
+
+            if "agent_utterance" in turn:
+                au = turn["agent_utterance"]
+                chunks = au.get("messages", [])
+                if not isinstance(chunks, list):
+                    chunks = [chunks]
+                text = " ".join([c.get("text", "") for c in chunks if "text" in c])
                 if text:
                     out_yaml["turns"].append({"agent": text})
 
-            tool_calls = turn.get('tool_calls', [])
-            if not isinstance(tool_calls, list): tool_calls = [tool_calls]
+            tool_calls = turn.get("tool_calls", [])
+            if not isinstance(tool_calls, list):
+                tool_calls = [tool_calls]
             for tc in tool_calls:
-                args = tc.get('args', {})
+                args = tc.get("args", {})
                 unwrapped = Common.unwrap_struct(args)
-                name = tc.get('display_name', tc.get('name', tc.get('tool', '')))
-                out_yaml["turns"].append({
-                    "tool_call": {
-                        "tool": name,
-                        "args": unwrapped
-                    }
-                })
-                id_to_tool[tc.get('id', '')] = name
-                
-            tool_responses = turn.get('tool_responses', [])
-            if not isinstance(tool_responses, list): tool_responses = [tool_responses]
+                name = tc.get("display_name", tc.get("name", tc.get("tool", "")))
+                out_yaml["turns"].append(
+                    {"tool_call": {"tool": name, "args": unwrapped}}
+                )
+                id_to_tool[tc.get("id", "")] = name
+
+            tool_responses = turn.get("tool_responses", [])
+            if not isinstance(tool_responses, list):
+                tool_responses = [tool_responses]
             for tr in tool_responses:
-                res = tr.get('response', {})
+                res = tr.get("response", {})
                 unwrapped = Common.unwrap_struct(res)
-                name = id_to_tool.get(tr.get('id', ''), tr.get('tool', ''))
-                out_yaml["mocks"].append({
-                    "tool": name,
-                    "response": unwrapped
-                })
-                
+                name = id_to_tool.get(tr.get("id", ""), tr.get("tool", ""))
+                out_yaml["mocks"].append({"tool": name, "response": unwrapped})
+
         return out_yaml
 
     def list_conversations(self, app_id: str = None) -> Any:
@@ -147,10 +145,10 @@ class ConversationHistory(Common):
     def export_conversation_to_yaml(self, conversation_id: str) -> str:
         """
         Fetches a specific conversation and exports it to the FDE YAML format.
-        
+
         Args:
             conversation_id: Full resource name or ID of the conversation.
-            
+
         Returns:
             A string containing the formatted YAML.
         """

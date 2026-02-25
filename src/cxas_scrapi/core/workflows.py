@@ -17,11 +17,13 @@
 from typing import List, Optional, Dict, Any, Union
 from dataclasses import dataclass, field, asdict
 
+
 @dataclass
 class VariableMetadata:
     variable: str
     description: Optional[str] = None
     is_required: Optional[bool] = None
+
 
 @dataclass
 class Reasoning:
@@ -34,12 +36,14 @@ class Reasoning:
             result["output_variables"] = [asdict(v) for v in self.output_variables]
         return result
 
+
 @dataclass
 class PythonCode:
     code: str
 
     def to_dict(self) -> Dict[str, Any]:
         return {"code": self.code}
+
 
 @dataclass
 class WorkflowAction:
@@ -55,13 +59,15 @@ class WorkflowAction:
             return {"python_code": self.python_code.to_dict()}
         return {}
 
+
 @dataclass
 class Transition:
     workflow_step_id: str
-    condition_type: Optional[str] = None # Placeholder for oneof condition logic
-    
+    condition_type: Optional[str] = None  # Placeholder for oneof condition logic
+
     def to_dict(self) -> Dict[str, Any]:
         return {"workflow_step_id": self.workflow_step_id}
+
 
 @dataclass
 class WorkflowStep:
@@ -75,8 +81,9 @@ class WorkflowStep:
             "id": self.id,
             "display_name": self.display_name,
             "action": self.action.to_dict(),
-            "transitions": [t.to_dict() for t in self.transitions]
+            "transitions": [t.to_dict() for t in self.transitions],
         }
+
 
 @dataclass
 class WorkflowAgent:
@@ -91,5 +98,5 @@ class WorkflowAgent:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "workflow_steps": [step.to_dict() for step in self.workflow_steps],
-            "root_step_id": self.root_step_id
+            "root_step_id": self.root_step_id,
         }

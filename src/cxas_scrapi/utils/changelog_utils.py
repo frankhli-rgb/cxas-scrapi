@@ -9,8 +9,9 @@ try:
 except ImportError:
     pass
 
+
 class ChangelogUtils:
-    
+
     @staticmethod
     def _get_nested_val(data: Dict, path: List[str], default=None):
         """Safely gets a value from a nested dictionary."""
@@ -136,7 +137,9 @@ class ChangelogUtils:
                 original_parts = ChangelogUtils._extract_relevant_parts(
                     original_resource, resource_type
                 )
-                new_parts = ChangelogUtils._extract_relevant_parts(new_resource, resource_type)
+                new_parts = ChangelogUtils._extract_relevant_parts(
+                    new_resource, resource_type
+                )
 
                 # Format as compact JSON strings for the prompt
                 try:
@@ -217,7 +220,11 @@ class ChangelogUtils:
             return all_changelogs
 
     @staticmethod
-    def summarize_changelogs(vertex_client_or_project: Any, changelogs: List[Dict[str, Any]], project_id: str = None) -> str:
+    def summarize_changelogs(
+        vertex_client_or_project: Any,
+        changelogs: List[Dict[str, Any]],
+        project_id: str = None,
+    ) -> str:
         """Summarizes each non-evaluation changelog into a simple, specific one-liner."""
         resource_types_to_exclude = [
             "Version",
@@ -236,7 +243,8 @@ class ChangelogUtils:
 
         # Format each changelog entry, potentially producing multi-line strings for updates
         formatted_log_entries = [
-            ChangelogUtils._format_changelog_for_prompt(cl) for cl in filtered_changelogs
+            ChangelogUtils._format_changelog_for_prompt(cl)
+            for cl in filtered_changelogs
         ]
 
         # Combine and number the entries for the prompt
@@ -277,11 +285,13 @@ class ChangelogUtils:
 
         try:
             # Handle if the user passes the vertex framework client or strings
-            if hasattr(vertex_client_or_project, 'models'):
+            if hasattr(vertex_client_or_project, "models"):
                 cl = vertex_client_or_project
             else:
-                cl = genai.Client(vertexai=True, project=project_id, location="us-central1")
-                
+                cl = genai.Client(
+                    vertexai=True, project=project_id, location="us-central1"
+                )
+
             response = cl.models.generate_content(
                 model="gemini-2.5-flash", contents=prompt
             )

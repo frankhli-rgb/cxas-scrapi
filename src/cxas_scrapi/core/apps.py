@@ -57,7 +57,7 @@ class Apps(Common):
 
     def get_apps_map(self, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of App full names to display names.
-        
+
         Args:
             reverse: If True, map display_name -> name.
         """
@@ -156,10 +156,10 @@ class Apps(Common):
         app_id: str,
         gcs_uri: str = None,
         export_format: str = "JSON",
-        ) -> Any:
+    ) -> Any:
         # TODO: Fix return type hint to Operation or specific LRO type
         """Exports the specified app.
-        
+
         Args:
             app_id: The resource name of the app to export.
             gcs_uri: Optional. The Google Cloud Storage URI to export to.
@@ -167,14 +167,14 @@ class Apps(Common):
         """
         # Map string formats to enum
         # Note: types.ExportAppRequest.ExportFormat might be an enum, strictly speaking.
-        # But SDK usually accepts string/int if compatible. 
-        # Inspecting types usually reveals enum values. 
+        # But SDK usually accepts string/int if compatible.
+        # Inspecting types usually reveals enum values.
         # Assuming defaults for now, or passing as kwargs if strict typing issues arise.
-        
+
         request = types.ExportAppRequest(
             name=app_id,
             gcs_uri=gcs_uri if gcs_uri else None,
-            export_format=export_format, # defaults to JSON if not passed, but we pass it.
+            export_format=export_format,  # defaults to JSON if not passed, but we pass it.
         )
         return self.client.export_app(request=request)
 
@@ -190,8 +190,6 @@ class Apps(Common):
             display_name: The display name for the new app.
         """
         request = types.ImportAppRequest(
-            parent=self.parent,
-            app_content=app_content,
-            display_name=display_name
+            parent=self.parent, app_content=app_content, display_name=display_name
         )
         return self.client.import_app(request=request)
