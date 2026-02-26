@@ -28,14 +28,16 @@ class Tools(Apps):
 
     def __init__(
         self,
-        project_id: str,
-        location: str,
+        app_id: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
         scope: List[str] = None,
     ):
         """Initializes the Tools client."""
+        project_id = app_id.split("/")[1]
+        location = app_id.split("/")[3]
+
         super().__init__(
             project_id=project_id,
             location=location,
@@ -44,6 +46,7 @@ class Tools(Apps):
             creds=creds,
             scope=scope,
         )
+        self.app_id = app_id
         self.resource_type = "tools"
         self.client = AgentServiceClient(
             credentials=self.creds, client_options=self.client_options
@@ -52,13 +55,14 @@ class Tools(Apps):
             credentials=self.creds, client_options=self.client_options
         )
         self.var_client = Variables(
-            project_id=project_id,
-            location=location,
+            app_id=self.app_id,
             creds_path=creds_path,
             creds_dict=creds_dict,
             creds=creds,
             scope=scope,
         )
+        self.tools_map: Dict[str, str] = {}
+
 
     def _is_toolset(self, tool_id: str) -> bool:
         """Helper to determine if a full resource name refers to a Toolset."""
@@ -72,7 +76,7 @@ class Tools(Apps):
         toolsets_request = types.ListToolsetsRequest(parent=app_id)
         toolsets_response = self.client.list_toolsets(request=toolsets_request)
 
-        return list(tools_response.tools) + list(toolsets_response.toolsets)
+        return list(tools_response) + list(toolsets_response)
 
     def get_tools_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of Tool and Toolset full names to display names.
@@ -93,6 +97,12 @@ class Tools(Apps):
                 else:
                     resources_dict[name] = display_name
         return resources_dict
+
+    def _get_or_load_tools_map(self, app_id: str) -> Dict[str, str]:
+        """Gets a reverse map of tools from cache or loads it if missing."""
+        if not self.tools_map:
+            self.tools_map = self.get_tools_map(app_id, reverse=True)
+        return self.tools_map
 
     def get_tool(self, tool_id: str) -> Any:
         """Gets a specific tool or toolset by full resource name."""
@@ -214,8 +224,13 @@ class Tools(Apps):
 
         payload = {}
 
-        tools_map = self.get_tools_map(app_id, reverse=True)
+        tools_map = self._get_or_load_tools_map(app_id)
         tool_id = tools_map.get(tool_display_name)
+
+        if not tool_id:
+            raise ValueError(
+                f"Tool '{tool_display_name}' not found in App '{app_id}'. "
+            )
 
         if "toolsets/" in tool_id:
             payload["toolsetTool"] = {"toolset": tool_id, "toolId": tool_display_name}
@@ -269,8 +284,6 @@ class Tools(Apps):
 
         resp_dict = response.json()
 
-        # Make consistent with what the helper script expects
-        # variables might naturally be inside resp_dict from the API now
         if final_variables:
             resp_dict["variables"] = final_variables
         return resp_dict

@@ -27,14 +27,16 @@ class Guardrails(Apps):
 
     def __init__(
         self,
-        project_id: str,
-        location: str,
+        app_id: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
         scope: List[str] = None,
     ):
         """Initializes the Guardrails client."""
+        project_id = app_id.split("/")[1]
+        location = app_id.split("/")[3]
+
         super().__init__(
             project_id=project_id,
             location=location,
@@ -44,12 +46,13 @@ class Guardrails(Apps):
             scope=scope,
         )
         self.resource_type = "guardrails"
+        self.app_id = app_id
 
     def list_guardrails(self, app_id: str) -> List[types.Guardrail]:
         """Lists guardrails within a specific app."""
         request = types.ListGuardrailsRequest(parent=app_id)
         response = self.client.list_guardrails(request=request)
-        return list(response.guardrails)
+        return list(response)
 
     def get_guardrails_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of Guardrail full names to display names.

@@ -44,7 +44,7 @@ class Changelogs(Agents):
 
         request = types.ListChangelogsRequest(parent=app_id)
         response = self.client.list_changelogs(request=request)
-        return list(response.changelogs)
+        return list(response)
 
     def get_changelog(self, changelog_id: str) -> types.Changelog:
         """Gets a specific changelog."""

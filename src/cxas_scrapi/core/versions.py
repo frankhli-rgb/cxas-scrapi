@@ -25,14 +25,16 @@ class Versions(Apps):
 
     def __init__(
         self,
-        project_id: str,
-        location: str,
+        app_id: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
         scope: List[str] = None,
     ):
         """Initializes the Versions client."""
+        project_id = app_id.split("/")[1]
+        location = app_id.split("/")[3]
+
         super().__init__(
             project_id=project_id,
             location=location,
@@ -42,12 +44,13 @@ class Versions(Apps):
             scope=scope,
         )
         self.resource_type = "versions"
+        self.app_id = app_id
 
     def list_versions(self, app_id: str) -> List[types.AppVersion]:
         """Lists versions within a specific app."""
         request = types.ListAppVersionsRequest(parent=app_id)
         response = self.client.list_app_versions(request=request)
-        return list(response.app_versions)
+        return list(response)
 
     def get_versions_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
         """Returns a map of version display names to full resource names.

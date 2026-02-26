@@ -189,7 +189,7 @@ class Evaluations(Common):
 
         request = types.ListEvaluationsRequest(parent=app_id)
         response = self.client.list_evaluations(request=request)
-        return list(response.evaluations)
+        return list(response)
 
     def list_evaluation_results(
         self, evaluation_name: str
@@ -202,7 +202,7 @@ class Evaluations(Common):
         """
         request = types.ListEvaluationResultsRequest(parent=evaluation_name)
         response = self.client.list_evaluation_results(request=request)
-        return list(response.evaluation_results)
+        return list(response)
 
     def get_evaluations_map(
         self, app_id: Optional[str] = None, reverse: bool = False
@@ -234,24 +234,28 @@ class Evaluations(Common):
         request = types.GetEvaluationRequest(name=evaluation_id)
         return self.client.get_evaluation(request=request)
 
-    def export_evaluation_to_yaml(self, evaluation_id: str) -> str:
+    def export_evaluation(self, evaluation_id: str, output_format: str = "yaml") -> str:
         """
-        Fetches a specific evaluation and exports it to the FDE YAML format.
+        Fetches a specific evaluation and exports it to the specified format.
 
         Args:
             evaluation_id: Full resource name of the evaluation.
+            output_format: Output format ('yaml' or 'json'). Defaults to 'yaml'.
 
         Returns:
-            A string containing the formatted YAML.
+            A string containing the formatted output.
         """
         eval_obj = self.get_evaluation(evaluation_id=evaluation_id)
         # Convert the protobuf object to a python dictionary
         eval_dict = type(eval_obj).to_dict(eval_obj)
 
-        out_yaml_dict = self.eval_dict_to_yaml(eval_dict)
+        out_dict = self.eval_dict_to_yaml(eval_dict)
+
+        if output_format.lower() == "json":
+            return json.dumps(out_dict, indent=2)
 
         # Dump to YAML string
-        return yaml.dump(out_yaml_dict, sort_keys=False, allow_unicode=True)
+        return yaml.dump(out_dict, sort_keys=False, allow_unicode=True)
 
     def run_evaluation(
         self, evaluations: List[str], app_id: Optional[str] = None

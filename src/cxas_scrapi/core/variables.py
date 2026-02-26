@@ -26,8 +26,7 @@ class Variables(Apps):
 
     def __init__(
         self,
-        project_id: str,
-        location: str,
+        app_id: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
@@ -37,6 +36,9 @@ class Variables(Apps):
         Note that Variables are resources of the App itself, not a standalone resource.
         This class is a wrapper around the App class to make it easier to manage Variables.
         """
+        project_id = app_id.split("/")[1]
+        location = app_id.split("/")[3]
+
         super().__init__(
             project_id=project_id,
             location=location,
@@ -45,6 +47,7 @@ class Variables(Apps):
             creds=creds,
             scope=scope,
         )
+        self.app_id = app_id
         self.resource_type = "variables"
 
     @staticmethod

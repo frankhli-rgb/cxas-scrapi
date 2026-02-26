@@ -53,7 +53,7 @@ class Apps(Common):
         """Lists apps in the configured project and location."""
         request = types.ListAppsRequest(parent=self.parent)
         response = self.client.list_apps(request=request)
-        return list(response.apps)
+        return list(response)
 
     def get_apps_map(self, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of App full names to display names.

@@ -71,7 +71,7 @@ class Agents(Common):
 
         request = types.ListAgentsRequest(parent=app_id)
         response = self.client.list_agents(request=request)
-        return list(response.agents)
+        return list(response)
 
     def get_agents_map(
         self, app_id: Optional[str] = None, reverse: bool = False

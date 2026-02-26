@@ -27,14 +27,16 @@ class Deployments(Apps):
 
     def __init__(
         self,
-        project_id: str,
-        location: str,
+        app_id: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
         scope: List[str] = None,
     ):
         """Initializes the Deployments client."""
+        project_id = app_id.split("/")[1]
+        location = app_id.split("/")[3]
+
         super().__init__(
             project_id=project_id,
             location=location,
@@ -44,13 +46,13 @@ class Deployments(Apps):
             scope=scope,
         )
         self.resource_type = "deployments"
-        self.app_id = None
+        self.app_id = app_id
 
     def list_deployments(self, app_id: str) -> List[types.Deployment]:
         """Lists deployments within a specific app."""
         request = types.ListDeploymentsRequest(parent=app_id)
         response = self.client.list_deployments(request=request)
-        return list(response.deployments)
+        return list(response)
 
     def get_deployments_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of Deployment full names to display names.

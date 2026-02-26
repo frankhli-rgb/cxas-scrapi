@@ -88,12 +88,8 @@ class EvalUtils(Evaluations):
         """
         super().__init__(app_id=app_id, env=env)
         self.app_id = app_id
-        self.tools_client = Tools(
-            project_id=self.project_id, location=self.location, creds=self.creds
-        )
-        self.var_client = Variables(
-            project_id=self.project_id, location=self.location, creds=self.creds
-        )
+        self.tools_client = Tools(app_id=self.app_id, creds=self.creds)
+        self.var_client = Variables(app_id=self.app_id, creds=self.creds)
         try:
             self.tool_map = self.tools_client.get_tools_map(self.app_id, reverse=True)
         except Exception as e:
