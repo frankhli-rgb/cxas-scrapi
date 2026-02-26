@@ -2,7 +2,10 @@ import pytest
 from unittest.mock import patch, MagicMock
 from cxas_scrapi.utils.secret_manager_utils import SecretManagerUtils
 
-@patch("cxas_scrapi.utils.secret_manager_utils.secretmanager.SecretManagerServiceClient")
+
+@patch(
+    "cxas_scrapi.utils.secret_manager_utils.secretmanager.SecretManagerServiceClient"
+)
 def test_create_or_get_secret_existing(mock_client_cls):
     mock_client = mock_client_cls.return_value
     mock_secret = MagicMock()
@@ -14,7 +17,10 @@ def test_create_or_get_secret_existing(mock_client_cls):
     assert res == "projects/test-project/secrets/my-secret/versions/latest"
     mock_client.create_secret.assert_not_called()
 
-@patch("cxas_scrapi.utils.secret_manager_utils.secretmanager.SecretManagerServiceClient")
+
+@patch(
+    "cxas_scrapi.utils.secret_manager_utils.secretmanager.SecretManagerServiceClient"
+)
 def test_create_or_get_secret_new(mock_client_cls):
     mock_client = mock_client_cls.return_value
     mock_client.list_secrets.return_value = []
@@ -24,7 +30,7 @@ def test_create_or_get_secret_new(mock_client_cls):
 
     sm = SecretManagerUtils("test-project")
     res = sm.create_or_get_secret("new-secret", "my-payload")
-    
+
     assert res == "projects/test-project/secrets/new-secret/versions/latest"
     mock_client.create_secret.assert_called_once_with(
         request={
@@ -35,12 +41,15 @@ def test_create_or_get_secret_new(mock_client_cls):
     )
     mock_client.add_secret_version.assert_called_once_with(
         request={
-            "parent": "projects/test-project/secrets/new-secret", 
-            "payload": {"data": b"my-payload"}
+            "parent": "projects/test-project/secrets/new-secret",
+            "payload": {"data": b"my-payload"},
         }
     )
 
-@patch("cxas_scrapi.utils.secret_manager_utils.secretmanager.SecretManagerServiceClient")
+
+@patch(
+    "cxas_scrapi.utils.secret_manager_utils.secretmanager.SecretManagerServiceClient"
+)
 def test_create_or_get_secret_missing_payload(mock_client_cls):
     mock_client = mock_client_cls.return_value
     mock_client.list_secrets.return_value = []

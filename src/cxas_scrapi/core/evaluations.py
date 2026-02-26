@@ -20,7 +20,7 @@ import json
 import requests
 from google.protobuf import field_mask_pb2
 from google.protobuf import json_format
-from google.cloud.ces_v1beta import EvaluationServiceClient, types
+from google.cloud.ces_v1beta import EvaluationServiceClient, AgentServiceClient, types
 import yaml
 from cxas_scrapi.core.common import Common
 
@@ -206,27 +206,39 @@ class Evaluations(Common):
 
     def get_evaluations_map(
         self, app_id: Optional[str] = None, reverse: bool = False
-    ) -> Dict[str, str]:
-        """Creates a map of Evaluation full names to display names.
+    ) -> Dict[str, Dict[str, str]]:
+        """Creates a map of Evaluation full names to display names, grouped by type.
+
+        Returns a dictionary with 'goldens' and 'scenarios' keys, each containing
+        a sub-dictionary of the mappings.
 
         Args:
             app_id: Parent App ID. Defaults to self.app_id.
             reverse: If True, map display_name -> name.
         """
         app_id = app_id or self.app_id
-        # list_evaluations check will handle empty app_id check, but good to be safe if reusing logic
 
         evaluations = self.list_evaluations(app_id)
-        evaluations_dict: Dict[str, str] = {}
+        evaluations_dict: Dict[str, Dict[str, str]] = {"goldens": {}, "scenarios": {}}
 
         for evaluation in evaluations:
             display_name = evaluation.display_name
             name = evaluation.name
+
             if display_name and name:
-                if reverse:
-                    evaluations_dict[display_name] = name
-                else:
-                    evaluations_dict[name] = display_name
+                target_dict = None
+                # Check the oneof field or structure property to determine the type
+                if getattr(evaluation, "golden", None):
+                    target_dict = evaluations_dict["goldens"]
+                elif getattr(evaluation, "scenario", None):
+                    target_dict = evaluations_dict["scenarios"]
+
+                if target_dict is not None:
+                    if reverse:
+                        target_dict[display_name] = name
+                    else:
+                        target_dict[name] = display_name
+
         return evaluations_dict
 
     def get_evaluation(self, evaluation_id: str) -> types.Evaluation:
@@ -272,3 +284,189 @@ class Evaluations(Common):
 
         request = types.RunEvaluationRequest(app=app_id, evaluations=evaluations)
         return self.client.run_evaluation(request=request)
+
+    def import_evaluations(
+        self,
+        app_id: Optional[str] = None,
+        gcs_uri: Optional[str] = None,
+        csv_content: Optional[bytes] = None,
+        conversations: Optional[List[str]] = None,
+        conflict_strategy: int = 0,
+    ) -> Any:
+        """Imports evaluations into the app.
+
+        Args:
+            app_id: Parent App ID. Defaults to self.app_id.
+            gcs_uri: The GCS URI to import from (gs://...).
+            csv_content: Raw bytes representing the csv file.
+            conversations: A list of conversation resource names.
+            conflict_strategy: See types.ImportEvaluationsRequest.ImportOptions.ConflictResolutionStrategy
+                               (0=UNSPECIFIED, 1=OVERWRITE, 2=SKIP, 3=DUPLICATE)
+        """
+        app_id = app_id or self.app_id
+        if not app_id:
+            raise ValueError("app_id is required.")
+
+        request = types.ImportEvaluationsRequest(parent=app_id)
+
+        if gcs_uri:
+            request.gcs_uri = gcs_uri
+        elif csv_content:
+            request.csv_content = csv_content
+        elif conversations:
+            request.conversation_list = types.ImportEvaluationsRequest.ConversationList(
+                conversations=conversations
+            )
+        else:
+            raise ValueError(
+                "Must provide one of: gcs_uri, csv_content, or conversations."
+            )
+
+        if conflict_strategy:
+            request.import_options = types.ImportEvaluationsRequest.ImportOptions(
+                conflict_resolution_strategy=conflict_strategy
+            )
+
+        return self.client.import_evaluations(request=request)
+
+    def list_evaluation_expectations(
+        self, app_id: Optional[str] = None
+    ) -> List[types.EvaluationExpectation]:
+        """Lists all evaluation expectations in the given app.
+
+        Args:
+            app_id: Parent App ID. Defaults to self.app_id.
+        """
+        app_id = app_id or self.app_id
+        if not app_id:
+            raise ValueError("app_id is required.")
+
+        request = types.ListEvaluationExpectationsRequest(parent=app_id)
+        response = self.client.list_evaluation_expectations(request=request)
+        return list(response)
+
+    def get_evaluation_expectation(self, name: str) -> types.EvaluationExpectation:
+        """Gets details of the specified evaluation expectation.
+
+        Args:
+            name: Full resource name of the evaluation expectation.
+        """
+        request = types.GetEvaluationExpectationRequest(name=name)
+        return self.client.get_evaluation_expectation(request=request)
+
+    def create_evaluation_expectation(
+        self,
+        evaluation_expectation: Union[types.EvaluationExpectation, Dict[str, Any]],
+        app_id: Optional[str] = None,
+    ) -> types.EvaluationExpectation:
+        """Creates an evaluation expectation.
+
+        Args:
+            evaluation_expectation: The EvaluationExpectation object or dict to create.
+            app_id: Parent App ID. Defaults to self.app_id.
+        """
+        app_id = app_id or self.app_id
+        if not app_id:
+            raise ValueError("app_id is required.")
+
+        if isinstance(evaluation_expectation, dict):
+            evaluation_expectation = types.EvaluationExpectation(
+                **evaluation_expectation
+            )
+
+        request = types.CreateEvaluationExpectationRequest(
+            parent=app_id, evaluation_expectation=evaluation_expectation
+        )
+        return self.client.create_evaluation_expectation(request=request)
+
+    def update_evaluation_expectation(
+        self,
+        evaluation_expectation: types.EvaluationExpectation,
+        update_mask: Optional[field_mask_pb2.FieldMask] = None,
+    ) -> types.EvaluationExpectation:
+        """Updates an evaluation expectation.
+
+        Args:
+            evaluation_expectation: The EvaluationExpectation to update.
+            update_mask: Optional mask defining which fields to update.
+        """
+        request = types.UpdateEvaluationExpectationRequest(
+            evaluation_expectation=evaluation_expectation, update_mask=update_mask
+        )
+        return self.client.update_evaluation_expectation(request=request)
+
+    def delete_evaluation_expectation(self, name: str) -> None:
+        """Deletes an evaluation expectation.
+
+        Args:
+            name: Full resource name of the evaluation expectation.
+        """
+        request = types.DeleteEvaluationExpectationRequest(name=name)
+        self.client.delete_evaluation_expectation(request=request)
+
+    def get_evaluation_thresholds(
+        self, app_id: Optional[str] = None, print_console: bool = False
+    ) -> Dict[str, Any]:
+        """Gets the evaluation metrics thresholds for the app.
+
+        Args:
+            app_id: Parent App ID. Defaults to self.app_id.
+            print_console: If True, prints a formatted summary of the settings to the console.
+
+        Returns:
+            A dictionary containing the evaluation metrics thresholds,
+            with any enums resolved to their string representations.
+        """
+        app_id = app_id or self.app_id
+        if not app_id:
+            raise ValueError("app_id is required.")
+
+        agent_client = AgentServiceClient(
+            credentials=self.creds, client_options=self.client_options
+        )
+
+        request = types.GetAppRequest(name=app_id)
+        app_obj = agent_client.get_app(request=request)
+
+        # Convert the app protobuf to a dictionary, forcing enums to strings
+        app_dict = json_format.MessageToDict(
+            app_obj._pb,
+            preserving_proto_field_name=True,
+            use_integers_for_enums=False,
+        )
+
+        thresholds = app_dict.get("evaluation_metrics_thresholds", {})
+
+        if print_console:
+            print("===== GLOBAL Settings =====")
+            print(f"Hallucinations: {thresholds.get('hallucination_metric_behavior', 'UNSPECIFIED')}")
+
+            print("\n===== GOLDEN Settings =====")
+            print(f"Hallucinations: {thresholds.get('golden_hallucination_metric_behavior', 'UNSPECIFIED')}")
+
+            golden = thresholds.get("golden_evaluation_metrics_thresholds", {})
+            turn_level = golden.get("turn_level_metrics_thresholds", {})
+            expectation_level = golden.get("expectation_level_metrics_thresholds", {})
+
+            divisors = {
+                "semantic_similarity_success_threshold": "/4",
+                "overall_tool_invocation_correctness_threshold": "/1.0",
+                "tool_invocation_parameter_correctness_threshold": "/1.0",
+            }
+
+            if turn_level:
+                print("\n### Turn Level Metrics ###")
+                for k, v in turn_level.items():
+                    suffix = divisors.get(k, "")
+                    print(f"- {k}: {v}{suffix}")
+            if expectation_level:
+                print("\n### Expectation Level Metrics ###")
+                for k, v in expectation_level.items():
+                    suffix = divisors.get(k, "")
+                    print(f"- {k}: {v}{suffix}")
+
+            print("\n===== SCENARIO Settings =====")
+            print(f"Hallucinations: {thresholds.get('scenario_hallucination_metric_behavior', 'UNSPECIFIED')}")
+            print("\n")
+
+        return thresholds

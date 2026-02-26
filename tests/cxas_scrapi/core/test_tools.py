@@ -276,7 +276,9 @@ def test_execute_toolset(mock_client_cls, mock_post):
     with patch.object(
         t,
         "get_tools_map",
-        return_value={"my_tool_in_toolset": "apps/app1/toolsets/ts1"},
+        return_value={
+            "my_tool_in_toolset": "apps/app1/toolsets/ts1/tools/my_tool_in_toolset"
+        },
     ):
         res = t.execute_tool(
             app_id="apps/app1",

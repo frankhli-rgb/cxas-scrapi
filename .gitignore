@@ -4,7 +4,7 @@
 z_adhoc/
 *scratch.ipynb
 *scratch.py
-.agent/skills/
+.agent/
 *.tar
 
 # Byte-compiled / optimized / DLL files
