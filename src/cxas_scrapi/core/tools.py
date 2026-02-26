@@ -16,7 +16,7 @@
 
 from typing import Dict, List, Any, Optional
 from google.protobuf import struct_pb2, json_format, field_mask_pb2
-from google.cloud.ces_v1beta import types, ToolServiceClient, AgentServiceClient
+from google.cloud.ces_v1beta import types, ToolServiceClient, AgentServiceClient, types
 from google.protobuf.json_format import MessageToDict
 
 from cxas_scrapi.core.apps import Apps
@@ -87,11 +87,22 @@ class Tools(Apps):
         for resource in resources:
             display_name = resource.display_name
             name = resource.name
-            if display_name and name:
-                if reverse:
-                    resources_dict[display_name] = name
-                else:
-                    resources_dict[name] = display_name
+            if self._is_toolset(name):
+                # Retrieve display names of tools in the toolsets.
+                tools = self.retrieve_tool(name)
+                for tool in tools.tools:
+                    display_name = self._get_tool_display_name(tool)
+                    if display_name and name:
+                        if reverse:
+                            resources_dict[display_name] = name
+                        else:
+                            resources_dict[name] = display_name
+            else:
+                if display_name and name:
+                    if reverse:
+                        resources_dict[display_name] = name
+                    else:
+                        resources_dict[name] = display_name
         return resources_dict
 
     def get_tool(self, tool_id: str) -> Any:
@@ -274,3 +285,28 @@ class Tools(Apps):
         if final_variables:
             resp_dict["variables"] = final_variables
         return resp_dict
+
+    def retrieve_tool(self, toolset_id: str) -> Any:
+        """Retrieves all tools in a toolset."""
+        request = types.RetrieveToolsRequest(toolset=toolset_id)
+        return self.tool_client.retrieve_tools(request=request)
+
+    def _get_tool_display_name(self, tool: types.Tool) -> Optional[str]:
+      """Helper to get the display name of a tool."""
+      display_name = ""
+      if tool.python_function:
+          display_name = tool.python_function.name
+      elif tool.data_store_tool:
+          display_name = tool.data_store_tool.name
+      elif tool.open_api_tool:
+          display_name = tool.open_api_tool.name
+      elif tool.google_search_tool:
+          display_name = tool.google_search_tool.name
+      elif tool.connector_tool:
+          display_name = tool.connector_tool.name
+      elif tool.mcp_tool:
+          display_name = tool.connector_tool.name
+      elif tool.file_search_tool:
+          display_name = tool.file_search_tool.name
+
+      return display_name
