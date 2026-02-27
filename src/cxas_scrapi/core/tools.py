@@ -79,7 +79,7 @@ class Tools(Apps):
         elif tool.connector_tool:
             display_name = tool.connector_tool.name
         elif tool.mcp_tool:
-            display_name = tool.connector_tool.name
+            display_name = tool.mcp_tool.name
         elif tool.file_search_tool:
             display_name = tool.file_search_tool.name
 
