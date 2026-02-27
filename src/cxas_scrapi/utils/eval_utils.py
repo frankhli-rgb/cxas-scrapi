@@ -14,7 +14,7 @@
 
 """Utility functions for processing and exporting CXAS Evaluation Results."""
 
-from typing import Annotated, Any, Dict, List, Optional, NamedTuple
+from typing import Annotated, Any, Dict, List, Optional, NamedTuple, Union
 import datetime
 import time
 import enum
@@ -43,13 +43,16 @@ from pydantic import (
 )
 from sentence_transformers import SentenceTransformer, util
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.agents import Agents
+from cxas_scrapi.core.conversation_history import ConversationHistory
 from cxas_scrapi.core.evaluations import Evaluations
 from cxas_scrapi.core.sessions import Sessions
 from cxas_scrapi.core.tools import Tools
 from cxas_scrapi.core.variables import Variables
+from cxas_scrapi.utils.latency_parser import LatencyParser
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +98,8 @@ class EvalUtils(Evaluations):
         except Exception as e:
             logger.warning(f"Failed to fetch tool map for {self.app_id}: {e}")
             self.tool_map = {}
-        self.agents_client = Agents(app_id=self.app_id)
+        self.agents_client = Agents(app_id=self.app_id, creds=self.creds)
+        self.ch_client = ConversationHistory(app_id=self.app_id, creds=self.creds)
 
     @staticmethod
     def parse_variables_input(v: Any) -> Dict[str, Any]:
@@ -167,33 +171,6 @@ class EvalUtils(Evaluations):
             model=model,
         )
 
-    def generate_report(
-        self, df: pd.DataFrame, test_type: str = "guardrails_test"
-    ) -> pd.DataFrame:
-        """Generates a summary stats report for recent tests."""
-        report_timestamp = datetime.datetime.now()
-        stats = EvalUtils._calculate_stats(df)
-
-        df_report = pd.DataFrame(
-            columns=SUMMARY_SCHEMA_COLUMNS,
-            data=[
-                [
-                    report_timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                    test_type,
-                    stats.total_tests,
-                    stats.pass_count,
-                    stats.pass_rate,
-                    stats.p50_latency_ms,
-                    stats.p90_latency_ms,
-                    stats.p99_latency_ms,
-                    stats.agent_name,
-                    stats.model,
-                ]
-            ],
-        )
-
-        return df_report
-
     @staticmethod
     def _map_outcome(val):
         if isinstance(val, int):
@@ -228,260 +205,6 @@ class EvalUtils(Evaluations):
         cosine_score = util.cos_sim(emb1, emb2).item()
         return cosine_score
 
-    def evals_to_dataframe(
-        self,
-        results: Optional[List[types.EvaluationResult]] = None,
-        eval_names: Optional[List[str]] = None,
-    ) -> Any:
-        """Parses a list of EvaluationResult objects into a flattened pandas DataFrame.
-
-        If results is not provided, automatically fetches all evaluation results for the app.
-        If eval_names is provided, filters the fetched results to only those matching the display names.
-
-        Args:
-            results: A list of EvaluationResult objects from the CES API. Optional.
-            eval_names: A list of evaluation display names to filter by. Optional.
-
-        Returns:
-            A pandas DataFrame with flattened metrics.
-        """
-        if results is None:
-            results = []
-            evaluations = self.list_evaluations(self.app_id)
-            for evaluation in evaluations:
-                if eval_names and evaluation.display_name not in eval_names:
-                    continue
-                results.extend(self.list_evaluation_results(evaluation.name))
-
-        flattened_data = []
-        eval_cache = {}
-
-        for result in results:
-            res_dict = type(result).to_dict(result)
-            result_name = res_dict.get("name", "")
-
-            # Extract parent Evaluation name to lookup display_name
-            # result_name format: projects/*/locations/*/apps/*/evaluations/*/results/*
-            eval_name = "/".join(result_name.split("/")[:-2])
-            display_name = "Unknown Evaluation"
-            if eval_name:
-                if eval_name not in eval_cache:
-                    try:
-                        eval_obj = self.get_evaluation(eval_name)
-                        eval_cache[eval_name] = eval_obj.display_name
-                    except Exception:
-                        eval_cache[eval_name] = "Unknown Evaluation"
-                display_name = eval_cache[eval_name]
-
-            # Map enum integer to string for readability
-            raw_status = res_dict.get("evaluation_status", 0)
-            if isinstance(raw_status, int):
-                status_map = {0: "UNSPECIFIED", 1: "PASSED", 2: "FAILED"}
-                status_str = status_map.get(raw_status, f"UNKNOWN_{raw_status}")
-            else:
-                status_str = str(raw_status)
-
-            base_info = {
-                "eval_result_id": result_name,
-                "display_name": display_name,
-                "evaluation_status": status_str,
-                "create_time": res_dict.get("create_time", ""),
-                "update_time": res_dict.get("update_time", ""),
-            }
-
-            golden = res_dict.get("golden_result", {})
-            metrics = golden.get("metrics", {}) if golden else {}
-
-            # Overall evaluation metrics (apply to all rows for this specific eval result)
-            semantic_res = metrics.get("semantic_similarity_result", {})
-            tool_res = metrics.get("overall_tool_invocation_result", {})
-
-            overall_info = base_info.copy()
-            overall_info.update(
-                {
-                    "semantic_score": semantic_res.get("score"),
-                    "semantic_label": semantic_res.get("label", ""),
-                    "semantic_explanation": semantic_res.get("explanation", ""),
-                    "tool_invocation_score": EvalUtils._map_outcome(
-                        tool_res.get("tool_invocation_score")
-                    ),
-                }
-            )
-
-            expectation_list = metrics.get("expectation_results", [])
-
-            for exp_item in expectation_list:
-                row = overall_info.copy()
-                row["record_type"] = "summary_expectation"
-                row["expectation"] = str(exp_item.get("expectation", ""))
-                row["met_count"] = exp_item.get("met_count", 0)
-                row["not_met_count"] = exp_item.get("not_met_count", 0)
-                row["met_percentage"] = exp_item.get("met_percentage", 0.0)
-                row["not_met_percentage"] = exp_item.get("not_met_percentage", 0.0)
-
-                flattened_data.append(row)
-
-            turn_list = golden.get("turn_replay_results", [])
-            if isinstance(turn_list, list):
-                for i, turn in enumerate(turn_list):
-                    if not isinstance(turn, dict):
-                        continue
-                    row = overall_info.copy()
-                    row["record_type"] = "turn_replay"
-                    row["turn_index"] = i
-                    row["conversation_id"] = turn.get("conversation", "")
-
-                    lat = turn.get("turn_latency", {})
-                    if isinstance(lat, dict):
-                        row["turn_latency_seconds"] = lat.get("seconds", 0)
-
-                    sem_res = turn.get("semantic_similarity_result", {})
-                    if isinstance(sem_res, dict):
-                        row["turn_semantic_score"] = sem_res.get("score")
-                        row["turn_semantic_label"] = sem_res.get("label", "")
-                        row["turn_semantic_explanation"] = sem_res.get(
-                            "explanation", ""
-                        )
-                        row["turn_semantic_outcome"] = EvalUtils._map_outcome(
-                            sem_res.get("outcome")
-                        )
-
-                    hal_res = turn.get("hallucination_result", {})
-                    if isinstance(hal_res, dict):
-                        row["turn_hallucination_score"] = hal_res.get("score")
-                        row["turn_hallucination_label"] = hal_res.get("label", "")
-                        row["turn_hallucination_explanation"] = hal_res.get(
-                            "explanation", ""
-                        )
-
-                    row["turn_tool_ordered_invocation_score"] = EvalUtils._map_outcome(
-                        turn.get("tool_ordered_invocation_score")
-                    )
-                    row["turn_tool_invocation_score"] = EvalUtils._map_outcome(
-                        turn.get("tool_invocation_score")
-                    )
-
-                    # Store expectation outcomes as JSON string to keep the table flat
-                    outcomes = turn.get("expectation_outcome", [])
-                    row["expectation_outcomes"] = json.dumps(outcomes)
-
-                    flattened_data.append(row)
-
-            if not expectation_list and not turn_list:
-                row = overall_info.copy()
-                row["record_type"] = "overall_only"
-                flattened_data.append(row)
-
-        df = pd.DataFrame(flattened_data)
-
-        # Ensure timestamp types are parsed correctly
-        if "create_time" in df.columns:
-            df["create_time"] = pd.to_datetime(df["create_time"])
-        if "update_time" in df.columns:
-            df["update_time"] = pd.to_datetime(df["update_time"])
-
-        return df
-
-    def to_bigquery(
-        self,
-        df: Any,
-        dataset_table: str,
-        project_id: Optional[str] = None,
-        if_exists: str = "append",
-    ):
-        """Exports a pandas DataFrame to a Google BigQuery table.
-
-        Args:
-            df: The pandas DataFrame to upload.
-            dataset_table: The BigQuery target in 'dataset.table' format.
-            project_id: The GCP Project ID override (defaults to the app's project).
-            if_exists: Behavior when the table exists ('fail', 'replace', 'append').
-        """
-        target_project = project_id or self._get_project_id(self.app_id)
-
-        # Let pandas_gbq handle the upload utilizing the application default credentials
-        df.to_gbq(
-            destination_table=dataset_table,
-            project_id=target_project,
-            if_exists=if_exists,
-            credentials=self.creds,
-        )
-        print(
-            f"Successfully uploaded {len(df)} rows to {target_project}.{dataset_table}"
-        )
-
-    def get_run_summaries(self, df: Any) -> Any:
-        """Takes a flattened DataFrame from evals_to_dataframe and returns a simplified summary.
-
-        The summary contains one row per evaluation run, quickly extracting
-        the run ID, date, status, and overall metrics.
-
-        Args:
-            df: The pandas DataFrame generated by evals_to_dataframe.
-
-        Returns:
-            A simplified pandas DataFrame with one row per unique evaluation run.
-        """
-        # pandas import removed as it is now at top level
-
-        if df is None or df.empty or "eval_result_id" not in df.columns:
-            return pd.DataFrame()
-
-        cols_to_keep = [
-            "display_name",
-            "eval_result_id",
-            "evaluation_status",
-            "semantic_score",
-            "tool_invocation_score",
-            "create_time",
-            "update_time",
-        ]
-
-        # Group by the unique run identifier and take the first row's overall stats
-        summary_df = df.groupby("eval_result_id", as_index=False).first()
-
-        existing_cols = [c for c in cols_to_keep if c in summary_df.columns]
-        summary_df = summary_df[existing_cols]
-
-        # Sort by update_time descending so newer runs are at the top
-        if "update_time" in summary_df.columns:
-            summary_df = summary_df.sort_values(
-                by="update_time", ascending=False
-            ).reset_index(drop=True)
-
-        return summary_df
-
-    def load_tool_test_cases_from_file(self, test_file_path: str) -> List["TestCase"]:
-        """Loads tool tests from a YAML file."""
-        with open(test_file_path, "r") as f:
-            return self.load_tool_test_cases_from_yaml(f.read())
-
-    def load_tool_test_cases_from_yaml(self, yaml_data: str) -> List["TestCase"]:
-        """Loads tool tests from a YAML string."""
-        raw_data = yaml.safe_load(yaml_data)
-        if not raw_data or "tests" not in raw_data:
-            return []
-
-        return self.load_tool_test_cases_from_data(raw_data["tests"])
-
-    def load_tool_test_cases_from_data(
-        self, test_data: List[Dict[str, Any]]
-    ) -> List["TestCase"]:
-        """Loads tool tests from a list of dictionaries."""
-        # Pre-process data to handle VariableDeclaration objects
-        cleaned_data = []
-        for case in test_data:
-            case_copy = case.copy()
-            if "variables" in case_copy and isinstance(case_copy["variables"], dict):
-                cleaned_vars = {}
-                for k, v in case_copy["variables"].items():
-                    cleaned_vars[k] = self.variable_to_dict(v)
-                case_copy["variables"] = cleaned_vars
-            cleaned_data.append(case_copy)
-
-        adapter = TypeAdapter(List[ToolTestCase])
-        return adapter.validate_python(cleaned_data)
-
     @staticmethod
     def variable_to_dict(variable: Any) -> Any:
         """Converts a VariableDeclaration object or other types to a dictionary/value."""
@@ -514,6 +237,151 @@ class EvalUtils(Evaluations):
             return type(variable).to_dict(variable)
 
         return variable
+
+    def _parse_eval_results(
+        self,
+        results: Optional[Union[List[Any], str]] = None,
+        eval_names: Optional[Union[List[str], str]] = None,
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+        if isinstance(results, str):
+            eval_names = [results]
+            results = None
+        elif (
+            isinstance(results, list)
+            and len(results) > 0
+            and isinstance(results[0], str)
+        ):
+            eval_names = results
+            results = None
+
+        if isinstance(eval_names, str):
+            eval_names = [eval_names]
+
+        if results is None:
+            results = []
+            evaluations = self.list_evaluations(self.app_id)
+            for evaluation in evaluations:
+                if (
+                    eval_names
+                    and evaluation.display_name not in eval_names
+                    and evaluation.name not in eval_names
+                ):
+                    continue
+                results.extend(self.list_evaluation_results(evaluation.name))
+
+        run_summaries = []
+        expectations = []
+        turns = []
+        eval_cache = {}
+
+        for result in results:
+            res_dict = type(result).to_dict(result)
+            result_name = res_dict.get("name", "")
+            eval_name = "/".join(result_name.split("/")[:-2])
+            display_name = "Unknown Evaluation"
+            if eval_name:
+                if eval_name not in eval_cache:
+                    try:
+                        eval_obj = self.get_evaluation(eval_name)
+                        eval_cache[eval_name] = eval_obj.display_name
+                    except Exception:
+                        eval_cache[eval_name] = "Unknown Evaluation"
+                display_name = eval_cache[eval_name]
+
+            raw_status = res_dict.get("evaluation_status", 0)
+            if isinstance(raw_status, int):
+                status_map = {0: "UNSPECIFIED", 1: "✅ PASSED", 2: "❌ FAILED"}
+                status_str = status_map.get(raw_status, f"UNKNOWN_{raw_status}")
+            else:
+                status_str = str(raw_status)
+
+            golden = res_dict.get("golden_result", {})
+            metrics = golden.get("metrics", {}) if golden else {}
+
+            sem_score_raw = metrics.get("semantic_similarity_result", {}).get("score")
+            sem_score_str = (
+                f"{int(sem_score_raw) if sem_score_raw == int(sem_score_raw) else sem_score_raw} / 4.0"
+                if isinstance(sem_score_raw, (int, float))
+                else str(sem_score_raw) if sem_score_raw is not None else None
+            )
+
+            tool_score_raw = metrics.get("overall_tool_invocation_result", {}).get(
+                "tool_invocation_score"
+            )
+            tool_score_str = (
+                f"{int(tool_score_raw * 100)}%"
+                if isinstance(tool_score_raw, (int, float))
+                else EvalUtils._map_outcome(tool_score_raw)
+            )
+
+            base_info = {
+                "display_name": display_name,
+                "eval_result_id": result_name,
+                "evaluation_status": status_str,
+                "semantic_score": sem_score_str,
+                "tool_invocation_score": tool_score_str,
+                "create_time": res_dict.get("create_time", ""),
+                "update_time": res_dict.get("update_time", ""),
+            }
+            run_summaries.append(base_info)
+
+            expectation_list = metrics.get("expectation_results", [])
+            for exp_item in expectation_list:
+                row = {
+                    "display_name": display_name,
+                    "eval_result_id": result_name,
+                    "record_type": "summary_expectation",
+                    "expectation": str(exp_item.get("expectation", "")),
+                    "met_count": exp_item.get("met_count", 0),
+                    "not_met_count": exp_item.get("not_met_count", 0),
+                    "met_percentage": exp_item.get("met_percentage", 0.0),
+                    "not_met_percentage": exp_item.get("not_met_percentage", 0.0),
+                }
+                expectations.append(row)
+
+            turn_list = golden.get("turn_replay_results", [])
+            if isinstance(turn_list, list):
+                for i, turn in enumerate(turn_list):
+                    if not isinstance(turn, dict):
+                        continue
+                    row = {
+                        "display_name": display_name,
+                        "eval_result_id": result_name,
+                        "turn_index": i + 1,
+                    }
+                    lat = turn.get("turn_latency", {})
+                    row["latency_seconds"] = (
+                        lat.get("seconds", 0) if isinstance(lat, dict) else None
+                    )
+
+                    sem_res = turn.get("semantic_similarity_result", {})
+                    if isinstance(sem_res, dict):
+                        row["semantic_score"] = sem_res.get("score")
+                        row["semantic_outcome"] = EvalUtils._map_outcome(
+                            sem_res.get("outcome")
+                        )
+                    else:
+                        row["semantic_score"] = None
+                        row["semantic_outcome"] = None
+
+                    hal_res = turn.get("hallucination_result", {})
+                    row["hallucination_score"] = (
+                        hal_res.get("score") if isinstance(hal_res, dict) else None
+                    )
+                    row["hallucination"] = (
+                        hal_res.get("label", "") if isinstance(hal_res, dict) else None
+                    )
+
+                    row["tool_invocation_score"] = EvalUtils._map_outcome(
+                        turn.get("tool_invocation_score")
+                    )
+
+                    outcomes = turn.get("expectation_outcome", [])
+                    row["expectation_outcomes"] = json.dumps(outcomes)
+
+                    turns.append(row)
+
+        return run_summaries, expectations, turns
 
     def _get_value_at_path(self, data: Any, path: str) -> Any:
         """Retrieves value from data using dot notation (e.g., 'a.b.c' or 'list.0.item')."""
@@ -565,6 +433,514 @@ class EvalUtils(Evaluations):
             return actual is not None
         return False
 
+    def _search_span_dict(self, span_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        # Sometimes span names can be upper/lower cased.
+        if span_dict.get("name", "").lower() == "guardrail":
+            attrs = span_dict.get("attributes", {})
+            if (
+                str(attrs.get("triggered", "")).lower() == "true"
+                or attrs.get("triggered") is True
+            ):
+                return span_dict
+
+        child_spans = span_dict.get("childSpans", span_dict.get("child_spans", []))
+        for child in child_spans:
+            res = self._search_span_dict(child)
+            if res:
+                return res
+        return None
+
+    def generate_report(
+        self, df: pd.DataFrame, test_type: str = "guardrails_test"
+    ) -> pd.DataFrame:
+        """Generates a summary stats report for recent tests."""
+        report_timestamp = datetime.datetime.now()
+        stats = EvalUtils._calculate_stats(df)
+
+        df_report = pd.DataFrame(
+            columns=SUMMARY_SCHEMA_COLUMNS,
+            data=[
+                [
+                    report_timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    test_type,
+                    stats.total_tests,
+                    stats.pass_count,
+                    stats.pass_rate,
+                    stats.p50_latency_ms,
+                    stats.p90_latency_ms,
+                    stats.p99_latency_ms,
+                    stats.agent_name,
+                    stats.model,
+                ]
+            ],
+        )
+
+        return df_report
+
+    def evals_to_dataframe(
+        self,
+        results: Optional[Union[List[Any], str]] = None,
+        eval_names: Optional[Union[List[str], str]] = None,
+    ) -> Dict[str, Any]:
+        """Provides three simplified views of the evaluation data.
+
+        Returns:
+            A dict with 'summary', 'failures', and 'trace' DataFrames.
+        """
+        run_summaries, expectations, turns = self._parse_eval_results(
+            results, eval_names
+        )
+
+        # Summary
+        df_summary = pd.DataFrame(run_summaries)
+        if not df_summary.empty:
+            if "create_time" in df_summary.columns:
+                df_summary["create_time"] = pd.to_datetime(df_summary["create_time"])
+            if "update_time" in df_summary.columns:
+                df_summary["update_time"] = pd.to_datetime(df_summary["update_time"])
+            if "update_time" in df_summary.columns:
+                df_summary = df_summary.sort_values(
+                    by="update_time", ascending=False
+                ).reset_index(drop=True)
+
+        # Failures
+        failures = []
+        for exp in expectations:
+            if exp.get("not_met_count", 0) > 0:
+                failures.append(
+                    {
+                        "display_name": exp["display_name"],
+                        "eval_result_id": exp["eval_result_id"],
+                        "turn_index": None,
+                        "failure_type": "Expectation",
+                        "expected": str(exp.get("expectation", "")),
+                        "actual": "(Not Met)",
+                        "score": None,
+                    }
+                )
+
+        for turn in turns:
+            outcomes_str = turn.get("expectation_outcomes", "[]")
+            outcomes = []
+            try:
+                outcomes = json.loads(outcomes_str)
+            except Exception:
+                pass
+
+            def _get_exp_act(outcome_obj):
+                e_text = ""
+                a_text = "(None / Missed)"
+                f_type = "Turn Expectation"
+                e_dict = outcome_obj.get("expectation", {})
+
+                if "agent_response" in e_dict:
+                    chunks = e_dict["agent_response"].get("chunks", [])
+                    e_text = (
+                        chunks[0].get("text", "agent_response")
+                        if chunks
+                        else "agent_response"
+                    )
+                    f_type = "Semantic Similarity"
+                elif "tool_call" in e_dict:
+                    e_text = e_dict["tool_call"].get(
+                        "display_name", e_dict["tool_call"].get("id", "tool_call")
+                    )
+                    f_type = "Tool Call"
+                elif "agent_transfer" in e_dict:
+                    e_text = e_dict["agent_transfer"].get(
+                        "display_name",
+                        e_dict["agent_transfer"].get("target_agent", "agent_transfer"),
+                    )
+                    f_type = "Routing / Agent"
+
+                if "observed_agent_response" in outcome_obj:
+                    chunks = outcome_obj["observed_agent_response"].get("chunks", [])
+                    a_text = chunks[0].get("text", "") if chunks else ""
+                elif "observed_tool_call" in outcome_obj:
+                    a_text = outcome_obj["observed_tool_call"].get(
+                        "display_name", outcome_obj["observed_tool_call"].get("id", "")
+                    )
+                elif "observed_agent_transfer" in outcome_obj:
+                    a_text = outcome_obj["observed_agent_transfer"].get(
+                        "display_name",
+                        outcome_obj["observed_agent_transfer"].get("target_agent", ""),
+                    )
+
+                return e_text, a_text, f_type
+
+            sem_handled = False
+            tool_handled = False
+
+            # Process individual explicit expectation failures
+            for outcome_obj in outcomes:
+                raw_outcome = outcome_obj.get("outcome")
+                if raw_outcome == 2 or EvalUtils._map_outcome(raw_outcome) == "FAIL":
+                    e, a, f = _get_exp_act(outcome_obj)
+                    score_val = None
+                    if f == "Semantic Similarity":
+                        raw_score = turn.get("semantic_score")
+                        if isinstance(raw_score, (int, float)):
+                            score_val = f"{int(raw_score) if raw_score == int(raw_score) else raw_score} / 4.0"
+                        else:
+                            score_val = (
+                                str(raw_score) if raw_score is not None else None
+                            )
+                        sem_handled = True
+                    elif f == "Tool Call":
+                        raw_score = turn.get("tool_invocation_score")
+                        if isinstance(raw_score, (int, float)):
+                            score_val = f"{int(raw_score * 100)}%"
+                        else:
+                            score_val = EvalUtils._map_outcome(raw_score)
+
+                        if EvalUtils._map_outcome(raw_score) == "FAIL":
+                            tool_handled = True
+
+                    failures.append(
+                        {
+                            "display_name": turn["display_name"],
+                            "eval_result_id": turn["eval_result_id"],
+                            "turn_index": turn["turn_index"],
+                            "failure_type": f,
+                            "expected": e,
+                            "actual": a,
+                            "score": score_val,
+                        }
+                    )
+
+            # Process overall semantic failure if not caught
+            sem_outcome = turn.get("semantic_outcome")
+            if sem_outcome == "FAIL" and not sem_handled:
+                e_text, a_text = "", ""
+                for outcome_obj in outcomes:
+                    if "agent_response" in outcome_obj.get("expectation", {}):
+                        e_text, a_text, _ = _get_exp_act(outcome_obj)
+                        break
+                raw_score = turn.get("semantic_score")
+                if isinstance(raw_score, (int, float)):
+                    score_val = f"{int(raw_score) if raw_score == int(raw_score) else raw_score} / 4.0"
+                else:
+                    score_val = str(raw_score) if raw_score is not None else None
+
+                failures.append(
+                    {
+                        "display_name": turn["display_name"],
+                        "eval_result_id": turn["eval_result_id"],
+                        "turn_index": turn["turn_index"],
+                        "failure_type": "Semantic Similarity",
+                        "expected": e_text,
+                        "actual": a_text,
+                        "score": score_val,
+                    }
+                )
+
+            # Process overall tool failure if not caught
+            tool_outcome = turn.get("tool_invocation_score")
+            if tool_outcome == "FAIL" and not tool_handled:
+                e_text, a_text = "", ""
+                for outcome_obj in outcomes:
+                    if "tool_call" in outcome_obj.get("expectation", {}):
+                        e_text, a_text, _ = _get_exp_act(outcome_obj)
+                        break
+                failures.append(
+                    {
+                        "display_name": turn["display_name"],
+                        "eval_result_id": turn["eval_result_id"],
+                        "turn_index": turn["turn_index"],
+                        "failure_type": "Tool Call",
+                        "expected": e_text,
+                        "actual": a_text,
+                        "score": "FAIL",
+                    }
+                )
+
+        df_failures = pd.DataFrame(failures)
+        if not df_failures.empty:
+            df_failures = df_failures.sort_values(
+                by=["eval_result_id", "turn_index"]
+            ).reset_index(drop=True)
+
+        df_traces = pd.DataFrame(turns)
+
+        return {"summary": df_summary, "failures": df_failures, "trace": df_traces}
+
+    def get_latency_metrics_dfs(
+        self,
+        results: Optional[List[Any]] = None,
+        eval_names: Optional[List[str]] = None,
+        app_id: Optional[str] = None,
+    ) -> Dict[str, pd.DataFrame]:
+        """Generates detailed and aggregated latency metrics DataFrames from evaluation results and traces.
+
+        Args:
+            results: An optional list of Eval Result List payload chunks.
+            eval_names: Alternatively, an optional list of string Display Names / Names of Evals.
+            app_id: Optional override if retrieving Conversation traces dynamically.
+        """
+        if not results:
+            if not getattr(self, "app_id", None) and not app_id:
+                raise ValueError("app_id must be set to look up evaluations by name.")
+            results = []
+            for name in eval_names or []:
+                # Retrieve all results for the provided display name
+                results.extend(self.list_evaluation_results(name))
+
+        if not results:
+            return {
+                "eval_summary": pd.DataFrame(),
+                "eval_details": pd.DataFrame(),
+                "tool_summary": pd.DataFrame(),
+                "tool_details": pd.DataFrame(),
+                "callback_summary": pd.DataFrame(),
+                "callback_details": pd.DataFrame(),
+                "guardrail_summary": pd.DataFrame(),
+                "guardrail_details": pd.DataFrame(),
+            }
+
+        conv_ids = set()
+        for res_obj in results:
+            res_dict = (
+                type(res_obj).to_dict(res_obj)
+                if not isinstance(res_obj, dict)
+                else res_obj
+            )
+            turns = res_dict.get("golden_result", {}).get("turn_replay_results", [])
+            for t in turns:
+                if t.get("conversation"):
+                    conv_ids.add(t.get("conversation"))
+
+        target_app = app_id or getattr(self, "app_id", None)
+        traces = {}
+        if target_app and conv_ids:
+            if target_app == getattr(self, "app_id", None):
+                ch_getter = self.ch_client.get_conversation
+            else:
+                ch_client = ConversationHistory(app_id=target_app, creds=self.creds)
+                ch_getter = ch_client.get_conversation
+            traces = LatencyParser.fetch_conversation_traces(list(conv_ids), ch_getter)
+
+        eval_details_rows = []
+        eval_summary_agg = []
+        tool_details_rows = []
+        callback_details_rows = []
+        guardrail_details_rows = []
+
+        for res_obj in results:
+            res_dict = (
+                type(res_obj).to_dict(res_obj)
+                if not isinstance(res_obj, dict)
+                else res_obj
+            )
+            result_name = res_dict.get("name", "")
+            tokens = result_name.split("/")
+            eval_result_id = tokens[-1] if tokens else result_name
+            eval_name = "/".join(tokens[:-2]) if len(tokens) >= 2 else ""
+
+            # Get display name
+            display_name = eval_name
+            evals_map = getattr(self, "_get_or_load_evals_map", lambda x: {})(
+                getattr(self, "app_id", None)
+            )
+            if evals_map:
+                for lookup_name, full_path in evals_map.get("goldens", {}).items():
+                    if full_path == eval_name:
+                        display_name = lookup_name
+                        break
+                for lookup_name, full_path in evals_map.get("scenarios", {}).items():
+                    if full_path == eval_name:
+                        display_name = lookup_name
+                        break
+
+            golden = res_dict.get("golden_result", {})
+            turns = golden.get("turn_replay_results", [])
+
+            run_total_turn_latencies = []
+            run_tool_latencies = []
+            run_llm_latencies = []
+            run_guardrail_latencies = []
+            run_callback_latencies = []
+
+            for turn_idx, t in enumerate(turns):
+                total_turn_ms = LatencyParser._parse_duration_ms(
+                    t.get("turn_latency", "0s")
+                )
+
+                # Turn specific items
+                tool_calls = t.get("tool_call_latencies", [])
+                turn_tool_ms = sum(
+                    [
+                        LatencyParser._parse_duration_ms(
+                            tc.get("execution_latency", "0s")
+                        )
+                        for tc in tool_calls
+                    ]
+                )
+                tool_names = ", ".join(
+                    [tc.get("display_name", tc.get("tool", "")) for tc in tool_calls]
+                )
+
+                turn_llm_ms = 0.0
+                turn_guardrail_ms = 0.0
+                turn_callback_ms = 0.0
+
+                cid = t.get("conversation")
+                if cid and cid in traces:
+                    conv = traces[cid]
+                    conv_turns = conv.get("turns", [])
+                    # Match by index assuming evaluating linearly
+                    if turn_idx < len(conv_turns):
+                        trace_turn = conv_turns[turn_idx]
+                        root = trace_turn.get("root_span", {})
+                        if root:
+                            sums = LatencyParser._process_spans(
+                                [root],
+                                eval_result_id,
+                                turn_idx + 1,
+                                tool_details_rows,
+                                callback_details_rows,
+                                guardrail_details_rows,
+                                context_key="eval_result_id",
+                            )
+                            turn_llm_ms = sums["LLM"]
+                            turn_guardrail_ms = sums["Guardrail"]
+                            turn_callback_ms = sums["Callback"]
+
+                run_total_turn_latencies.append(total_turn_ms)
+                if turn_tool_ms > 0:
+                    run_tool_latencies.append(turn_tool_ms)
+                if turn_llm_ms > 0:
+                    run_llm_latencies.append(turn_llm_ms)
+                if turn_guardrail_ms > 0:
+                    run_guardrail_latencies.append(turn_guardrail_ms)
+                if turn_callback_ms > 0:
+                    run_callback_latencies.append(turn_callback_ms)
+
+                eval_details_rows.append(
+                    {
+                        "display_name": display_name,
+                        "eval_result_id": eval_result_id,
+                        "turn_index": turn_idx + 1,
+                        "Total Turn Latency (ms)": int(total_turn_ms),
+                        "Tool Call Latencies (ms)": int(turn_tool_ms),
+                        "LLM Latencies (ms)": int(turn_llm_ms),
+                        "Guardrail Latencies (ms)": int(turn_guardrail_ms),
+                        "Callback Latencies (ms)": int(turn_callback_ms),
+                        "tool_names": tool_names,
+                    }
+                )
+
+            # Compute run summary aggregations
+            def _aggregate(arr):
+                if not arr:
+                    return {"Average": 0, "p50": 0, "p90": 0, "p99": 0}
+                ser = pd.Series(arr)
+                return {
+                    "Average": int(ser.mean()),
+                    "p50": int(ser.quantile(0.50)),
+                    "p90": int(ser.quantile(0.90)),
+                    "p99": int(ser.quantile(0.99)),
+                }
+
+            t_agg = _aggregate(run_total_turn_latencies)
+            tc_agg = _aggregate(run_tool_latencies)
+            llm_agg = _aggregate(run_llm_latencies)
+            gr_agg = _aggregate(run_guardrail_latencies)
+            cb_agg = _aggregate(run_callback_latencies)
+
+            eval_summary_agg.append(
+                {
+                    "display_name": display_name,
+                    "eval_result_id": eval_result_id,
+                    "evaluation_type": "Golden" if golden else "Scenario",
+                    "Average (Turn)": f"{t_agg['Average']} ms",
+                    "p50 | p90 | p99 (Turn)": f"{t_agg['p50']} ms | {t_agg['p90']} ms | {t_agg['p99']} ms",
+                    "Average (LLM)": f"{llm_agg['Average']} ms",
+                    "p50 | p90 | p99 (LLM)": f"{llm_agg['p50']} ms | {llm_agg['p90']} ms | {llm_agg['p99']} ms",
+                    "Average (Tool Call)": f"{tc_agg['Average']} ms",
+                    "p50 | p90 | p99 (Tool Call)": f"{tc_agg['p50']} ms | {tc_agg['p90']} ms | {tc_agg['p99']} ms",
+                    "Average (Guardrail)": f"{gr_agg['Average']} ms",
+                    "p50 | p90 | p99 (Guardrail)": f"{gr_agg['p50']} ms | {gr_agg['p90']} ms | {gr_agg['p99']} ms",
+                    "Average (Callback)": f"{cb_agg['Average']} ms",
+                    "p50 | p90 | p99 (Callback)": f"{cb_agg['p50']} ms | {cb_agg['p90']} ms | {cb_agg['p99']} ms",
+                }
+            )
+
+        eval_details = pd.DataFrame(eval_details_rows)
+        eval_summary = pd.DataFrame(eval_summary_agg)
+
+        tool_details = pd.DataFrame(tool_details_rows)
+        callback_details = pd.DataFrame(callback_details_rows)
+        guardrail_details = pd.DataFrame(guardrail_details_rows)
+
+        tool_summary = LatencyParser.build_summary_df(tool_details, ["tool_name"])
+        callback_summary = LatencyParser.build_summary_df(
+            callback_details, ["agent", "stage", "description"]
+        )
+        guardrail_summary = LatencyParser.build_summary_df(
+            guardrail_details, ["agent", "name"]
+        )
+
+        return {
+            "eval_summary": eval_summary,
+            "eval_details": eval_details,
+            "tool_summary": tool_summary,
+            "tool_details": tool_details,
+            "callback_summary": callback_summary,
+            "callback_details": callback_details,
+            "guardrail_summary": guardrail_summary,
+            "guardrail_details": guardrail_details,
+        }
+
+    def to_bigquery(
+        self,
+        df: Any,
+        dataset_table: str,
+        project_id: Optional[str] = None,
+        if_exists: str = "append",
+    ):
+        """Exports a pandas DataFrame to a Google BigQuery table."""
+        target_project = project_id or self._get_project_id(self.app_id)
+        df.to_gbq(
+            destination_table=dataset_table,
+            project_id=target_project,
+            if_exists=if_exists,
+            credentials=self.creds,
+        )
+        print(
+            f"Successfully uploaded {len(df)} rows to {target_project}.{dataset_table}"
+        )
+
+    def load_tool_test_cases_from_file(self, test_file_path: str) -> List["TestCase"]:
+        """Loads tool tests from a YAML file."""
+        with open(test_file_path, "r") as f:
+            return self.load_tool_test_cases_from_yaml(f.read())
+
+    def load_tool_test_cases_from_yaml(self, yaml_data: str) -> List["TestCase"]:
+        """Loads tool tests from a YAML string."""
+        raw_data = yaml.safe_load(yaml_data)
+        if not raw_data or "tests" not in raw_data:
+            return []
+
+        return self.load_tool_test_cases_from_data(raw_data["tests"])
+
+    def load_tool_test_cases_from_data(
+        self, test_data: List[Dict[str, Any]]
+    ) -> List["TestCase"]:
+        """Loads tool tests from a list of dictionaries."""
+        # Pre-process data to handle VariableDeclaration objects
+        cleaned_data = []
+        for case in test_data:
+            case_copy = case.copy()
+            if "variables" in case_copy and isinstance(case_copy["variables"], dict):
+                cleaned_vars = {}
+                for k, v in case_copy["variables"].items():
+                    cleaned_vars[k] = self.variable_to_dict(v)
+                case_copy["variables"] = cleaned_vars
+            cleaned_data.append(case_copy)
+
+        adapter = TypeAdapter(List[ToolTestCase])
+        return adapter.validate_python(cleaned_data)
+
     def validate_tool_test(
         self,
         test_case: "TestCase",
@@ -579,25 +955,14 @@ class EvalUtils(Evaluations):
         if isinstance(tool_response, dict) and "variables" in tool_response:
             updated_variables = tool_response["variables"]
 
-        # If response is just the JSON from API, it might have 'toolResponse' key or be flat
-        # The execute_tool returns JSON.
-        # Assuming typical tool response structure.
-        # If 'response' key exists in test expectations, we check against tool_response directly or tool_response['response']?
-        # The original code checked `tool_response["response"]`.
-        # We'll assume the API returns something like {response: ..., variables: ...} or we adapt.
-        # For now, following original logic: expects "response" key in tool_response.
-
         errors = []
         # Validate response
         for exp in test_case.response_expectations:
-            # Safe access
             resp_data = (
                 tool_response.get("response")
                 if isinstance(tool_response, dict)
                 else tool_response
             )
-            # If "response" key is missing, maybe the whole thing is the response?
-            # Adjust based on observed API behavior.
             actual_value = self._get_value_at_path(resp_data, exp.path)
             if not self._check_expectation(actual_value, exp):
                 errors.append(
@@ -671,12 +1036,6 @@ class EvalUtils(Evaluations):
                     final_variables[var_name] = custom_val
 
             try:
-                # Calculate tool_display_name or toolset key logic
-                # execute_tool needs tool_display_name?
-                # In original script: tool_id = self.tool_display_name_id_map[test_case.tool]
-                # execute_tool(..., tool_id, test_case.tool, ...)
-                # So test_case.tool IS the display name.
-
                 if debug:
                     print(f"[DEBUG] Executing tool: {test_case.tool}")
                     print(f"[DEBUG] Tool ID: {tool_id}")
@@ -973,23 +1332,6 @@ class EvalUtils(Evaluations):
         # Append results to the original dataframe
         results_df = pd.DataFrame(results)
         return pd.concat([df.reset_index(drop=True), results_df], axis=1)
-
-    def _search_span_dict(self, span_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        # Sometimes span names can be upper/lower cased.
-        if span_dict.get("name", "").lower() == "guardrail":
-            attrs = span_dict.get("attributes", {})
-            if (
-                str(attrs.get("triggered", "")).lower() == "true"
-                or attrs.get("triggered") is True
-            ):
-                return span_dict
-
-        child_spans = span_dict.get("childSpans", span_dict.get("child_spans", []))
-        for child in child_spans:
-            res = self._search_span_dict(child)
-            if res:
-                return res
-        return None
 
 
 # --- Testing Classes ---

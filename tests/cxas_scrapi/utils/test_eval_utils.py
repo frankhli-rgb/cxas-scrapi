@@ -32,22 +32,24 @@ def test_evals_to_dataframe_with_data():
                 "expectation_results": [
                     {
                         "expectation": "Agent should pass",
-                        "met_count": 1,
-                        "not_met_count": 0,
-                        "met_percentage": 100.0,
-                        "not_met_percentage": 0.0,
+                        "met_count": 0,
+                        "not_met_count": 1,
+                        "met_percentage": 0.0,
+                        "not_met_percentage": 100.0,
                     }
                 ],
             }
         },
     }
 
-    df = utils.evals_to_dataframe([res])
+    df_dict = utils.evals_to_dataframe([res])
+    
+    assert len(df_dict["summary"]) == 1
+    assert "semantic_score" in df_dict["summary"].columns
+    assert "tool_invocation_score" in df_dict["summary"].columns
 
-    assert len(df) == 1
-    assert df.iloc[0]["expectation"] == "Agent should pass"
-    assert df.iloc[0]["met_count"] == 1
-    assert df.iloc[0]["semantic_score"] == 5
+    assert len(df_dict["failures"]) == 1
+    assert df_dict["failures"].iloc[0]["expected"] == "Agent should pass"
 
 
 def test_to_bigquery():

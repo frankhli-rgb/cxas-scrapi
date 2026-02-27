@@ -15,9 +15,14 @@
 # limitations under the License.
 
 from typing import Dict, List, Optional, Any
+import datetime
+import logging
+import pandas as pd
 from google.cloud.ces_v1beta import AgentServiceClient, types
 import yaml
 from cxas_scrapi.core.common import Common
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationHistory(Common):
@@ -113,15 +118,110 @@ class ConversationHistory(Common):
 
         return out_yaml
 
-    def list_conversations(self, app_id: str = None) -> Any:
-        """Lists conversations in the configured app."""
+    def list_conversations(
+        self, app_id: str = None, time_filter: str = None, source_filter: str = None
+    ) -> Any:
+        """Lists conversations in the configured app.
+
+        Args:
+            app_id: The specific App ID string.
+            time_filter: An optional relative time filter (e.g. '7d', '24h', '1m').
+            source_filter: An optional enum string filter (e.g. 'LIVE', 'SIMULATOR', 'EVAL').
+        """
         if self.app_id:
             app_id = self.app_id
 
-        request = types.ListConversationsRequest(parent=app_id)
+        filter_str = None
+        if time_filter:
+            now = datetime.datetime.utcnow()
+            valid = False
+            if time_filter.endswith("d"):
+                days = int(time_filter[:-1])
+                past = now - datetime.timedelta(days=days)
+                valid = True
+            elif time_filter.endswith("h"):
+                hours = int(time_filter[:-1])
+                past = now - datetime.timedelta(hours=hours)
+                valid = True
+            elif time_filter.endswith("m"):
+                minutes = int(time_filter[:-1])
+                past = now - datetime.timedelta(minutes=minutes)
+                valid = True
+            if valid:
+                formatted_time = past.strftime("%Y-%m-%dT%H:%M:%SZ")
+                filter_str = f'start_time > "{formatted_time}"'
+            else:
+                logger.warning(
+                    f"Unrecognized time_filter format: {time_filter}. Ignoring."
+                )
+
+        request_kwargs = {"parent": app_id, "filter": filter_str}
+
+        if source_filter:
+            source_enum_val = getattr(
+                types.Conversation.Source, source_filter.upper(), None
+            )
+            if source_enum_val is not None:
+                request_kwargs["source"] = source_enum_val
+            else:
+                logger.warning(
+                    f"Unrecognized source_filter format: {source_filter}. Ignoring."
+                )
+
+        request = types.ListConversationsRequest(**request_kwargs)
 
         # Return the response iterator directly to allow auto-pagination
         return list(self.client.list_conversations(request=request))
+
+    def get_latency_metrics_dfs(
+        self,
+        app_id: Optional[str] = None,
+        time_filter: str = "7d",
+        source_filter: str = None,
+        limit: int = 50,
+    ) -> Dict[str, pd.DataFrame]:
+        """Generates latency metrics DataFrames from recent conversation traces.
+
+        Args:
+            app_id: Optional App ID override.
+            time_filter: Relative timeframe to fetch (e.g. '7d', '24h').
+            source_filter: Optional source environment to filter by (e.g. 'LIVE', 'SIMULATOR').
+            limit: Maximum number of conversations to retrieve and parse.
+
+        Returns:
+            Dictionary containing DataFrames: tool_summary, tool_details, callback_summary, callback_details, guardrail_summary, guardrail_details
+        """
+        from cxas_scrapi.utils.latency_parser import LatencyParser
+
+        target_app = app_id or self.app_id
+        if not target_app:
+            raise ValueError(
+                "app_id must be provided to fetch conversational latency metrics."
+            )
+
+        convs = self.list_conversations(
+            app_id=target_app, time_filter=time_filter, source_filter=source_filter
+        )
+        if not convs:
+            logger.warning(
+                f"No conversations found for time_filter: {time_filter} and source_filter: {source_filter}"
+            )
+            return {
+                "tool_summary": pd.DataFrame(),
+                "tool_details": pd.DataFrame(),
+                "callback_summary": pd.DataFrame(),
+                "callback_details": pd.DataFrame(),
+                "guardrail_summary": pd.DataFrame(),
+                "guardrail_details": pd.DataFrame(),
+            }
+
+        # Extract the string IDs, limiting to the requested amount
+        conv_ids = [c.name.split("/")[-1] for c in convs[:limit]]
+
+        traces = LatencyParser.fetch_conversation_traces(
+            conv_ids, self.get_conversation
+        )
+        return LatencyParser.extract_trace_metrics(traces, context_type="conversation")
 
     def get_conversation(self, conversation_id: str) -> types.Conversation:
         """Gets a specific conversation by its ID."""

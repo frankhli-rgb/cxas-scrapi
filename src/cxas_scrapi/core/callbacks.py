@@ -24,13 +24,13 @@ from cxas_scrapi.core.agents import Agents
 class Callbacks(Agents):
     """Core Class for managing Agent Callback Resources."""
 
-    def __init__(self, app_id: str, env: str = "PROD"):
+    def __init__(self, app_id: str):
         """Initializes the Callbacks client.
 
         Args:
             app_id: The full resource name of the parent App (projects/P/locations/L/apps/A).
         """
-        super().__init__(app_id=app_id, env=env)
+        super().__init__(app_id=app_id)
         self.resource_type = "callbacks"
 
         # Maps shorthand callback types to the exact field names in the Agent proto
