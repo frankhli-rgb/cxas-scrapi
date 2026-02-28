@@ -85,19 +85,10 @@ class Tools(Apps):
 
         return display_name
 
-    def _is_toolset(self, tool_id: str) -> bool:
+    @staticmethod
+    def _is_toolset(tool_id: str) -> bool:
         """Helper to determine if a full resource name refers to a Toolset."""
         return "/toolsets/" in tool_id
-
-    def list_tools(self, app_id: str) -> List[Any]:
-        """Lists both tools and toolsets within a specific app."""
-        tools_request = types.ListToolsRequest(parent=app_id)
-        tools_response = self.client.list_tools(request=tools_request)
-
-        toolsets_request = types.ListToolsetsRequest(parent=app_id)
-        toolsets_response = self.client.list_toolsets(request=toolsets_request)
-
-        return list(tools_response) + list(toolsets_response)
 
     @staticmethod
     def _parse_openapi_schema(
@@ -183,6 +174,16 @@ class Tools(Apps):
         if not self.tools_map:
             self.tools_map = self.get_tools_map(app_id, reverse=True)
         return self.tools_map
+
+    def list_tools(self, app_id: str) -> List[Any]:
+        """Lists both tools and toolsets within a specific app."""
+        tools_request = types.ListToolsRequest(parent=app_id)
+        tools_response = self.client.list_tools(request=tools_request)
+
+        toolsets_request = types.ListToolsetsRequest(parent=app_id)
+        toolsets_response = self.client.list_toolsets(request=toolsets_request)
+
+        return list(tools_response) + list(toolsets_response)
 
     def get_tool(self, tool_id: str) -> Any:
         """Gets a specific tool or toolset by full resource name."""

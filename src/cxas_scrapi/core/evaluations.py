@@ -23,6 +23,8 @@ from google.protobuf import json_format
 from google.cloud.ces_v1beta import EvaluationServiceClient, AgentServiceClient, types
 import yaml
 from cxas_scrapi.core.common import Common
+from cxas_scrapi.core.tools import Tools
+from cxas_scrapi.core.agents import Agents
 
 
 class Evaluations(Common):
@@ -47,6 +49,8 @@ class Evaluations(Common):
             credentials=self.creds, client_options=self.client_options
         )
         self.resource_type = "evaluations"
+        self.evals_map: Dict[str, Dict[str, str]] = {}
+        self._eval_search_index: Dict[str, str] = {}
 
     @staticmethod
     def parse_eval_to_yaml(filepath):
@@ -192,17 +196,147 @@ class Evaluations(Common):
         return list(response)
 
     def list_evaluation_results(
-        self, evaluation_name: str
+        self, evaluation_display_name: str
     ) -> List[types.EvaluationResult]:
         """Fetches all evaluation results for a specific evaluation.
 
         Args:
-            evaluation_name: Full resource name of the evaluation
-                             (e.g., projects/.../evaluations/...)
+            evaluation_display_name: Full resource name or display name of the evaluation
         """
+        evaluation_name = evaluation_display_name
+        if "/evaluations/" not in evaluation_name:
+            if not getattr(self, "app_id", None):
+                raise ValueError(
+                    "app_id must be set to look up evaluations by display name."
+                )
+            evals_map = self._get_or_load_evals_map(self.app_id)
+
+            if evaluation_name in evals_map.get("goldens", {}):
+                evaluation_name = evals_map["goldens"][evaluation_name]
+            elif evaluation_name in evals_map.get("scenarios", {}):
+                evaluation_name = evals_map["scenarios"][evaluation_name]
+            else:
+                raise ValueError(
+                    f"No evaluation found with display name: '{evaluation_name}'"
+                )
+
         request = types.ListEvaluationResultsRequest(parent=evaluation_name)
         response = self.client.list_evaluation_results(request=request)
         return list(response)
+
+    def get_evaluation_run(self, evaluation_run_id: str) -> types.EvaluationRun:
+        """Gets details of the specified evaluation run by its full resource name.
+
+        Args:
+            evaluation_run_id: Full resource name of the evaluation run.
+        """
+        request = types.GetEvaluationRunRequest(name=evaluation_run_id)
+        return self.client.get_evaluation_run(request=request)
+
+    def list_evaluation_results_by_run(
+        self, evaluation_run_id: str
+    ) -> List[types.EvaluationResult]:
+        """Fetches all evaluation results associated with a specific evaluation run.
+
+        Args:
+            evaluation_run_id: Full resource name of the evaluation run.
+        """
+        if "/evaluationRuns/" not in evaluation_run_id:
+            raise ValueError(f"Invalid evaluation_run_id format: {evaluation_run_id}")
+
+        app_name = evaluation_run_id.split("/evaluationRuns/")[0]
+        wildcard_parent = f"{app_name}/evaluations/-"
+
+        request = types.ListEvaluationResultsRequest(
+            parent=wildcard_parent, filter=f'evaluation_run:"{evaluation_run_id}"'
+        )
+        response = self.client.list_evaluation_results(request=request)
+        return list(response)
+
+    def build_search_index(
+        self, app_id: Optional[str] = None, force: bool = False
+    ) -> None:
+        """Builds a JSON string index of all evaluations for fast searching.
+
+        Args:
+            app_id: Parent App ID. Defaults to self.app_id.
+            force: If True, rebuilds the index even if already built.
+        """
+        app_id = app_id or self.app_id
+        if not force and self._eval_search_index:
+            return
+
+        evaluations = self.list_evaluations(app_id)
+        self._eval_search_index = {}
+
+        for eval_obj in evaluations:
+            # Convert to dictionary and then to JSON string
+            eval_dict = type(eval_obj).to_dict(eval_obj)
+            # Dump to string and convert to lowercase for case-insensitive searching
+            self._eval_search_index[eval_obj.display_name] = json.dumps(
+                eval_dict
+            ).lower()
+
+    def search_evaluations(
+        self,
+        app_id: str,
+        tools: Optional[List[str]] = None,
+        variables: Optional[List[str]] = None,
+        agents: Optional[List[str]] = None,
+        rebuild_index: bool = False,
+    ) -> List[str]:
+        """Searches querying evaluations and filters by connected tools, variables, or agents.
+
+        Args:
+            app_id: Parent App ID.
+            tools: List of tool display names to search for.
+            variables: List of variable names to search for.
+            agents: List of agent display names to search for.
+            rebuild_index: If True, forcefully rebuilds the search index.
+
+        Returns:
+            List of Evaluation display names that match the search criteria.
+        """
+        search_terms = []
+
+        if tools:
+            tools_client = Tools(app_id=app_id, creds=self.creds)
+            tools_map = tools_client.get_tools_map(app_id, reverse=True)
+            for tool_name in tools:
+                if tool_name in tools_map:
+                    # Append the resource ID name in lowercase
+                    search_terms.append(tools_map[tool_name].lower())
+                else:
+                    raise ValueError(f"Tool '{tool_name}' not found in App.")
+
+        if agents:
+            agents_client = Agents(app_id=app_id, creds=self.creds)
+            agents_map = agents_client.get_agents_map(app_id, reverse=True)
+            for agent_name in agents:
+                if agent_name in agents_map:
+                    # Append the resource ID name in lowercase
+                    search_terms.append(agents_map[agent_name].lower())
+                else:
+                    raise ValueError(f"Agent '{agent_name}' not found in App.")
+
+        if variables:
+            for var_name in variables:
+                search_terms.append(var_name.lower())
+
+        if not search_terms:
+            raise ValueError(
+                "Must provide at least one search term (tools, variables, or agents)."
+            )
+
+        self.build_search_index(app_id, force=rebuild_index)
+
+        matched_evals = []
+        for eval_name, eval_str in self._eval_search_index.items():
+            # Check if all search terms are in the evaluation JSON string
+            if all(term in eval_str for term in search_terms):
+                matched_evals.append(eval_name)
+
+        return matched_evals
 
     def get_evaluations_map(
         self, app_id: Optional[str] = None, reverse: bool = False
@@ -241,6 +375,14 @@ class Evaluations(Common):
 
         return evaluations_dict
 
+    def _get_or_load_evals_map(
+        self, app_id: Optional[str] = None
+    ) -> Dict[str, Dict[str, str]]:
+        """Gets a map of reverse evaluations from cache or loads it if missing."""
+        if not self.evals_map:
+            self.evals_map = self.get_evaluations_map(app_id, reverse=True)
+        return self.evals_map
+
     def get_evaluation(self, evaluation_id: str) -> types.Evaluation:
         """Gets a specific evaluation."""
         request = types.GetEvaluationRequest(name=evaluation_id)
@@ -270,19 +412,71 @@ class Evaluations(Common):
         return yaml.dump(out_dict, sort_keys=False, allow_unicode=True)
 
     def run_evaluation(
-        self, evaluations: List[str], app_id: Optional[str] = None
+        self,
+        evaluations: Optional[Union[str, List[str]]] = None,
+        eval_type: Optional[str] = None,
+        app_id: Optional[str] = None,
     ) -> Any:
         """Runs an evaluation on the specified app.
 
         Args:
-            evaluations: List of evaluation resource names to run.
+            evaluations: A single display name or a list of display names to run.
+            eval_type: Run a specific type of evaluation. Must be one of:
+                      'goldens', 'scenarios', or 'all'.
             app_id: Parent App ID. Defaults to self.app_id.
         """
         app_id = app_id or self.app_id
         if not app_id:
             raise ValueError("app_id is required.")
 
-        request = types.RunEvaluationRequest(app=app_id, evaluations=evaluations)
+        if not evaluations and not eval_type:
+            raise ValueError(
+                "Must provide either 'evaluations' (display names) or 'eval_type' ('goldens'/'scenarios'/'all')."
+            )
+
+        resolved_names = set()
+        evals_map = self._get_or_load_evals_map(app_id)
+
+        # Handle explicit evaluation display names
+        if evaluations:
+            if isinstance(evaluations, str):
+                evaluations = [evaluations]
+
+            for display_name in evaluations:
+                # Check both goldens and scenarios for this name
+                resource_name = evals_map.get("goldens", {}).get(
+                    display_name
+                ) or evals_map.get("scenarios", {}).get(display_name)
+
+                if resource_name:
+                    resolved_names.add(resource_name)
+                else:
+                    raise ValueError(
+                        f"Evaluation display name not found: '{display_name}'"
+                    )
+
+        # Handle explicit evaluation types
+        if eval_type:
+            eval_type = eval_type.lower()
+            if eval_type == "goldens":
+                resolved_names.update(evals_map.get("goldens", {}).values())
+            elif eval_type == "scenarios":
+                resolved_names.update(evals_map.get("scenarios", {}).values())
+            elif eval_type == "all":
+                resolved_names.update(evals_map.get("goldens", {}).values())
+                resolved_names.update(evals_map.get("scenarios", {}).values())
+            else:
+                raise ValueError(
+                    f"Invalid eval_type: '{eval_type}'. Must be 'goldens', 'scenarios', or 'all'."
+                )
+
+        if not resolved_names:
+            raise ValueError("No matching evaluation resource names found to run.")
+
+        request = types.RunEvaluationRequest(
+            app=app_id, evaluations=list(resolved_names)
+        )
+
         return self.client.run_evaluation(request=request)
 
     def import_evaluations(
@@ -439,10 +633,14 @@ class Evaluations(Common):
 
         if print_console:
             print("===== GLOBAL Settings =====")
-            print(f"Hallucinations: {thresholds.get('hallucination_metric_behavior', 'UNSPECIFIED')}")
+            print(
+                f"Hallucinations: {thresholds.get('hallucination_metric_behavior', 'UNSPECIFIED')}"
+            )
 
             print("\n===== GOLDEN Settings =====")
-            print(f"Hallucinations: {thresholds.get('golden_hallucination_metric_behavior', 'UNSPECIFIED')}")
+            print(
+                f"Hallucinations: {thresholds.get('golden_hallucination_metric_behavior', 'UNSPECIFIED')}"
+            )
 
             golden = thresholds.get("golden_evaluation_metrics_thresholds", {})
             turn_level = golden.get("turn_level_metrics_thresholds", {})
@@ -466,7 +664,9 @@ class Evaluations(Common):
                     print(f"- {k}: {v}{suffix}")
 
             print("\n===== SCENARIO Settings =====")
-            print(f"Hallucinations: {thresholds.get('scenario_hallucination_metric_behavior', 'UNSPECIFIED')}")
+            print(
+                f"Hallucinations: {thresholds.get('scenario_hallucination_metric_behavior', 'UNSPECIFIED')}"
+            )
             print("\n")
 
         return thresholds

@@ -22,14 +22,14 @@ from cxas_scrapi.core.agents import Agents
 class Changelogs(Agents):
     """Core Class for managing Changelog Resources."""
 
-    def __init__(self, app_id: str, env: str = "PROD"):
+    def __init__(self, app_id: str):
         """Initializes the Changelogs client.
 
         Args:
             app_id: The full resource name of the parent App (projects/P/locations/L/apps/A).
         """
         # We inherit from Agents because it holds the AgentServiceClient which contains changelog methods
-        super().__init__(app_id=app_id, env=env)
+        super().__init__(app_id=app_id)
         self.resource_type = "changelogs"
 
     def list_changelogs(self, app_id: Optional[str] = None) -> List[types.Changelog]:

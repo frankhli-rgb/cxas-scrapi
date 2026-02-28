@@ -21,43 +21,39 @@ import requests
 from google.protobuf import field_mask_pb2
 from google.protobuf import json_format
 from google.cloud.ces_v1beta import AgentServiceClient, types
-from cxas_scrapi.core.common import Common
+from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.workflows import WorkflowAgent
 
 
-class Agents(Common):
-    def __init__(self, app_id: str, env: str = "PROD"):
-        """Initializes the Agents client.
+class Agents(Apps):
+    """Core Class for managing Agent Resources."""
 
-        Args:
-            app_id: CXAS App ID (projects/{project}/locations/{location}/apps/{app}).
-            env: Environment override (default: PROD).
-        """
-        # Pass app_id to Common for client_options determination
-        super().__init__(agent_id=app_id)
+    def __init__(
+        self,
+        app_id: str,
+        creds_path: str = None,
+        creds_dict: Dict[str, str] = None,
+        creds: Any = None,
+        scope: List[str] = None,
+    ):
+        """Initializes the Agents client."""
+        project_id = app_id.split("/")[1]
+        location = app_id.split("/")[3]
+
+        super().__init__(
+            project_id=project_id,
+            location=location,
+            creds_path=creds_path,
+            creds_dict=creds_dict,
+            creds=creds,
+            scope=scope,
+        )
 
         self.app_id = app_id
-
-        # Parse project and location from app_id
-        try:
-            # Expected format: projects/{project}/locations/{location}/apps/{app}
-            parts = app_id.split("/")
-            if len(parts) >= 4 and parts[0] == "projects" and parts[2] == "locations":
-                self.project_id = parts[1]
-                self.location = parts[3]
-            else:
-                # Attempt simple parsing or default
-                self.project_id = None
-                self.location = None
-        except Exception:
-            self.project_id = None
-            self.location = None
-
-        # Initialize SDK Client
+        self.resource_type = "agents"
         self.client = AgentServiceClient(
             credentials=self.creds, client_options=self.client_options
         )
-        self.resource_type = "agents"
 
     def list_agents(self, app_id: Optional[str] = None) -> List[types.Agent]:
         """Lists agents within a specific app.
@@ -108,7 +104,7 @@ class Agents(Common):
         display_name: str,
         app_id: Optional[str] = None,
         agent_type: str = "llm",  # llm, dfcx, workflow
-        model: Optional[str] = "gemini-pro",
+        model: Optional[str] = "gemini-2.5-flash",
         instruction: Optional[str] = None,
         timeout: Optional[float] = None,
         dfcx_agent_resource: Optional[str] = None,
