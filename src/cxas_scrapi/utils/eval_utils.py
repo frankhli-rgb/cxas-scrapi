@@ -20,6 +20,7 @@ import time
 import enum
 import json
 import logging
+import uuid
 
 import pandas as pd
 import yaml
@@ -1482,6 +1483,192 @@ class EvalUtils(Evaluations):
         # Append results to the original dataframe
         results_df = pd.DataFrame(results)
         return pd.concat([df.reset_index(drop=True), results_df], axis=1)
+
+    @staticmethod
+    def _extract_tool_call_args(tool_call: Dict[str, Any]) -> Dict[str, Any]:
+        """Extracts tool arguments from various possible alias keys."""
+        for key in ["input_action_parameters", "args", "arguments"]:
+            if key in tool_call:
+                return tool_call[key]
+        return {}
+
+    @staticmethod
+    def _process_dataset_turn(
+        turn: Dict[str, Any],
+        session_params: Dict[str, Any],
+        params_injected: bool,
+    ) -> Dict[str, Any]:
+        """Processes a single turn from a conversation dataset into JSON steps.
+
+        Returns:
+            A tuple of (steps_list, updated_params_injected).
+        """
+        steps = []
+        user_input_text = turn.get("user")
+
+        if not params_injected and session_params:
+            steps.append({"userInput": {"variables": session_params}})
+            params_injected = True
+
+        user_input_obj = {}
+        if user_input_text is None:
+            user_input_obj["event"] = {"event": "welcome"}
+        else:
+            user_input_obj["text"] = str(user_input_text)
+
+        steps.append({"userInput": user_input_obj})
+
+        if (
+            "agent" in turn
+            and isinstance(turn["agent"], str)
+            and "# silent" not in turn["agent"]
+        ):
+            steps.append(
+                {
+                    "expectation": {
+                        "agentResponse": {
+                            "role": "agent",
+                            "chunks": [{"text": turn["agent"]}],
+                        }
+                    }
+                }
+            )
+
+        if "tool_calls" in turn:
+            for tool_call in turn["tool_calls"]:
+                action = tool_call["action"]
+
+                if action == "transfer_to_agent" and "agent" in tool_call:
+                    steps.append(
+                        {
+                            "expectation": {
+                                "agentTransfer": {
+                                    "targetAgent": tool_call["agent"]
+                                }
+                            }
+                        }
+                    )
+                    continue
+
+                tool_call_id = f"adk-{uuid.uuid4()}"
+                tool_call_expectation = {
+                    "expectation": {
+                        "toolCall": {
+                            "id": tool_call_id,
+                            "tool": action,
+                            "args": EvalUtils._extract_tool_call_args(tool_call),
+                        }
+                    }
+                }
+                steps.append(tool_call_expectation)
+
+                if tool_call.get("output") is not None:
+                    steps.append(
+                        {
+                            "expectation": {
+                                "toolResponse": {
+                                    "id": tool_call_id,
+                                    "tool": action,
+                                    "response": tool_call["output"],
+                                }
+                            }
+                        }
+                    )
+
+        return {"steps": steps, "params_injected": params_injected}
+
+    @staticmethod
+    def load_golden_eval_from_yaml(
+        yaml_file_path: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Parses a YAML file and creates a Golden eval input from it.
+
+        Supports two formats:
+        1. A compressed YAML format matching
+        tests/testdata/compressed_example.yaml
+        2. A YAML format matching the YAML from export_app, e.g.
+        tests/testdata/exported_eval_example.yaml
+
+        Args:
+            yaml_file_path: Path to the YAML file to be parsed.
+
+        Returns:
+            A dictionary matching the Golden Evaluation proto structure.
+        """
+        try:
+            with open(yaml_file_path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+        except (IOError, yaml.YAMLError) as e:
+            logger.error("Failed to load YAML from %s: %s", yaml_file_path, e)
+            return None
+
+        if not data:
+            return None
+
+        # Case 1: Exported Evaluation resources (has 'displayName' and 'golden')
+        if "displayName" in data and "golden" in data:
+            logger.info(
+                "YAML '%s' is an Evaluation resource. Returning as is.",
+                yaml_file_path,
+            )
+            return data
+
+        # Case 2: Dataset with 'conversations' list
+        logger.info(
+            "YAML '%s' is a conversation dataset. Processing first conversation.",
+            yaml_file_path,
+        )
+        common_params = data.get("common_session_parameters", {})
+        conversations_list = data.get("conversations", [])
+
+        if not conversations_list:
+            logger.error(
+                "YAML '%s' contains no 'conversations'.", yaml_file_path
+            )
+            return None
+
+        # Process only the first conversation from the list
+        conversation = conversations_list[0]
+        conversation_tags = conversation.get("tags") or []
+        if isinstance(conversation_tags, str):
+            conversation_tags = conversation_tags.split(",")
+
+        if not isinstance(conversation_tags, list):
+            raise ValueError(
+                f"Tags must be list or string. Got {type(conversation_tags)}"
+            )
+
+        conversation_tags = [str(t).strip() for t in conversation_tags]
+        display_name = conversation.get("conversation", "Unknown Conversation")
+
+        session_params = common_params.copy()
+        session_params.update(conversation.get("session_parameters", {}))
+        params_injected = False
+        json_turns = []
+
+        for turn in conversation.get("turns", []):
+            result = EvalUtils._process_dataset_turn(
+                turn, session_params, params_injected
+            )
+            json_turns.append({"steps": result["steps"]})
+            params_injected = result["params_injected"]
+
+        # Handle conversation level expectations.
+        eval_expectations = []
+        for exp in conversation.get("expectations", []):
+            if isinstance(exp, str):
+                eval_expectations.append({"expectation": exp})
+            else:
+                eval_expectations.append(exp)
+
+        return {
+            "displayName": display_name,
+            "tags": conversation_tags,
+            "golden": {
+                "turns": json_turns,
+                "evaluationExpectations": eval_expectations,
+            },
+        }
 
 
 # --- Testing Classes ---

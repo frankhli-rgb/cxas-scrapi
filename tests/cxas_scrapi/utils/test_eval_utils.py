@@ -1,6 +1,7 @@
 """Tests for evaluation utility functions."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+import yaml
 from cxas_scrapi.utils.eval_utils import EvalUtils
 import sys
 
@@ -79,3 +80,85 @@ def test_to_bigquery():
     # Cleanup mocks
     del sys.modules["google.cloud.bigquery"]
     del sys.modules["pandas_gbq"]
+
+
+def test_load_golden_eval_from_compressed_yaml():
+    """Test load_golden_eval_from_yaml with compressed format."""
+    # We want to test that EvalUtils.load_golden_eval_from_yaml parses this
+    # correctly from the local example file.
+
+    test_file_path = "tests/testdata/compressed_example.yaml"
+    with (
+        patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,
+    ):
+        mock_uuid.return_value = "mock_uuid"
+
+        result = EvalUtils.load_golden_eval_from_yaml(test_file_path)
+
+        # Verify "Unlock_Intent1" (the first conversation) was picked up
+        assert result["displayName"] == "Unlock_Intent1"
+        assert result["tags"] == ["direct", "p0"]
+
+        # Verify turns
+        turns = result["golden"]["turns"]
+        assert len(turns) == 2  # 2 turns in Unlock_Intent1
+
+        # Turn 1: Implicit greeting -> Agent response
+        # user: None -> event: welcome
+        # agent: In a sentence or two...
+        turn0_steps = turns[0]["steps"]
+        assert turn0_steps[0]["userInput"]["event"]["event"] == "welcome"
+        assert (
+            turn0_steps[1]["expectation"]["agentResponse"]["chunks"][0]["text"]
+            == "In a sentence or two, what are you calling about today?"
+        )
+
+        # Turn 2: User input -> Tool calls
+        # user: "unlock a phone"
+        # agent: # silent transfer (so no agentResponse expectation)
+        # tool_calls: retrieve_intent_matches, transfer_to_cx
+        turn1_steps = turns[1]["steps"]
+        assert turn1_steps[0]["userInput"]["text"] == "unlock a phone"
+
+        # Check tool calls
+        # We expect toolCall expectations for each tool in the list
+        # The order depends on implementation, but likely sequential
+
+        # First tool: retrieve_intent_matches
+        tool1 = turn1_steps[1]["expectation"]["toolCall"]
+        assert tool1["tool"] == "retrieve_intent_matches"
+        assert tool1["id"] == "adk-mock_uuid"
+
+        # Second tool: transfer_to_cx
+        tool2 = turn1_steps[2]["expectation"]["toolCall"]
+        assert tool2["tool"] == "transfer_to_cx"
+        assert tool2["id"] == "adk-mock_uuid"
+        assert tool2["args"] == {"intent": "Unlock"}
+
+        # Verify evaluation expectations
+        eval_exps = result["golden"]["evaluationExpectations"]
+        assert len(eval_exps) == 1
+
+
+def test_load_golden_eval_from_exported_yaml():
+    test_file_path = "tests/testdata/exported_eval_example.yaml"
+    with (
+        patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,
+    ):
+        mock_uuid.return_value = "mock_uuid"
+
+        result = EvalUtils.load_golden_eval_from_yaml(test_file_path)
+
+        # Verify it returns the parsed data correctly
+        assert result["displayName"] == "Basic Product Search Simplified"
+        assert len(result["golden"]["turns"]) == 4
+        assert (
+            result["golden"]["turns"][0]["steps"][0]["userInput"]["event"][
+                "event"
+            ]
+            == "WelcomeEvent"
+        )
+        assert (
+            result["golden"]["evaluationExpectations"][0]["displayName"]
+            == "Simple tool expectation 1"
+        )

@@ -1,0 +1,58 @@
+# yamllint disable rule:truthy
+conversations:
+- conversation: Unlock_Intent1
+  tags: [direct, p0]
+  turns:
+  - user:  # implicit greeting
+    agent: In a sentence or two, what are you calling about today?
+  - user: unlock a phone
+    agent:  # silent transfer
+    tool_calls:
+    -
+      {
+        "action": "retrieve_intent_matches"
+      }
+    -
+      {
+        "action": "transfer_to_cx",
+        "input_action_parameters": {
+          "intent": "Unlock"
+        }
+      }
+  expectations:
+  - There must be a transfer_to_cx tool call with the intent parameter set to Unlock
+- conversation: Unlock.Intent2
+  tags: [direct]
+  turns:
+  - user:  # implicit greeting
+    agent: In a sentence or two, what are you calling about today?
+  - user: I'm locked out of my account
+    agent:  # silent transfer
+    tool_calls:
+    -
+      {
+        "action": "retrieve_intent_matches"
+      }
+    -
+      {
+        "action": "transfer_to_cx",
+        "input_action_parameters": {
+          "intent": "Unlock"
+        }
+      }
+  expectations:
+  - There must be a transfer_to_cx tool call with the intent parameter set to Unlock
+- conversation: Datastore_Intent1
+  tags: [direct]
+  turns:
+  - user:  # implicit greeting
+    agent: In a sentence or two, what are you calling about today?
+  - user: block a number
+    agent:  # silent transfer
+    tool_calls:
+    -
+      {
+        "action": "website_datastore"
+      }
+  expectations:
+  - The agent must invoke the website_datastore tool.

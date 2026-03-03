@@ -1,0 +1,20 @@
+displayName: Basic Product Search Simplified
+golden:
+  turns:
+  - steps:
+    - userInput:
+        event:
+          event: WelcomeEvent
+  - steps:
+    - userInput:
+        text: balloons
+  - steps:
+    - userInput:
+        text: cups
+  - steps:
+    - userInput:
+        text: sandwiches
+  evaluationExpectations:
+    - displayName: Simple tool expectation 1
+      llmCriteria:
+        prompt: Did the agent call get_themes and filter_themes tool sequentially? get_themes should always come before filter_themes
