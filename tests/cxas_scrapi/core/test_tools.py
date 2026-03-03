@@ -305,3 +305,41 @@ def test_execute_tool_not_found(mock_client_cls):
     ):
         with pytest.raises(ValueError, match="Tool 'missing_tool' not found"):
             t.execute_tool(app_id="apps/A", tool_display_name="missing_tool", args={})
+
+
+@patch("requests.post")
+@patch("cxas_scrapi.core.tools.AgentServiceClient")
+def test_execute_tool_with_context(mock_client_cls, mock_post):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"result": "fake"}
+
+    mock_post.return_value = FakeResponse()
+
+    t = Tools("projects/p/locations/l/apps/A")
+    t.creds = MagicMock()
+    t.creds.token = "token"
+
+    with patch.object(
+        t, "get_tools_map", return_value={"my_tool": "apps/app1/tools/t1"}
+    ):
+        res = t.execute_tool(
+            app_id="apps/app1",
+            tool_display_name="my_tool",
+            args={"query": "test"},
+            variables={"var2": "var2"},
+            context={"state": {"var1": "val1"}, "events": [ {"author": "user", "content": {"parts": [{"text": "Hello"}], "role": "user"}}]}
+        )
+
+    mock_post.assert_called_once()
+    args, kwargs = mock_post.call_args
+    assert args[0] == "https://ces.googleapis.com/v1beta/apps/app1:executeTool"
+    assert kwargs["json"]["tool"] == "apps/app1/tools/t1"
+    assert kwargs["json"]["args"] == {"query": "test"}
+    assert kwargs["json"]["context"] == {"state": {"var1": "val1"}, "events": [ {"author": "user", "content": {"parts": [{"text": "Hello"}], "role": "user"}}]}
+    assert "variables" not in kwargs["json"]
+
+    assert res["result"] == "fake"

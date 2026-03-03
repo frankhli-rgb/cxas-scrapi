@@ -117,19 +117,23 @@ class Tools(Apps):
         return parsed_tools
 
     def _get_final_variables(
-        self, app_id: str, variables: Optional[Any]
+        self, app_id: str, variables: Optional[Any], context: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Resolves the variables to pass to the tool payload."""
+        # Variables logic, context takes precedence over variables
         final_variables = {}
 
-        if isinstance(variables, dict):
+        if context and isinstance(context, dict) and "state" in context:
+            final_variables = context["state"]
+        elif isinstance(variables, dict):
             final_variables = variables
 
-        elif variables is None or isinstance(variables, list):
+
+        if not final_variables:
             # Fetch variables from the app and filter by this list of names.
             raw_app_vars = self.var_client.list_variables(app_id)
 
-            app_vars_cache = {}
+            app_default_vars_cache = {}
             for var in raw_app_vars:
                 try:
                     var_dict = MessageToDict(var._pb)
@@ -138,19 +142,20 @@ class Tools(Apps):
 
                 schema = var_dict.get("schema", {})
                 actual_data = schema.get("default") or var_dict.get("value") or {}
-                app_vars_cache[var.name] = actual_data
+                app_default_vars_cache[var.name] = actual_data
 
-            if variables is None:
-                final_variables = app_vars_cache
-            else:
+            if isinstance(variables, list):
+                # If variables is a list, filter the app's default variables by this list
                 for var_name in variables:
-                    if var_name in app_vars_cache:
-                        final_variables[var_name] = app_vars_cache[var_name]
+                    if var_name in app_default_vars_cache:
+                        final_variables[var_name] = app_default_vars_cache[var_name]
                     else:
                         print(
                             f"[WARNING] App variable '{var_name}' requested but not found in app."
                         )
-
+            else:
+                # No variables specified, use default variable values
+                final_variables = app_default_vars_cache
         return final_variables
 
     def get_tools_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
@@ -316,6 +321,7 @@ class Tools(Apps):
         tool_display_name: str,
         args: Optional[Dict[str, Any]] = None,
         variables: Optional[Any] = None,  # Accepts Dict, List[str], or None
+        context: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """Executes a tool directly via the CES API.
 
@@ -327,6 +333,8 @@ class Tools(Apps):
                 - None: Fetches and passes ALL variables from the app.
                 - List[str]: Fetches variables from the app and filters by this list of names.
                 - Dict[str, Any]: Uses the provided dictionary directly (e.g. from Evals).
+            context: ToolContext object available to the Python Function tool. If context is
+                     provided, variables will be ignored.
 
         Returns:
             The tool execution response (JSON or Object).
@@ -366,19 +374,21 @@ class Tools(Apps):
 
         payload["args"] = args or {}
 
-        final_variables = self._get_final_variables(app_id, variables)
+        final_variables = self._get_final_variables(app_id, variables, context)
 
-        if final_variables:
+        # Use context if provided, otherwise use variables.
+        if context:
+            context_copy = context.copy()
+            if "state" in context_copy:
+                context_copy["state"] = final_variables
+            payload["context"] = context_copy
+        else:
             payload["variables"] = final_variables
 
         response = requests.post(url, headers=headers, json=payload)
         response.raise_for_status()
 
-        resp_dict = response.json()
-
-        if final_variables:
-            resp_dict["variables"] = final_variables
-        return resp_dict
+        return response.json()
 
     def retrieve_tool(self, toolset_id: str) -> Any:
         """Retrieves all tools in a toolset."""
