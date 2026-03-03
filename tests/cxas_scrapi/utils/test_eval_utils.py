@@ -1,7 +1,7 @@
-import pytest
-from unittest.mock import patch, MagicMock
+"""Tests for evaluation utility functions."""
+
+from unittest.mock import MagicMock
 from cxas_scrapi.utils.eval_utils import EvalUtils
-import sys
 import sys
 
 
@@ -28,7 +28,9 @@ def test_evals_to_dataframe_with_data():
         "golden_result": {
             "metrics": {
                 "semantic_similarity_result": {"score": 5},
-                "overall_tool_invocation_result": {"tool_invocation_score": 1.0},
+                "overall_tool_invocation_result": {
+                    "tool_invocation_score": 1.0
+                },
                 "expectation_results": [
                     {
                         "expectation": "Agent should pass",
