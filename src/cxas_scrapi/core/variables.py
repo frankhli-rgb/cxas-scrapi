@@ -17,6 +17,7 @@
 import logging
 from typing import Dict, List, Optional, Any
 from google.cloud.ces_v1beta import types
+from proto.marshal.collections import maps, repeated
 
 from cxas_scrapi.core.apps import Apps
 
@@ -62,6 +63,39 @@ class Variables(Apps):
             "ARRAY",
         ]:
             raise ValueError(f"Invalid schema type: {input_type}")
+
+    @staticmethod
+    def variable_to_dict(variable: Any) -> Any:
+        """Converts VariableDeclaration to a dictionary or value."""
+
+        # 1. Handle RepeatedComposite (List)
+        if isinstance(variable, repeated.RepeatedComposite):
+            return [Variables.variable_to_dict(v) for v in variable]
+
+        # 2. Handle MapComposite (Dict)
+        if isinstance(variable, maps.MapComposite):
+            return {k: Variables.variable_to_dict(v) for k, v in variable.items()}
+
+        # 3. If it's already a dict or primitive, return as is
+        if isinstance(variable, (dict, list, str, int, float, bool, type(None))):
+            return variable
+
+        # 4. Priority: Check for schema.default (VariableDeclaration pattern)
+        try:
+            if hasattr(variable, "schema") and hasattr(variable.schema, "default"):
+                return Variables.variable_to_dict(variable.schema.default)
+        except (AttributeError, KeyError, TypeError):
+            pass
+
+        # 5. Check if it has a to_dict method (common in Google Protobufs)
+        if hasattr(variable, "to_dict"):
+            return variable.to_dict()
+
+        # 6. Check if it has a to_dict method on the type
+        if hasattr(type(variable), "to_dict"):
+            return type(variable).to_dict(variable)
+
+        return variable
 
     def list_variables(self, app_id: str) -> List[Any]:
         """Lists variables within a specific app."""

@@ -29,9 +29,7 @@ def test_evals_to_dataframe_with_data():
         "golden_result": {
             "metrics": {
                 "semantic_similarity_result": {"score": 5},
-                "overall_tool_invocation_result": {
-                    "tool_invocation_score": 1.0
-                },
+                "overall_tool_invocation_result": {"tool_invocation_score": 1.0},
                 "expectation_results": [
                     {
                         "expectation": "Agent should pass",
@@ -46,7 +44,7 @@ def test_evals_to_dataframe_with_data():
     }
 
     df_dict = utils.evals_to_dataframe([res])
-    
+
     assert len(df_dict["summary"]) == 1
     assert "semantic_score" in df_dict["summary"].columns
     assert "tool_invocation_score" in df_dict["summary"].columns
@@ -88,9 +86,7 @@ def test_load_golden_eval_from_compressed_yaml():
     # correctly from the local example file.
 
     test_file_path = "tests/testdata/compressed_example.yaml"
-    with (
-        patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,
-    ):
+    with (patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,):
         mock_uuid.return_value = "mock_uuid"
 
         result = EvalUtils.load_golden_eval_from_yaml(test_file_path)
@@ -142,9 +138,7 @@ def test_load_golden_eval_from_compressed_yaml():
 
 def test_load_golden_eval_from_exported_yaml():
     test_file_path = "tests/testdata/exported_eval_example.yaml"
-    with (
-        patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,
-    ):
+    with (patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,):
         mock_uuid.return_value = "mock_uuid"
 
         result = EvalUtils.load_golden_eval_from_yaml(test_file_path)
@@ -153,9 +147,7 @@ def test_load_golden_eval_from_exported_yaml():
         assert result["displayName"] == "Basic Product Search Simplified"
         assert len(result["golden"]["turns"]) == 4
         assert (
-            result["golden"]["turns"][0]["steps"][0]["userInput"]["event"][
-                "event"
-            ]
+            result["golden"]["turns"][0]["steps"][0]["userInput"]["event"]["event"]
             == "WelcomeEvent"
         )
         assert (

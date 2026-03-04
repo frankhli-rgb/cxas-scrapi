@@ -116,6 +116,43 @@ class Tools(Apps):
             print(f"[WARNING] Failed to parse OpenAPI schema for {display_name}: {e}")
         return parsed_tools
 
+    def _get_final_variables(
+        self, app_id: str, variables: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Resolves the variables to pass to the tool payload."""
+        final_variables = {}
+
+        if isinstance(variables, dict):
+            final_variables = variables
+
+        elif variables is None or isinstance(variables, list):
+            # Fetch variables from the app and filter by this list of names.
+            raw_app_vars = self.var_client.list_variables(app_id)
+
+            app_vars_cache = {}
+            for var in raw_app_vars:
+                try:
+                    var_dict = MessageToDict(var._pb)
+                except AttributeError:
+                    var_dict = MessageToDict(var)
+
+                schema = var_dict.get("schema", {})
+                actual_data = schema.get("default") or var_dict.get("value") or {}
+                app_vars_cache[var.name] = actual_data
+
+            if variables is None:
+                final_variables = app_vars_cache
+            else:
+                for var_name in variables:
+                    if var_name in app_vars_cache:
+                        final_variables[var_name] = app_vars_cache[var_name]
+                    else:
+                        print(
+                            f"[WARNING] App variable '{var_name}' requested but not found in app."
+                        )
+
+        return final_variables
+
     def get_tools_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of Tool and Toolset full names to display names.
 
@@ -153,6 +190,9 @@ class Tools(Apps):
                         for tool in tools.tools:
                             tool_display_name = self._get_tool_display_name(tool)
                             if tool_display_name and tool.name:
+                                tool_display_name = (
+                                    f"{display_name}_{tool_display_name}"
+                                )
                                 if reverse:
                                     resources_dict[tool_display_name] = tool.name
                                 else:
@@ -274,7 +314,7 @@ class Tools(Apps):
         self,
         app_id: str,
         tool_display_name: str,
-        args: Dict[str, Any],
+        args: Optional[Dict[str, Any]] = None,
         variables: Optional[Any] = None,  # Accepts Dict, List[str], or None
     ) -> Any:
         """Executes a tool directly via the CES API.
@@ -324,40 +364,9 @@ class Tools(Apps):
         else:
             payload["tool"] = tool_id
 
-        if args:
-            payload["args"] = args
+        payload["args"] = args or {}
 
-        # Variables logic
-        final_variables = {}
-
-        if isinstance(variables, dict):
-            final_variables = variables
-
-        elif variables is None or isinstance(variables, list):
-            # Fetch variables from the app and filter by this list of names.
-            raw_app_vars = self.var_client.list_variables(app_id)
-
-            app_vars_cache = {}
-            for var in raw_app_vars:
-                try:
-                    var_dict = MessageToDict(var._pb)
-                except AttributeError:
-                    var_dict = MessageToDict(var)
-
-                schema = var_dict.get("schema", {})
-                actual_data = schema.get("default") or var_dict.get("value") or {}
-                app_vars_cache[var.name] = actual_data
-
-            if variables is None:
-                final_variables = app_vars_cache
-            else:
-                for var_name in variables:
-                    if var_name in app_vars_cache:
-                        final_variables[var_name] = app_vars_cache[var_name]
-                    else:
-                        print(
-                            f"[WARNING] App variable '{var_name}' requested but not found in app."
-                        )
+        final_variables = self._get_final_variables(app_id, variables)
 
         if final_variables:
             payload["variables"] = final_variables

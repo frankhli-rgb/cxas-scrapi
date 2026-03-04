@@ -75,15 +75,15 @@ def test_unwrap_struct():
 
 def test_tokenize():
     text = '{ key: "value" }'
-    tokens = list(Common.tokenize(text))
+    tokens = list(Common._tokenize_textproto(text))
     kinds = [t[0] for t in tokens]
     assert kinds == ["LBRACE", "ID", "COLON", "STRING", "RBRACE"]
 
 
 def test_parse():
     text = '{ key: "value" num: 42 bool_val: true }'
-    tokens = Common.tokenize(text)
-    res = Common.parse(tokens)
+    tokens = Common._tokenize_textproto(text)
+    res = Common._parse_textproto_tokens(tokens)
     assert res == {"key": "value", "num": "42", "bool_val": True}
 
 

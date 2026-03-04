@@ -76,6 +76,14 @@ class Common:
             self.client_options = self._get_client_options(agent_id)
 
     @staticmethod
+    def empty_to_dict(v: Any) -> Any:
+        return v if v is not None else {}
+
+    @staticmethod
+    def empty_to_list(v: Any) -> Any:
+        return v if v is not None else []
+
+    @staticmethod
     def _get_client_options(resource_id: str) -> Dict[str, str]:
         """Determine API endpoint based on region."""
         if not resource_id:
@@ -129,7 +137,7 @@ class Common:
         return None
 
     @staticmethod
-    def tokenize(text):
+    def _tokenize_textproto(text):
         token_pattern = re.compile(
             r'(?P<STRING>"(?:\\.|[^"\\])*")|'
             r"(?P<ID>[a-zA-Z_][a-zA-Z0-9_]*)|"
@@ -147,7 +155,7 @@ class Common:
             yield kind, value
 
     @staticmethod
-    def parse(tokens):
+    def _parse_textproto_tokens(tokens):
         obj = {}
         current_key = None
 
@@ -184,7 +192,7 @@ class Common:
                         elif actual_val == "false":
                             actual_val = False
                     elif val_kind == "LBRACE":
-                        actual_val = Common.parse(tokens)
+                        actual_val = Common._parse_textproto_tokens(tokens)
 
                     if current_key in obj:
                         if not isinstance(obj[current_key], list):
@@ -194,7 +202,7 @@ class Common:
                         obj[current_key] = actual_val
 
                 elif next_kind == "LBRACE":
-                    child_obj = Common.parse(tokens)
+                    child_obj = Common._parse_textproto_tokens(tokens)
                     if current_key in obj:
                         if not isinstance(obj[current_key], list):
                             obj[current_key] = [obj[current_key]]
@@ -208,8 +216,8 @@ class Common:
 
     @staticmethod
     def parse_textproto(text):
-        tokens = Common.tokenize(text)
-        return Common.parse(tokens)
+        tokens = Common._tokenize_textproto(text)
+        return Common._parse_textproto_tokens(tokens)
 
     @staticmethod
     def unwrap_value(val):
@@ -252,6 +260,25 @@ class Common:
 
         return res
 
+    @staticmethod
+    def get_agent_text_from_outputs(outputs: List[Any], separator: str = "\n") -> str:
+        """Extracts and concatenates text responses from a list of output objects.
+
+        Args:
+            outputs: A list of output objects (dict or protobuf) from a Session flow execution.
+            separator: String used to join multiple text responses.
+
+        Returns:
+            A string containing the concatenated text from all outputs.
+        """
+        agent_texts = []
+        for output in outputs:
+            if hasattr(output, "text") and getattr(output, "text", ""):
+                agent_texts.append(output.text)
+            elif isinstance(output, dict) and "text" in output and output["text"]:
+                agent_texts.append(output["text"])
+        return separator.join(agent_texts)
+
     def recurse_proto_repeated_composite(self, repeated_object):
         """Recursively converts RepeatedComposite objects to lists."""
         repeated_list = []
@@ -278,22 +305,3 @@ class Common:
             new_dict[k] = v
 
         return new_dict
-
-    @staticmethod
-    def get_agent_text_from_outputs(outputs: List[Any], separator: str = "\n") -> str:
-        """Extracts and concatenates text responses from a list of output objects.
-
-        Args:
-            outputs: A list of output objects (dict or protobuf) from a Session flow execution.
-            separator: String used to join multiple text responses.
-
-        Returns:
-            A string containing the concatenated text from all outputs.
-        """
-        agent_texts = []
-        for output in outputs:
-            if hasattr(output, "text") and getattr(output, "text", ""):
-                agent_texts.append(output.text)
-            elif isinstance(output, dict) and "text" in output and output["text"]:
-                agent_texts.append(output["text"])
-        return separator.join(agent_texts)
