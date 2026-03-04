@@ -86,10 +86,18 @@ def test_load_golden_eval_from_compressed_yaml():
     # correctly from the local example file.
 
     test_file_path = "tests/testdata/compressed_example.yaml"
-    with (patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,):
+    with (
+        patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,
+        patch("cxas_scrapi.utils.eval_utils.Evaluations") as mock_eval_cls,
+    ):
         mock_uuid.return_value = "mock_uuid"
+        mock_eval_instance = mock_eval_cls.return_value
+        mock_eval_instance.find_or_create_evaluation_expectation.return_value = (
+            "projects/p/locations/l/apps/a/evaluationExpectations/exp1"
+        )
 
-        result = EvalUtils.load_golden_eval_from_yaml(test_file_path)
+        utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
+        result = utils.load_golden_eval_from_yaml(test_file_path)
 
         # Verify "Unlock_Intent1" (the first conversation) was picked up
         assert result["displayName"] == "Unlock_Intent1"
@@ -134,14 +142,28 @@ def test_load_golden_eval_from_compressed_yaml():
         # Verify evaluation expectations
         eval_exps = result["golden"]["evaluationExpectations"]
         assert len(eval_exps) == 1
+        assert (
+            eval_exps[0]["expectation"]
+            == "projects/p/locations/l/apps/a/evaluationExpectations/exp1"
+        )
+        mock_eval_instance.find_or_create_evaluation_expectation.assert_called_once_with(
+            llm_prompt="There must be a transfer_to_cx tool call with the intent parameter set to Unlock"
+        )
 
 
 def test_load_golden_eval_from_exported_yaml():
     test_file_path = "tests/testdata/exported_eval_example.yaml"
+<<<<<<< HEAD
     with (patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,):
+=======
+    with (
+        patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,
+        patch("cxas_scrapi.utils.eval_utils.Evaluations") as mock_eval_cls,
+    ):
+>>>>>>> 12ac414 (feat: support creation of evaluation expecations in YAML based eval.)
         mock_uuid.return_value = "mock_uuid"
-
-        result = EvalUtils.load_golden_eval_from_yaml(test_file_path)
+        utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
+        result = utils.load_golden_eval_from_yaml(test_file_path)
 
         # Verify it returns the parsed data correctly
         assert result["displayName"] == "Basic Product Search Simplified"

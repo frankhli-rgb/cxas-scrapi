@@ -99,6 +99,7 @@ class EvalUtils(Evaluations):
             self.tool_map = {}
         self.agents_client = Agents(app_id=self.app_id, creds=self.creds)
         self.ch_client = ConversationHistory(app_id=self.app_id, creds=self.creds)
+        self.eval_client = Evaluations(app_id=self.app_id, env=env)
 
     @staticmethod
     def parse_variables_input(v: Any) -> Dict[str, Any]:
@@ -1344,8 +1345,8 @@ class EvalUtils(Evaluations):
 
         return {"steps": steps, "params_injected": params_injected}
 
-    @staticmethod
     def load_golden_eval_from_yaml(
+        self,
         yaml_file_path: str,
     ) -> Optional[Dict[str, Any]]:
         """Parses a YAML file and creates a Golden eval input from it.
@@ -1422,7 +1423,28 @@ class EvalUtils(Evaluations):
         eval_expectations = []
         for exp in conversation.get("expectations", []):
             if isinstance(exp, str):
-                eval_expectations.append({"expectation": exp})
+                # If it's just a string, it's an LLM prompt. Create a resource.
+                res_name = (
+                    self.eval_client.find_or_create_evaluation_expectation(
+                        llm_prompt=exp
+                    )
+                )
+                eval_expectations.append({"expectation": res_name})
+            elif isinstance(exp, dict):
+                # If it's a dict, it might have a displayName or just prompt
+                prompt = exp.get("prompt") or exp.get("llm_prompt")
+                display_name = exp.get("displayName") or exp.get("display_name")
+
+                if prompt:
+                    res_name = (
+                        self.eval_client.find_or_create_evaluation_expectation(
+                            llm_prompt=prompt, display_name=display_name
+                        )
+                    )
+                    eval_expectations.append({"expectation": res_name})
+                else:
+                    # Fallback for other dict formats if any
+                    eval_expectations.append(exp)
             else:
                 eval_expectations.append(exp)
 

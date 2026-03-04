@@ -17,6 +17,7 @@
 from typing import Dict, Any, Optional, List, Union
 import uuid
 import json
+import hashlib
 import requests
 from google.protobuf import field_mask_pb2
 from google.protobuf import json_format
@@ -597,6 +598,69 @@ class Evaluations(Common):
         """
         request = types.DeleteEvaluationExpectationRequest(name=name)
         self.client.delete_evaluation_expectation(request=request)
+
+    def get_evaluation_expectation_by_display_name(
+        self, display_name: str, app_id: Optional[str] = None
+    ) -> Optional[types.EvaluationExpectation]:
+        """Gets an evaluation expectation by its display name.
+
+        Args:
+            display_name: The display name of the evaluation expectation.
+            app_id: Parent App ID. Defaults to self.app_id.
+        """
+        app_id = app_id or self.app_id
+        expectations = self.list_evaluation_expectations(app_id=app_id)
+        for exp in expectations:
+            if exp.display_name == display_name:
+                return exp
+        return None
+
+    def find_or_create_evaluation_expectation(
+        self, llm_prompt: str, display_name: Optional[str] = None
+    ) -> str:
+        """Finds or creates an evaluation expectation from an LLM prompt.
+
+        Args:
+            llm_prompt: The prompt/criteria for the evaluation expectation.
+            display_name: Optional display name. If not provided, a hash of the
+                prompt is used.
+
+        Returns:
+            The full resource name of the evaluation expectation.
+
+        Raises:
+            ValueError: If an expectation with the same display name exists
+                but with a different prompt.
+        """
+        if not display_name:
+            # Generate a stable hash of the prompt for the display name
+            display_name = (
+                f"eval_exp_{hashlib.md5(llm_prompt.encode()).hexdigest()[:8]}"
+            )
+
+        existing_exp = self.get_evaluation_expectation_by_display_name(
+            display_name=display_name
+        )
+
+        if existing_exp:
+            if existing_exp.llm_criteria.prompt != llm_prompt:
+                raise ValueError(
+                    f"Evaluation expectation '{display_name}' already exists "
+                    "with a different prompt."
+                )
+            return existing_exp.name
+
+        # Create new expectation
+        new_exp = types.EvaluationExpectation(
+            display_name=display_name,
+            llm_criteria=types.EvaluationExpectation.LlmCriteria(
+                prompt=llm_prompt
+            ),
+        )
+        created_exp = self.create_evaluation_expectation(
+            evaluation_expectation=new_exp
+        )
+        return created_exp.name
 
     def get_evaluation_thresholds(
         self, app_id: Optional[str] = None, print_console: bool = False
