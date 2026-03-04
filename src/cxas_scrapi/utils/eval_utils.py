@@ -36,7 +36,6 @@ from pydantic import (
     Field,
     TypeAdapter,
 )
-from sentence_transformers import SentenceTransformer, util
 from tqdm import tqdm
 
 from cxas_scrapi.core.apps import Apps

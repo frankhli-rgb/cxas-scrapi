@@ -6,3 +6,6 @@ requests
 google-cloud-secret-manager
 google-genai
 pylint
+ipython
+PyYAML
+tqdm

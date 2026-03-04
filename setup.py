@@ -58,5 +58,9 @@ setup(
         'pandas',
         'gspread',
         'gspread-dataframe',
+        'ipython',
+        'PyYAML',
+        'tqdm',
+        'google-genai',
     ]
 )
