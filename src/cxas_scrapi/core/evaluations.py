@@ -432,6 +432,35 @@ class Evaluations(Common):
         # Dump to YAML string
         return yaml.dump(out_dict, sort_keys=False, allow_unicode=True)
 
+    def create_evaluation(
+        self,
+        evaluation: Union[types.Evaluation, Dict[str, Any]],
+        app_id: Optional[str] = None,
+    ) -> types.Evaluation:
+        """Creates an evaluation.
+
+        Args:
+            evaluation: The Evaluation object or dict to create.
+            app_id: Parent App ID. Defaults to self.app_id.
+        """
+        app_id = app_id or self.app_id
+        if not app_id:
+            raise ValueError("app_id is required.")
+
+        if isinstance(evaluation, dict):
+            # Use json_format to parse dict to message to handle camelCase/snake_case
+            eval_message = types.Evaluation()
+            # Parse into the underlying protobuf message
+            json_format.ParseDict(
+                evaluation, eval_message._pb, ignore_unknown_fields=True
+            )
+            evaluation = eval_message
+
+        request = types.CreateEvaluationRequest(
+            parent=app_id, evaluation=evaluation
+        )
+        return self.client.create_evaluation(request=request)
+
     def run_evaluation(
         self,
         evaluations: Optional[Union[str, List[str]]] = None,

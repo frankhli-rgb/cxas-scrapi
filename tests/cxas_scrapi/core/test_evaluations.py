@@ -522,3 +522,44 @@ def test_search_evaluations(mock_client_cls, mock_tools_cls, mock_agents_cls):
         ValueError, match="Must provide at least one search term"
     ):
         evals_client.search_evaluations(app_id="projects/p/locations/l/apps/a")
+@patch("cxas_scrapi.core.evaluations.json_format")
+@patch("cxas_scrapi.core.evaluations.types")
+@patch("cxas_scrapi.core.evaluations.EvaluationServiceClient")
+def test_evaluations_create_evaluation(
+    mock_client_cls, mock_types, mock_json_format
+):
+    """Test Evaluations.create_evaluation."""
+    mock_client = mock_client_cls.return_value
+    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+
+    # Test with dict
+    evaluation_dict = {"display_name": "New Eval"}
+    mock_eval_msg = MagicMock()
+    mock_types.Evaluation.return_value = mock_eval_msg
+
+    evals_client.create_evaluation(evaluation=evaluation_dict)
+
+    mock_json_format.ParseDict.assert_called_once_with(
+        evaluation_dict, mock_eval_msg._pb, ignore_unknown_fields=True
+    )
+    mock_types.CreateEvaluationRequest.assert_called_once_with(
+        parent="projects/p/locations/l/apps/a", evaluation=mock_eval_msg
+    )
+    mock_client.create_evaluation.assert_called_once()
+
+    # Test with object
+    mock_client.create_evaluation.reset_mock()
+    mock_types.CreateEvaluationRequest.reset_mock()
+    evaluation_obj = MagicMock()
+
+    evals_client.create_evaluation(evaluation=evaluation_obj)
+
+    mock_types.CreateEvaluationRequest.assert_called_once_with(
+        parent="projects/p/locations/l/apps/a", evaluation=evaluation_obj
+    )
+    mock_client.create_evaluation.assert_called_once()
+
+    # Test missing app_id
+    evals_client.app_id = None
+    with pytest.raises(ValueError, match="app_id is required"):
+        evals_client.create_evaluation(evaluation=evaluation_dict)

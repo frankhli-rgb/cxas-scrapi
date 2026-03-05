@@ -176,3 +176,74 @@ def test_load_golden_eval_from_exported_yaml():
             result["golden"]["evaluationExpectations"][0]["displayName"]
             == "Simple tool expectation 1"
         )
+
+def test_process_dataset_turn_with_tool_mapping():
+    """Test _process_dataset_turn correctly resolves tool names."""
+    utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
+    utils.tool_map = {
+        "my_tool": "projects/p/locations/l/apps/a/tools/resolved_tool"
+    }
+
+    turn = {
+        "user": "run my tool",
+        "tool_calls": [
+            {
+                "action": "my_tool",
+                "input_action_parameters": {"arg1": "val1"},
+                "output": "res1",
+            }
+        ],
+    }
+
+    result = utils._process_dataset_turn(turn, {}, False)
+    steps = result["steps"]
+
+    # User input step
+    assert steps[0]["userInput"]["text"] == "run my tool"
+
+    # Tool call expectation
+    tool_call = steps[1]["expectation"]["toolCall"]
+    assert (
+        tool_call["tool"] == "projects/p/locations/l/apps/a/tools/resolved_tool"
+    )
+    assert tool_call["args"] == {"arg1": "val1"}
+
+    # Tool response expectation
+    tool_res = steps[2]["expectation"]["toolResponse"]
+    assert (
+        tool_res["tool"] == "projects/p/locations/l/apps/a/tools/resolved_tool"
+    )
+    assert tool_res["response"] == "res1"
+
+
+def test_create_and_run_evaluation_from_yaml():
+    """Test create_and_run_evaluation_from_yaml orchestration."""
+    utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
+
+    with (
+        patch.object(utils, "load_golden_eval_from_yaml") as mock_load,
+        patch.object(utils, "create_evaluation") as mock_create,
+        patch.object(utils, "run_evaluation") as mock_run,
+    ):
+        mock_load.return_value = {"displayName": "Test Eval", "golden": {}}
+        mock_created_eval = MagicMock()
+        mock_created_eval.display_name = "Test Eval"
+        mock_created_eval.name = "projects/p/locations/l/apps/a/evaluations/e1"
+        mock_create.return_value = mock_created_eval
+
+        mock_run_res = MagicMock()
+        mock_run.return_value = mock_run_res
+
+        res = utils.create_and_run_evaluation_from_yaml("test.yaml")
+
+        mock_load.assert_called_once_with("test.yaml")
+        mock_create.assert_called_once_with(
+            evaluation={"displayName": "Test Eval", "golden": {}},
+            app_id="projects/p/locations/l/apps/a",
+        )
+        mock_run.assert_called_once_with(
+            evaluations=["Test Eval"], app_id="projects/p/locations/l/apps/a"
+        )
+
+        assert res["evaluation"] == mock_created_eval
+        assert res["run"] == mock_run_res

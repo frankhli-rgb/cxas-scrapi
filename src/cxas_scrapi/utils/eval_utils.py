@@ -112,8 +112,8 @@ class EvalUtils(Evaluations):
                 return tool_call[key]
         return {}
 
-    @staticmethod
     def _process_dataset_turn(
+        self,
         turn: Dict[str, Any],
         session_params: Dict[str, Any],
         params_injected: bool,
@@ -171,11 +171,12 @@ class EvalUtils(Evaluations):
                     continue
 
                 tool_call_id = f"adk-{uuid.uuid4()}"
+                tool_resource = self.tool_map.get(action, action)
                 tool_call_expectation = {
                     "expectation": {
                         "toolCall": {
                             "id": tool_call_id,
-                            "tool": action,
+                            "tool": tool_resource,
                             "args": EvalUtils._extract_tool_call_args(
                                 tool_call
                             ),
@@ -190,7 +191,7 @@ class EvalUtils(Evaluations):
                             "expectation": {
                                 "toolResponse": {
                                     "id": tool_call_id,
-                                    "tool": action,
+                                    "tool": tool_resource,
                                     "response": tool_call["output"],
                                 }
                             }
@@ -925,7 +926,7 @@ class EvalUtils(Evaluations):
         json_turns = []
 
         for turn in conversation.get("turns", []):
-            result = EvalUtils._process_dataset_turn(
+            result = self._process_dataset_turn(
                 turn, session_params, params_injected
             )
             json_turns.append({"steps": result["steps"]})
@@ -967,4 +968,46 @@ class EvalUtils(Evaluations):
                 "turns": json_turns,
                 "evaluationExpectations": eval_expectations,
             },
+        }
+
+    def create_and_run_evaluation_from_yaml(
+        self,
+        yaml_file_path: str,
+        app_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Loads, creates, and runs an evaluation from a YAML file.
+
+        Args:
+            yaml_file_path: Path to the YAML file.
+            app_id: Optional parent App ID. Defaults to self.app_id.
+
+        Returns:
+            A dictionary containing the evaluation and the run response.
+        """
+        app_id = app_id or self.app_id
+        if not app_id:
+            raise ValueError("app_id is required.")
+
+        # 1. Load the evaluation from YAML
+        evaluation_dict = self.load_golden_eval_from_yaml(yaml_file_path)
+        if not evaluation_dict:
+            raise ValueError(f"Failed to load evaluation from {yaml_file_path}")
+
+        # 2. Create the evaluation
+        # Note: Evaluations.create_evaluation handles dict to proto conversion
+        created_evaluation = self.create_evaluation(
+            evaluation=evaluation_dict, app_id=app_id
+        )
+        logger.info("Created evaluation: %s", created_evaluation.name)
+
+        # 3. Run the evaluation
+        # run_evaluation expects display names
+        run_response = self.run_evaluation(
+            evaluations=[created_evaluation.display_name], app_id=app_id
+        )
+        logger.info("Started evaluation run: %s", run_response.operation.name)
+
+        return {
+            "evaluation": created_evaluation,
+            "run": run_response,
         }
