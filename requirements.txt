@@ -7,5 +7,14 @@ google-cloud-secret-manager
 google-genai
 pylint
 ipython
+google-auth
+protobuf
+pydantic
+jsonpath-ng
+pandas
+gspread
+gspread-dataframe
 PyYAML
 tqdm
+pandas-gbq
+google-cloud-bigquery

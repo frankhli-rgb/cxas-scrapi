@@ -61,5 +61,12 @@ setup(
         "PyYAML",
         "tqdm",
         "google-genai",
+        "pandas-gbq",
+        "google-cloud-bigquery",
     ],
+    entry_points={
+        'console_scripts': [
+            'cxas-eval=cxas_scrapi.cli.main:main',
+        ],
+    },
 )

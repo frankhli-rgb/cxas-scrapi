@@ -36,7 +36,7 @@ class Common:
         self,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
-        creds: service_account.Credentials = None,
+        creds: Any = None,
         scope: List[str] = None,
         agent_id: str = None,  # Optional: used to determine client_options
     ):
@@ -44,10 +44,17 @@ class Common:
         if scope:
             self.scopes += scope
 
+        import os
+        oauth_token = os.environ.get("CXAS_OAUTH_TOKEN")
+
         if creds:
             self.creds = creds
-            self.creds.refresh(Request())
-            self.token = self.creds.token
+            if hasattr(self.creds, "refresh"):
+                try:
+                    self.creds.refresh(Request())
+                except Exception:
+                    pass
+            self.token = getattr(self.creds, "token", None)
 
         elif creds_path:
             self.creds = service_account.Credentials.from_service_account_file(
@@ -62,6 +69,11 @@ class Common:
             )
             self.creds.refresh(Request())
             self.token = self.creds.token
+
+        elif oauth_token:
+            from google.oauth2.credentials import Credentials
+            self.creds = Credentials(token=oauth_token)
+            self.token = oauth_token
 
         else:
             self.creds, _ = default(scopes=self.scopes)
