@@ -37,11 +37,9 @@ def test_run_callback_tests_success(tmp_path):
     agent_dir = tmp_path / "agents" / "agentA" / "my_callbacks" / "cb1"
     agent_dir.mkdir(parents=True)
     test_file = agent_dir / "test.py"
-    test_file.write_text(
-        """def test_dummy():
+    test_file.write_text("""def test_dummy():
         assert True
-"""
-    )
+""")
 
     python_code_file = agent_dir / "python_code.py"
     python_code_file.write_text("def my_func(): pass\n")
@@ -49,7 +47,7 @@ def test_run_callback_tests_success(tmp_path):
     result = utils.run_callback_tests(app_root_dir=str(tmp_path))
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
-    assert result.iloc[0]["status"] == "passed"
+    assert result.iloc[0]["status"] == "PASSED"
     assert result.iloc[0]["test_name"] == "test_dummy"
     assert result.iloc[0]["agent_name"] == "agentA"
     assert result.iloc[0]["callback_type"] == "my_callbacks"
@@ -61,11 +59,9 @@ def test_run_callback_tests_failure(tmp_path):
     agent_dir = tmp_path / "agents" / "agentA" / "my_callbacks" / "cb1"
     agent_dir.mkdir(parents=True)
     test_file = agent_dir / "test.py"
-    test_file.write_text(
-        """def test_dummy_fail():
+    test_file.write_text("""def test_dummy_fail():
         assert False, 'Failed purposely'
-"""
-    )
+""")
 
     python_code_file = agent_dir / "python_code.py"
     python_code_file.write_text("def my_func(): pass\n")

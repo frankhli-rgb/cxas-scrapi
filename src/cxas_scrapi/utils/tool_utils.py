@@ -326,7 +326,7 @@ class ToolUtils:
                     {
                         "path": "$.result",
                         "operator": "contains",
-                        "value": "SUCCESS",
+                        "value": "PASSED",
                     }
                 ]
 
@@ -616,9 +616,9 @@ class ToolUtils:
                     print(f"[DEBUG] Tool Response: {tool_response}")
 
                 errors = self.validate_tool_test(test_case, tool_response)
-                status = "SUCCESS"
+                status = "PASSED"
                 if errors:
-                    status = "FAILURE"
+                    status = "FAILED"
 
                 print(f"{status}: {test_case.tool} --> {test_case.name}")
                 if errors:
@@ -635,12 +635,12 @@ class ToolUtils:
                 )
 
             except (AttributeError, KeyError, RuntimeError, ValueError) as e:
-                print(f"FAILURE: Exception {e}")
+                print(f"FAILED: Exception {e}")
                 results.append(
                     {
                         "test": test_case.name,
                         "tool": test_case.tool,
-                        "status": "FAILURE",
+                        "status": "FAILED",
                         "errors": [str(e)],
                     }
                 )

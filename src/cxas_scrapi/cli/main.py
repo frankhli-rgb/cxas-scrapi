@@ -14,7 +14,6 @@
 
 """CLI script for running CXAS SCRAPI evaluations."""
 
-
 import argparse
 from typing import Any, Dict, List, Optional
 import logging
@@ -33,6 +32,7 @@ from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.common import Common
 from cxas_scrapi.core.evaluations import Evaluations
 from cxas_scrapi.utils.eval_utils import EvalUtils
+from cxas_scrapi.utils.callback_utils import CallbackUtils
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,10 @@ def export_eval(args: argparse.Namespace) -> None:
 
 
 def wait_for_evaluation_completion(
-    eval_utils: EvalUtils, old_result_ids: List[str], app_id: str, timeout_seconds: int = 600
+    eval_utils: EvalUtils,
+    old_result_ids: List[str],
+    app_id: str,
+    timeout_seconds: int = 600,
 ) -> Dict[str, pd.DataFrame]:
     """Waits for a new evaluation result to appear."""
     print("Waiting for evaluation to complete...")
@@ -101,7 +104,9 @@ def wait_for_evaluation_completion(
     sys.exit(1)
 
 
-def filter_metrics_and_assess(df_dict_new_run: Dict[str, pd.DataFrame], filter_auto_metrics: bool) -> bool:
+def filter_metrics_and_assess(
+    df_dict_new_run: Dict[str, pd.DataFrame], filter_auto_metrics: bool
+) -> bool:
     """Assesses the evaluation run and returns True if passed, False otherwise."""
     passed = True
 
@@ -112,7 +117,9 @@ def filter_metrics_and_assess(df_dict_new_run: Dict[str, pd.DataFrame], filter_a
     # This might encompass semantic and hallucination metrics
 
     overall_status = (
-        df_new_run["evaluation_status"].iloc[0] if not df_new_run.empty else "UNKNOWN"
+        df_new_run["evaluation_status"].iloc[0]
+        if not df_new_run.empty
+        else "UNKNOWN"
     )
     print(f"\n--- Evaluation Status: {overall_status} ---")
 
@@ -122,7 +129,10 @@ def filter_metrics_and_assess(df_dict_new_run: Dict[str, pd.DataFrame], filter_a
         )
         print("Focusing strictly on custom expectations and tool invocation.")
 
-        if not df_expectations.empty and "record_type" in df_expectations.columns:
+        if (
+            not df_expectations.empty
+            and "record_type" in df_expectations.columns
+        ):
             expectation_rows = df_expectations[
                 df_expectations["record_type"] == "summary_expectation"
             ]
@@ -143,7 +153,9 @@ def filter_metrics_and_assess(df_dict_new_run: Dict[str, pd.DataFrame], filter_a
                     )
                 passed = False
             else:
-                print(f"PASSED: All {len(expectation_rows)} custom expectations met.")
+                print(
+                    f"PASSED: All {len(expectation_rows)} custom expectations met."
+                )
         else:
             print("WARNING: No custom expectations found in this evaluation.")
             # Fallback: check basic tool invocation if we want
@@ -165,13 +177,17 @@ def run_eval(args: argparse.Namespace) -> None:
 
     try:
         # Step 1: Capture existing evaluation runs to diff against later
-        df_initial = eval_utils.evals_to_dataframe().get("summary", pd.DataFrame())
+        df_initial = eval_utils.evals_to_dataframe().get(
+            "summary", pd.DataFrame()
+        )
         old_result_ids = set()
         if not df_initial.empty and "eval_result_id" in df_initial.columns:
             old_result_ids = set(df_initial["eval_result_id"].unique())
 
         # Step 2: Trigger evaluation
-        eval_client.run_evaluation(evaluations=[args.evaluation_id], app_id=args.app_id)
+        eval_client.run_evaluation(
+            evaluations=[args.evaluation_id], app_id=args.app_id
+        )
         print("Evaluation triggered successfully based on CLI call.")
 
         # Step 3: Wait and Assess
@@ -198,7 +214,9 @@ def run_eval(args: argparse.Namespace) -> None:
 def test_tools(args: argparse.Namespace) -> None:
     """Handles the 'test-tools' command."""
 
-    print(f"Running tool tests for App: {args.app_id} using file: {args.test_file}")
+    print(
+        f"Running tool tests for App: {args.app_id} using file: {args.test_file}"
+    )
     eval_utils = EvalUtils(app_id=args.app_id)
 
     try:
@@ -210,7 +228,7 @@ def test_tools(args: argparse.Namespace) -> None:
         results = eval_utils.run_tool_tests(test_cases, debug=args.debug)
 
         # Check overall status
-        failed_count = sum(1 for r in results if r.get("status") != "SUCCESS")
+        failed_count = sum(1 for r in results if r.get("status") != "PASSED")
 
         if failed_count > 0:
             print(f"\nFINAL RESULT: FAIL ({failed_count} tools failed)")
@@ -223,6 +241,32 @@ def test_tools(args: argparse.Namespace) -> None:
         print(f"Failed to run tool tests: {e}")
         sys.exit(1)
 
+
+def test_callbacks(args: argparse.Namespace) -> None:
+    """Handles the 'test-callbacks' command."""
+
+    print(f"Running callback tests in Agent directory: {args.agent_dir}")
+    callback_utils = CallbackUtils()
+
+    try:
+        results = callback_utils.run_callback_tests(app_root_dir=args.agent_dir)
+        if results.empty:
+            print(f"No valid callback tests found in {args.agent_dir}")
+            sys.exit(1)
+
+        # Check overall status
+        failed_count = sum(1 for r in results["status"] if r != "PASSED")
+
+        if failed_count > 0:
+            print(f"\nFINAL RESULT: FAIL ({failed_count} callbacks failed)")
+            sys.exit(1)
+        else:
+            print(f"\nFINAL RESULT: PASS (All {len(results)} callbacks passed)")
+            sys.exit(0)
+
+    except Exception as e:
+        print(f"Failed to run callback tests: {e}")
+        sys.exit(1)
 
 
 def deploy_agent(args: argparse.Namespace) -> None:
@@ -240,9 +284,19 @@ def deploy_agent(args: argparse.Namespace) -> None:
 
     # Valid roots for CX Agent Builder to avoid 400 errors
     valid_roots = [
-        "app.yaml", "app.json", "global_instruction.txt", "environment.json",
-        "agents", "tools", "examples", "guardrails", "toolsets",
-        "evaluations", "evaluationDatasets", "evaluationExpectations", "workflows"
+        "app.yaml",
+        "app.json",
+        "global_instruction.txt",
+        "environment.json",
+        "agents",
+        "tools",
+        "examples",
+        "guardrails",
+        "toolsets",
+        "evaluations",
+        "evaluationDatasets",
+        "evaluationExpectations",
+        "workflows",
     ]
 
     for item in valid_roots:
@@ -264,7 +318,9 @@ def deploy_agent(args: argparse.Namespace) -> None:
 
         apps_client = Apps(project_id=args.project_id, location=args.location)
 
-        display_name = args.display_name if args.display_name else "Deployed Agent"
+        display_name = (
+            args.display_name if args.display_name else "Deployed Agent"
+        )
 
         print(f"Uploading generic zip to CES...")
         result = apps_client.import_app(
@@ -424,7 +480,9 @@ def local_test(args: argparse.Namespace) -> None:
     """Handles the 'local-test' command."""
 
     agent_dir = os.path.abspath(args.agent_dir)
-    agent_name = os.path.basename(agent_dir.rstrip(os.sep)).lower().replace(" ", "-")
+    agent_name = (
+        os.path.basename(agent_dir.rstrip(os.sep)).lower().replace(" ", "-")
+    )
     tag = f"{agent_name}-local-test"
 
     print(f"Building Docker image for {agent_name}...")
@@ -441,14 +499,22 @@ def local_test(args: argparse.Namespace) -> None:
     # Default gcloud location
     adc_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     if not adc_path:
-        adc_path = os.path.join(home, ".config/gcloud/application_default_credentials.json")
+        adc_path = os.path.join(
+            home, ".config/gcloud/application_default_credentials.json"
+        )
 
     docker_cmd = [
-        "docker", "run", "--rm",
-        "-v", f"{agent_dir}:/workspace",
-        "-w", "/workspace",
-        "-e", f"PROJECT_ID={args.project_id}",
-        "-e", f"LOCATION={args.location}",
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{agent_dir}:/workspace",
+        "-w",
+        "/workspace",
+        "-e",
+        f"PROJECT_ID={args.project_id}",
+        "-e",
+        f"LOCATION={args.location}",
     ]
 
     oauth_token = os.environ.get("CXAS_OAUTH_TOKEN")
@@ -458,12 +524,18 @@ def local_test(args: argparse.Namespace) -> None:
         docker_cmd.extend(["-e", "CXAS_OAUTH_TOKEN"])
     elif os.path.exists(adc_path):
         print(f"Mounting credentials from {adc_path}")
-        docker_cmd.extend([
-            "-e", "GOOGLE_APPLICATION_CREDENTIALS=/tmp/keys/adc.json",
-            "-v", f"{adc_path}:/tmp/keys/adc.json:ro"
-        ])
+        docker_cmd.extend(
+            [
+                "-e",
+                "GOOGLE_APPLICATION_CREDENTIALS=/tmp/keys/adc.json",
+                "-v",
+                f"{adc_path}:/tmp/keys/adc.json:ro",
+            ]
+        )
     else:
-        print("Warning: Application Default Credentials not found. Authentication may fail.")
+        print(
+            "Warning: Application Default Credentials not found. Authentication may fail."
+        )
 
     display_name = f"[Local] {agent_name}"
 
@@ -471,16 +543,21 @@ def local_test(args: argparse.Namespace) -> None:
     inner_cmd = [
         tag,
         "ci-test",
-        "--agent_dir", "/workspace",
-        "--project_id", args.project_id,
-        "--location", args.location,
-        "--display_name", display_name
+        "--agent_dir",
+        "/workspace",
+        "--project_id",
+        args.project_id,
+        "--location",
+        args.location,
+        "--display_name",
+        display_name,
     ]
 
     docker_cmd.extend(inner_cmd)
 
     print(f"Executing: {' '.join(docker_cmd)}")
     sys.exit(subprocess.call(docker_cmd))
+
 
 def get_parser() -> argparse.ArgumentParser:
     """Sets up the argument parser."""
@@ -495,7 +572,9 @@ def get_parser() -> argparse.ArgumentParser:
         required=False,
     )
 
-    subparsers = parser.add_subparsers(title="Commands", dest="command", required=True)
+    subparsers = parser.add_subparsers(
+        title="Commands", dest="command", required=True
+    )
 
     # Parser for 'init-github-action'
     parser_init_gh = subparsers.add_parser(
@@ -556,7 +635,8 @@ def get_parser() -> argparse.ArgumentParser:
 
     # Parser for 'test-tools'
     parser_test_tools = subparsers.add_parser(
-        "test-tools", help="Run local tool unit tests against the deployed agent."
+        "test-tools",
+        help="Run local tool unit tests against the deployed agent.",
     )
     parser_test_tools.add_argument(
         "--app_id",
@@ -575,6 +655,44 @@ def get_parser() -> argparse.ArgumentParser:
     )
 
     parser_test_tools.set_defaults(func=test_tools)
+
+    # Parser for 'test-callbacks'
+    parser_test_callbacks = subparsers.add_parser(
+        "test-callbacks",
+        help="Run local callback unit tests against the deployed agent.",
+    )
+    parser_test_callbacks.add_argument(
+        "--agent_dir",
+        required=True,
+        help="The path to the agent directory.",
+    )
+    parser_test_callbacks.add_argument(
+        "--agent_name",
+        required=False,
+        help="Optional: The name of the agent to run callback tests for.",
+    )
+    parser_test_callbacks.add_argument(
+        "--callback_type",
+        required=False,
+        help="Optional: The type of callback to run tests for.",
+    )
+    parser_test_callbacks.add_argument(
+        "--callback_name",
+        required=False,
+        help="Optional: The name of the callback to run tests for.",
+    )
+    parser_test_callbacks.add_argument(
+        "--log_file",
+        required=False,
+        help="Optional: Path to a file to log pytest output to.",
+    )
+    parser_test_callbacks.add_argument(
+        "--pytest_args",
+        required=False,
+        help="Optional: Additional arguments to pass to pytest.",
+    )
+
+    parser_test_callbacks.set_defaults(func=test_callbacks)
 
     # Parser for 'export'
     parser_export = subparsers.add_parser(
@@ -731,7 +849,6 @@ def get_parser() -> argparse.ArgumentParser:
         help="The GCP Location.",
     )
     parser_local_test.set_defaults(func=local_test)
-
 
     return parser
 
