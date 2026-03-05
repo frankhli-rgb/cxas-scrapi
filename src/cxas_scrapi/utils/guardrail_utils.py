@@ -14,8 +14,9 @@
 
 """Utility functions for processing and running CXAS Guardrail Tests."""
 
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional, NamedTuple
 import time
+import datetime
 import json
 import logging
 
@@ -30,6 +31,34 @@ from cxas_scrapi.core.agents import Agents
 from cxas_scrapi.utils.eval_utils import EvalUtils
 
 logger = logging.getLogger(__name__)
+
+
+
+SUMMARY_SCHEMA_COLUMNS = [
+    "test_run_timestamp",
+    "test_type",
+    "total_tests",
+    "pass_count",
+    "pass_rate",
+    "p50_latency_ms",
+    "p90_latency_ms",
+    "p99_latency_ms",
+    "agent_name",
+    "model",
+]
+
+
+class SummaryStats(NamedTuple):
+    """Container for evaluation summary statistics."""
+
+    pass_count: int
+    pass_rate: float
+    total_tests: int
+    p50_latency_ms: float
+    p90_latency_ms: float
+    p99_latency_ms: float
+    agent_name: str
+    model: str
 
 
 class GuardrailTestCase(BaseModel):
@@ -404,3 +433,77 @@ class GuardrailUtils:
         # Append results to the original dataframe
         results_df = pd.DataFrame(results)
         return pd.concat([df.reset_index(drop=True), results_df], axis=1)
+
+    @staticmethod
+    def _calculate_stats(df: pd.DataFrame) -> SummaryStats:
+        """Calculates summary statistics from a test results DataFrame."""
+        total_tests = len(df)
+        if total_tests == 0:
+            return SummaryStats(0, 0.0, 0, 0.0, 0.0, 0.0, "Unknown", "Unknown")
+
+        pass_count = sum(1 for p in df.get("pass", []) if p is True)
+        pass_rate = 0.0
+        if total_tests > 0:
+            pass_rate = round(pass_count / total_tests, 2)
+
+        has_latency = (
+            "latency (ms)" in df.columns
+            and not df.empty
+            and not df["latency (ms)"].dropna().empty
+        )
+        if has_latency:
+            latency_dropna = df["latency (ms)"].dropna()
+            p50 = round(latency_dropna.quantile(0.50), 2)
+            p90 = round(latency_dropna.quantile(0.90), 2)
+            p99 = round(latency_dropna.quantile(0.99), 2)
+        else:
+            p50 = p90 = p99 = 0.0
+
+        agent_name = (
+            df["app_display_name"].iloc[0]
+            if "app_display_name" in df.columns and not df.empty
+            else "Unknown"
+        )
+        model = (
+            df["model"].iloc[0]
+            if "model" in df.columns and not df.empty
+            else "Unknown"
+        )
+
+        return SummaryStats(
+            pass_count=pass_count,
+            pass_rate=pass_rate,
+            total_tests=total_tests,
+            p50_latency_ms=p50,
+            p90_latency_ms=p90,
+            p99_latency_ms=p99,
+            agent_name=agent_name,
+            model=model,
+        )
+
+    def generate_report(
+        self, df: pd.DataFrame, test_type: str = "guardrails_test"
+    ) -> pd.DataFrame:
+        """Generates a summary stats report for recent tests."""
+        report_timestamp = datetime.datetime.now()
+        stats = GuardrailUtils._calculate_stats(df)
+
+        df_report = pd.DataFrame(
+            columns=SUMMARY_SCHEMA_COLUMNS,
+            data=[
+                [
+                    report_timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    test_type,
+                    stats.total_tests,
+                    stats.pass_count,
+                    stats.pass_rate,
+                    stats.p50_latency_ms,
+                    stats.p90_latency_ms,
+                    stats.p99_latency_ms,
+                    stats.agent_name,
+                    stats.model,
+                ]
+            ],
+        )
+
+        return df_report
