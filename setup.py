@@ -64,6 +64,9 @@ setup(
         "pandas-gbq",
         "google-cloud-bigquery",
         "pytest",
+        "google-cloud-texttospeech",
+        "websocket-client",
+        "certifi",
     ],
     entry_points={
         'console_scripts': [

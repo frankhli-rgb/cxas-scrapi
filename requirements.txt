@@ -18,3 +18,7 @@ PyYAML
 tqdm
 pandas-gbq
 google-cloud-bigquery
+google-cloud-ces
+google-cloud-texttospeech
+websocket-client
+certifi

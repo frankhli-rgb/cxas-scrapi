@@ -7,6 +7,17 @@ import sys
 import IPython.display
 
 
+import IPython.display
+
+
+class FakeRunSessionResponse:
+    def __init__(self, outputs=None, **kwargs):
+        self.outputs = outputs or []
+    
+    def __eq__(self, other):
+        return self.outputs == other.outputs
+
+
 @patch("cxas_scrapi.core.sessions.SessionServiceClient")
 def test_sessions_init(mock_client_cls):
     """Test Sessions initialization."""
@@ -34,17 +45,23 @@ def test_get_file_data(tmp_path):
         Sessions.get_file_data("non_existent_file.txt")
 
 
+@patch("cxas_scrapi.core.sessions.types")
 @patch("cxas_scrapi.core.sessions.SessionServiceClient")
-def test_run_session_basic(mock_client_cls):
+def test_run_session_basic(mock_client_cls, mock_types):
     """Test Sessions.run basic functionality."""
     mock_client = mock_client_cls.return_value
-    mock_response = MagicMock()
+    # Use FakeRunSessionResponse for mock response
+    mock_types.RunSessionResponse.side_effect = FakeRunSessionResponse
+    
+    mock_response = FakeRunSessionResponse(outputs=[{"text": "response"}])
     mock_client.run_session.return_value = mock_response
 
     sessions = Sessions(app_id="projects/p/locations/l/apps/a")
+    
     res = sessions.run(session_id="s1", text="hello")
 
-    assert res == mock_response
+    # verify contents match
+    assert res.outputs == mock_response.outputs
     mock_client.run_session.assert_called_once()
 
     # Verify the request args
@@ -181,3 +198,65 @@ def test_parse_result_fallback(mock_client_cls):
     # Cleanup
     del sys.modules["IPython"]
     del sys.modules["IPython.display"]
+
+
+@patch("cxas_scrapi.core.sessions.SessionServiceClient")
+@patch("cxas_scrapi.core.sessions.Sessions.async_bidi_run_session")
+def test_run_session_audio_modality_text_inputs(mock_async_run, mock_client_cls):
+    """Test Sessions.run handles text inputs for audio modality (TTS)."""
+    sessions = Sessions(app_id="projects/p/locations/l/apps/a")
+    
+    # Mock text_to_speech_bytes internally or just rely on AudioTransformer mock if we had one
+    # But AudioTransformer is instantiated inside run, so we need to patch it.
+    with patch("cxas_scrapi.core.sessions.AudioTransformer") as MockTransformer:
+        mock_transformer = MockTransformer.return_value
+        mock_transformer.text_to_speech_bytes.side_effect = lambda text, **kwargs: {"audio_bytes": b"tts_" + text.encode(), "text": text}
+        
+        sessions.run(
+            session_id="s1",
+            text=["Hello", "World"],
+            modality="audio"
+        )
+        
+        mock_async_run.assert_called_once()
+        call_kwargs = mock_async_run.call_args[1]
+        
+        # Verify inputs are transformed
+        inputs = call_kwargs["inputs"]
+        assert len(inputs) == 2
+        assert inputs[0]["audio"]["audio"] == b"tts_Hello"
+        assert inputs[1]["audio"]["audio"] == b"tts_World"
+
+
+@patch("cxas_scrapi.core.sessions.types")
+@patch("cxas_scrapi.core.sessions.SessionServiceClient")
+def test_run_session_text_multi_inputs_aggregation(mock_client_cls, mock_types):
+    """Test Sessions.run aggregates outputs from multiple text inputs."""
+    mock_client = mock_client_cls.return_value
+    sessions = Sessions(app_id="projects/p/locations/l/apps/a")
+
+    # Setup mock types
+    mock_types.RunSessionResponse.side_effect = FakeRunSessionResponse
+
+    # Mock responses for each input
+    # Use SimpleNamespace to support attribute access like real proto objects
+    from types import SimpleNamespace
+    response1 = FakeRunSessionResponse(outputs=[SimpleNamespace(text="Response 1")])
+    response2 = FakeRunSessionResponse(outputs=[SimpleNamespace(text="Response 2")])
+    
+    # side_effect to return different responses for consecutive calls
+    mock_client.run_session.side_effect = [response1, response2]
+
+    res = sessions.run(
+        session_id="s1",
+        text=["Input 1", "Input 2"],
+        modality="text"
+    )
+
+    # Verify run_session was called twice
+    assert mock_client.run_session.call_count == 2
+    
+    # Verify the result contains outputs from both responses
+    assert len(res.outputs) == 2
+    assert res.outputs[0].text == "Response 1"
+    assert res.outputs[1].text == "Response 2"
