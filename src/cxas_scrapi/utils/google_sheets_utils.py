@@ -68,7 +68,9 @@ class GoogleSheetsUtils(Common):
 
         if "has not been used in project" in error_msg:
             links = re.findall(r"(https?://[^\s]+)", error_msg)
-            link_text = f"\n    Enable the API here: {links[0]}\n" if links else "\n"
+            link_text = (
+                f"\n    Enable the API here: {links[0]}\n" if links else "\n"
+            )
 
             raise PermissionError(
                 f"\n{'='*80}\n"

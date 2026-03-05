@@ -50,7 +50,9 @@ def test_project_id_extraction():
 
 
 def test_location_extraction():
-    assert Common._get_location("projects/test-proj/locations/us/apps/abc") == "us"
+    assert (
+        Common._get_location("projects/test-proj/locations/us/apps/abc") == "us"
+    )
     assert Common._get_location("invalid-format") == None
 
 
@@ -58,9 +60,9 @@ def test_unwrap_value():
     assert Common.unwrap_value({"string_value": "hello"}) == "hello"
     assert Common.unwrap_value({"number_value": 42}) == 42
     assert Common.unwrap_value({"bool_value": True}) == True
-    assert Common.unwrap_value({"list_value": {"values": [{"string_value": "a"}]}}) == [
-        "a"
-    ]
+    assert Common.unwrap_value(
+        {"list_value": {"values": [{"string_value": "a"}]}}
+    ) == ["a"]
 
 
 def test_unwrap_struct():

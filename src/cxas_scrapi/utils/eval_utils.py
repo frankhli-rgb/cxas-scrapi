@@ -92,12 +92,18 @@ class EvalUtils(Evaluations):
         self.tools_client = Tools(app_id=self.app_id, creds=self.creds)
         self.var_client = Variables(app_id=self.app_id, creds=self.creds)
         try:
-            self.tool_map = self.tools_client.get_tools_map(self.app_id, reverse=True)
+            self.tool_map = self.tools_client.get_tools_map(
+                self.app_id, reverse=True
+            )
         except (AttributeError, KeyError, RuntimeError, ValueError) as e:
-            logger.warning("Failed to fetch tool map for %s: %s", self.app_id, e)
+            logger.warning(
+                "Failed to fetch tool map for %s: %s", self.app_id, e
+            )
             self.tool_map = {}
         self.agents_client = Agents(app_id=self.app_id, creds=self.creds)
-        self.ch_client = ConversationHistory(app_id=self.app_id, creds=self.creds)
+        self.ch_client = ConversationHistory(
+            app_id=self.app_id, creds=self.creds
+        )
         self.eval_client = Evaluations(app_id=self.app_id, env=env)
 
     @staticmethod
@@ -148,7 +154,9 @@ class EvalUtils(Evaluations):
             else "Unknown"
         )
         model = (
-            df["model"].iloc[0] if "model" in df.columns and not df.empty else "Unknown"
+            df["model"].iloc[0]
+            if "model" in df.columns and not df.empty
+            else "Unknown"
         )
 
         return SummaryStats(
@@ -173,7 +181,9 @@ class EvalUtils(Evaluations):
         self,
         results: Optional[Union[List[Any], str]] = None,
         eval_names: Optional[Union[List[str], str]] = None,
-    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    ) -> tuple[
+        List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]
+    ]:
         if isinstance(results, str):
             eval_names = [results]
             results = None
@@ -229,7 +239,9 @@ class EvalUtils(Evaluations):
             golden = res_dict.get("golden_result", {})
             metrics = golden.get("metrics", {}) if golden else {}
 
-            sem_score_raw = metrics.get("semantic_similarity_result", {}).get("score")
+            sem_score_raw = metrics.get("semantic_similarity_result", {}).get(
+                "score"
+            )
             sem_score_str = None
             if isinstance(sem_score_raw, (int, float)):
                 score_val = (
@@ -241,9 +253,9 @@ class EvalUtils(Evaluations):
             elif sem_score_raw is not None:
                 sem_score_str = str(sem_score_raw)
 
-            tool_score_raw = metrics.get("overall_tool_invocation_result", {}).get(
-                "tool_invocation_score"
-            )
+            tool_score_raw = metrics.get(
+                "overall_tool_invocation_result", {}
+            ).get("tool_invocation_score")
             tool_score_str = (
                 f"{int(tool_score_raw * 100)}%"
                 if isinstance(tool_score_raw, (int, float))
@@ -271,7 +283,9 @@ class EvalUtils(Evaluations):
                     "met_count": exp_item.get("met_count", 0),
                     "not_met_count": exp_item.get("not_met_count", 0),
                     "met_percentage": exp_item.get("met_percentage", 0.0),
-                    "not_met_percentage": exp_item.get("not_met_percentage", 0.0),
+                    "not_met_percentage": exp_item.get(
+                        "not_met_percentage", 0.0
+                    ),
                 }
                 expectations.append(row)
 
@@ -302,10 +316,14 @@ class EvalUtils(Evaluations):
 
                     hal_res = turn.get("hallucination_result", {})
                     row["hallucination_score"] = (
-                        hal_res.get("score") if isinstance(hal_res, dict) else None
+                        hal_res.get("score")
+                        if isinstance(hal_res, dict)
+                        else None
                     )
                     row["hallucination"] = (
-                        hal_res.get("label", "") if isinstance(hal_res, dict) else None
+                        hal_res.get("label", "")
+                        if isinstance(hal_res, dict)
+                        else None
                     )
 
                     row["tool_invocation_score"] = EvalUtils._map_outcome(
@@ -364,9 +382,13 @@ class EvalUtils(Evaluations):
         df_summary = pd.DataFrame(run_summaries)
         if not df_summary.empty:
             if "create_time" in df_summary.columns:
-                df_summary["create_time"] = pd.to_datetime(df_summary["create_time"])
+                df_summary["create_time"] = pd.to_datetime(
+                    df_summary["create_time"]
+                )
             if "update_time" in df_summary.columns:
-                df_summary["update_time"] = pd.to_datetime(df_summary["update_time"])
+                df_summary["update_time"] = pd.to_datetime(
+                    df_summary["update_time"]
+                )
             if "update_time" in df_summary.columns:
                 df_summary = df_summary.sort_values(
                     by="update_time", ascending=False
@@ -417,12 +439,16 @@ class EvalUtils(Evaluations):
                 elif "agent_transfer" in e_dict:
                     e_text = e_dict["agent_transfer"].get(
                         "display_name",
-                        e_dict["agent_transfer"].get("target_agent", "agent_transfer"),
+                        e_dict["agent_transfer"].get(
+                            "target_agent", "agent_transfer"
+                        ),
                     )
                     f_type = "Routing / Agent"
 
                 if "observed_agent_response" in outcome_obj:
-                    chunks = outcome_obj["observed_agent_response"].get("chunks", [])
+                    chunks = outcome_obj["observed_agent_response"].get(
+                        "chunks", []
+                    )
                     a_text = chunks[0].get("text", "") if chunks else ""
                 elif "observed_tool_call" in outcome_obj:
                     a_text = outcome_obj["observed_tool_call"].get(
@@ -432,7 +458,9 @@ class EvalUtils(Evaluations):
                 elif "observed_agent_transfer" in outcome_obj:
                     a_text = outcome_obj["observed_agent_transfer"].get(
                         "display_name",
-                        outcome_obj["observed_agent_transfer"].get("target_agent", ""),
+                        outcome_obj["observed_agent_transfer"].get(
+                            "target_agent", ""
+                        ),
                     )
 
                 return e_text, a_text, f_type
@@ -443,7 +471,10 @@ class EvalUtils(Evaluations):
             # Process individual explicit expectation failures
             for outcome_obj in outcomes:
                 raw_outcome = outcome_obj.get("outcome")
-                if raw_outcome == 2 or EvalUtils._map_outcome(raw_outcome) == "FAIL":
+                if (
+                    raw_outcome == 2
+                    or EvalUtils._map_outcome(raw_outcome) == "FAIL"
+                ):
                     e, a, f = _get_exp_act(outcome_obj)
                     score_val = None
                     if f == "Semantic Similarity":
@@ -457,7 +488,9 @@ class EvalUtils(Evaluations):
                             score_val = f"{s_val} / 4.0"
                         else:
                             score_val = (
-                                str(raw_score) if raw_score is not None else None
+                                str(raw_score)
+                                if raw_score is not None
+                                else None
                             )
                         sem_handled = True
                     elif f == "Tool Call":
@@ -492,10 +525,16 @@ class EvalUtils(Evaluations):
                         break
                 raw_score = turn.get("semantic_score")
                 if isinstance(raw_score, (int, float)):
-                    s_val = int(raw_score) if raw_score == int(raw_score) else raw_score
+                    s_val = (
+                        int(raw_score)
+                        if raw_score == int(raw_score)
+                        else raw_score
+                    )
                     score_val = f"{s_val} / 4.0"
                 else:
-                    score_val = str(raw_score) if raw_score is not None else None
+                    score_val = (
+                        str(raw_score) if raw_score is not None else None
+                    )
 
                 failures.append(
                     {
@@ -558,7 +597,9 @@ class EvalUtils(Evaluations):
         """
         if not results:
             if not getattr(self, "app_id", None) and not app_id:
-                raise ValueError("app_id must be set to look up evaluations by name.")
+                raise ValueError(
+                    "app_id must be set to look up evaluations by name."
+                )
             results = []
             for name in eval_names or []:
                 # Retrieve all results for the provided display name
@@ -583,7 +624,9 @@ class EvalUtils(Evaluations):
                 if not isinstance(res_obj, dict)
                 else res_obj
             )
-            turns = res_dict.get("golden_result", {}).get("turn_replay_results", [])
+            turns = res_dict.get("golden_result", {}).get(
+                "turn_replay_results", []
+            )
             for t in turns:
                 if t.get("conversation"):
                     conv_ids.add(t.get("conversation"))
@@ -594,9 +637,13 @@ class EvalUtils(Evaluations):
             if target_app == getattr(self, "app_id", None):
                 ch_getter = self.ch_client.get_conversation
             else:
-                ch_client = ConversationHistory(app_id=target_app, creds=self.creds)
+                ch_client = ConversationHistory(
+                    app_id=target_app, creds=self.creds
+                )
                 ch_getter = ch_client.get_conversation
-            traces = LatencyParser.fetch_conversation_traces(list(conv_ids), ch_getter)
+            traces = LatencyParser.fetch_conversation_traces(
+                list(conv_ids), ch_getter
+            )
 
         eval_details_rows = []
         eval_summary_agg = []
@@ -621,11 +668,15 @@ class EvalUtils(Evaluations):
                 getattr(self, "app_id", None)
             )
             if evals_map:
-                for lookup_name, full_path in evals_map.get("goldens", {}).items():
+                for lookup_name, full_path in evals_map.get(
+                    "goldens", {}
+                ).items():
                     if full_path == eval_name:
                         display_name = lookup_name
                         break
-                for lookup_name, full_path in evals_map.get("scenarios", {}).items():
+                for lookup_name, full_path in evals_map.get(
+                    "scenarios", {}
+                ).items():
                     if full_path == eval_name:
                         display_name = lookup_name
                         break
@@ -647,11 +698,16 @@ class EvalUtils(Evaluations):
                 # Turn specific items
                 tool_calls = t.get("tool_call_latencies", [])
                 turn_tool_ms = sum(
-                    LatencyParser._parse_duration_ms(tc.get("execution_latency", "0s"))
+                    LatencyParser._parse_duration_ms(
+                        tc.get("execution_latency", "0s")
+                    )
                     for tc in tool_calls
                 )
                 tool_names = ", ".join(
-                    [tc.get("display_name", tc.get("tool", "")) for tc in tool_calls]
+                    [
+                        tc.get("display_name", tc.get("tool", ""))
+                        for tc in tool_calls
+                    ]
                 )
 
                 turn_llm_ms = 0.0
@@ -725,9 +781,7 @@ class EvalUtils(Evaluations):
             p50_90_99_turn = (
                 f"{t_agg['p50']} ms | {t_agg['p90']} ms | {t_agg['p99']} ms"
             )
-            p50_90_99_llm = (
-                f"{llm_agg['p50']} ms | {llm_agg['p90']} ms | {llm_agg['p99']} ms"
-            )
+            p50_90_99_llm = f"{llm_agg['p50']} ms | {llm_agg['p90']} ms | {llm_agg['p99']} ms"
             p50_90_99_tc = (
                 f"{tc_agg['p50']} ms | {tc_agg['p90']} ms | {tc_agg['p99']} ms"
             )
@@ -763,7 +817,9 @@ class EvalUtils(Evaluations):
         callback_details = pd.DataFrame(callback_details_rows)
         guardrail_details = pd.DataFrame(guardrail_details_rows)
 
-        tool_summary = LatencyParser.build_summary_df(tool_details, ["tool_name"])
+        tool_summary = LatencyParser.build_summary_df(
+            tool_details, ["tool_name"]
+        )
         callback_summary = LatencyParser.build_summary_df(
             callback_details, ["agent", "stage", "description"]
         )
@@ -802,12 +858,16 @@ class EvalUtils(Evaluations):
             f"{target_project}.{dataset_table}"
         )
 
-    def load_tool_test_cases_from_file(self, test_file_path: str) -> List["TestCase"]:
+    def load_tool_test_cases_from_file(
+        self, test_file_path: str
+    ) -> List["TestCase"]:
         """Loads tool tests from a YAML file."""
         with open(test_file_path, "r", encoding="utf-8") as f:
             return self.load_tool_test_cases_from_yaml(f.read())
 
-    def load_tool_test_cases_from_yaml(self, yaml_data: str) -> List["TestCase"]:
+    def load_tool_test_cases_from_yaml(
+        self, yaml_data: str
+    ) -> List["TestCase"]:
         """Loads tool tests from a YAML string."""
         raw_data = yaml.safe_load(yaml_data)
         if not raw_data or "tests" not in raw_data:
@@ -823,7 +883,9 @@ class EvalUtils(Evaluations):
         cleaned_data = []
         for case in test_data:
             case_copy = case.copy()
-            if "variables" in case_copy and isinstance(case_copy["variables"], dict):
+            if "variables" in case_copy and isinstance(
+                case_copy["variables"], dict
+            ):
                 cleaned_vars = {}
                 for k, v in case_copy["variables"].items():
                     cleaned_vars[k] = self.variable_to_dict(v)
@@ -875,7 +937,9 @@ class EvalUtils(Evaluations):
 
         return errors
 
-    def run_tool_tests(self, test_cases: List["TestCase"], debug: bool = False) -> Any:
+    def run_tool_tests(
+        self, test_cases: List["TestCase"], debug: bool = False
+    ) -> Any:
         """Runs a list of tool tests.
 
         Returns:
@@ -998,7 +1062,9 @@ class EvalUtils(Evaluations):
         required_cols = ["user_input"]
         for col in required_cols:
             if col not in df.columns:
-                raise ValueError(f"Required column '{col}' not found in DataFrame.")
+                raise ValueError(
+                    f"Required column '{col}' not found in DataFrame."
+                )
 
         sessions_client = Sessions(app_id=self.app_id)
 
@@ -1036,7 +1102,8 @@ class EvalUtils(Evaluations):
         ):
             # Replace NaNs with None for Pydantic validation
             row_dict = {
-                k: (v if pd.notna(v) else None) for k, v in row.to_dict().items()
+                k: (v if pd.notna(v) else None)
+                for k, v in row.to_dict().items()
             }
 
             # Use test_id for name if available
@@ -1048,7 +1115,9 @@ class EvalUtils(Evaluations):
             try:
                 test_case = GuardrailTestCase(**row_dict)
             except (TypeError, ValueError) as e:
-                logger.error(f"Failed to parse row {index} into GuardrailTestCase: {e}")
+                logger.error(
+                    f"Failed to parse row {index} into GuardrailTestCase: {e}"
+                )
                 results.append({"pass": False, "error": str(e)})
                 continue
 
@@ -1066,7 +1135,9 @@ class EvalUtils(Evaluations):
                     f"projects/{project}/locations/{location}/quality"
                     f"/conversations/{session_uuid}"
                 )
-                session_id_link = f'=HYPERLINK("{base_url}/{path}", "{session_uuid}")'
+                session_id_link = (
+                    f'=HYPERLINK("{base_url}/{path}", "{session_uuid}")'
+                )
             except (IndexError, ValueError):
                 session_id_link = session_id
 
@@ -1094,7 +1165,9 @@ class EvalUtils(Evaluations):
 
                 for output in outputs:
                     diagnostic_info = getattr(output, "diagnostic_info", None)
-                    if diagnostic_info and hasattr(diagnostic_info, "root_span"):
+                    if diagnostic_info and hasattr(
+                        diagnostic_info, "root_span"
+                    ):
                         root_span = diagnostic_info.root_span
 
                         try:
@@ -1111,7 +1184,9 @@ class EvalUtils(Evaluations):
                             ValueError,
                         ):
                             span_dict = (
-                                dict(root_span) if isinstance(root_span, dict) else {}
+                                dict(root_span)
+                                if isinstance(root_span, dict)
+                                else {}
                             )
 
                         triggered_span = self._search_span_dict(span_dict)
@@ -1121,7 +1196,9 @@ class EvalUtils(Evaluations):
                             actual_guardrail_name = attrs.get("name")
                             actual_guardrail_type = attrs.get(
                                 "type",
-                                attrs.get("guardrailType", attrs.get("guardrail_type")),
+                                attrs.get(
+                                    "guardrailType", attrs.get("guardrail_type")
+                                ),
                             )
                             actual_reason = attrs.get("reason")
                             break  # Found the triggered guardrail
@@ -1158,7 +1235,8 @@ class EvalUtils(Evaluations):
             elif actual_triggered and expected_triggered:
                 if (
                     has_expected_name
-                    and test_case.expected_guardrail_name != actual_guardrail_name
+                    and test_case.expected_guardrail_name
+                    != actual_guardrail_name
                 ):
                     passed = False
                     error_details.append(
@@ -1172,7 +1250,9 @@ class EvalUtils(Evaluations):
                         .replace("_", "")
                     )
                     norm_actual = (
-                        actual_guardrail_type.lower().replace(" ", "").replace("_", "")
+                        actual_guardrail_type.lower()
+                        .replace(" ", "")
+                        .replace("_", "")
                     )
 
                     matched = False
@@ -1237,7 +1317,9 @@ class EvalUtils(Evaluations):
             failed_count = len(results) - passed_count
 
             for i, res in enumerate(results):
-                test_id = df.iloc[i].get("test_id", df.iloc[i].get("name", f"Test_{i}"))
+                test_id = df.iloc[i].get(
+                    "test_id", df.iloc[i].get("name", f"Test_{i}")
+                )
                 status = "SUCCESS" if res["pass"] else "FAILURE"
                 print(f"{status}: {test_id}")
                 if not res["pass"] and res.get("error_details"):
@@ -1311,7 +1393,9 @@ class EvalUtils(Evaluations):
                     steps.append(
                         {
                             "expectation": {
-                                "agentTransfer": {"targetAgent": tool_call["agent"]}
+                                "agentTransfer": {
+                                    "targetAgent": tool_call["agent"]
+                                }
                             }
                         }
                     )
@@ -1323,7 +1407,9 @@ class EvalUtils(Evaluations):
                         "toolCall": {
                             "id": tool_call_id,
                             "tool": action,
-                            "args": EvalUtils._extract_tool_call_args(tool_call),
+                            "args": EvalUtils._extract_tool_call_args(
+                                tool_call
+                            ),
                         }
                     }
                 }
@@ -1389,7 +1475,9 @@ class EvalUtils(Evaluations):
         conversations_list = data.get("conversations", [])
 
         if not conversations_list:
-            logger.error("YAML '%s' contains no 'conversations'.", yaml_file_path)
+            logger.error(
+                "YAML '%s' contains no 'conversations'.", yaml_file_path
+            )
             return None
 
         # Process only the first conversation from the list

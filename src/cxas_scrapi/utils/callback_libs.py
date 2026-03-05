@@ -22,9 +22,9 @@ class BaseModel(pydantic.BaseModel):
     """Base class for the pydantic model."""
 
     model_config = pydantic.ConfigDict(
-            arbitrary_types_allowed=True,
-            extra='ignore',
-            populate_by_name=True,
+        arbitrary_types_allowed=True,
+        extra="ignore",
+        populate_by_name=True,
     )
 
 
@@ -32,12 +32,12 @@ class Blob(BaseModel):
     """Datamodel for the blob content."""
 
     display_name: Optional[str] = pydantic.Field(
-            default=None, alias='displayName'
+        default=None, alias="displayName"
     )
     data: Optional[bytes] = pydantic.Field(
-            default=None,
+        default=None,
     )
-    mime_type: Optional[str] = pydantic.Field(default=None, alias='mimeType')
+    mime_type: Optional[str] = pydantic.Field(default=None, alias="mimeType")
 
     @property
     def raw_data(self) -> bytes:
@@ -48,10 +48,10 @@ class Blob(BaseModel):
         self.data = base64.b64encode(value)
 
     @classmethod
-    def from_json(cls, data: str) -> 'Blob':
+    def from_json(cls, data: str) -> "Blob":
         return cls(
-                data=base64.b64encode(data.encode('utf-8')),
-                mime_type='application/json',
+            data=base64.b64encode(data.encode("utf-8")),
+            mime_type="application/json",
         )
 
 
@@ -59,13 +59,13 @@ class FunctionCall(BaseModel):
     """Datamodel for the function call."""
 
     id: Optional[str] = pydantic.Field(
-            default=None,
+        default=None,
     )
     args: Optional[dict[str, Any]] = pydantic.Field(
-            default=None,
+        default=None,
     )
     name: Optional[str] = pydantic.Field(
-            default=None,
+        default=None,
     )
 
 
@@ -73,16 +73,16 @@ class FunctionResponse(BaseModel):
     """Datamodel for the function response."""
 
     will_continue: Optional[bool] = pydantic.Field(
-            default=None, alias='willContinue'
+        default=None, alias="willContinue"
     )
     id: Optional[str] = pydantic.Field(
-            default=None,
+        default=None,
     )
     name: Optional[str] = pydantic.Field(
-            default=None,
+        default=None,
     )
     response: Optional[dict[str, Any]] = pydantic.Field(
-            default=None,
+        default=None,
     )
 
 
@@ -90,16 +90,16 @@ class Part(BaseModel):
     """Datamodel for the part."""
 
     function_call: Optional[FunctionCall] = pydantic.Field(
-            default=None, alias='functionCall'
+        default=None, alias="functionCall"
     )
     function_response: Optional[FunctionResponse] = pydantic.Field(
-            default=None, alias='functionResponse'
+        default=None, alias="functionResponse"
     )
     text: Optional[str] = pydantic.Field(
-            default=None,
+        default=None,
     )
     inline_data: Optional[Blob] = pydantic.Field(
-            default=None, alias='inlineData'
+        default=None, alias="inlineData"
     )
 
     def text_or_transcript(self) -> Optional[str]:
@@ -111,98 +111,101 @@ class Part(BaseModel):
 
     def has_function_call(self, name: str) -> bool:
         return (
-                self.function_call is not None
-                and self.function_call.name == name
+            self.function_call is not None and self.function_call.name == name
         )
 
     def has_function_response(self, name: str) -> bool:
         return (
-                self.function_response is not None
-                and self.function_response.name == name
+            self.function_response is not None
+            and self.function_response.name == name
         )
 
     @classmethod
-    def from_text(cls, text: str) -> 'Part':
+    def from_text(cls, text: str) -> "Part":
         return cls(text=text)
 
     @classmethod
-    def from_function_call(cls, name: str, args: dict[str, Any]) -> 'Part':
+    def from_function_call(cls, name: str, args: dict[str, Any]) -> "Part":
         function_call = FunctionCall(name=name, args=args)
         return cls(function_call=function_call)
 
     @classmethod
     def from_function_response(
-            cls, name: str, response: dict[str, Any]
-    ) -> 'Part':
+        cls, name: str, response: dict[str, Any]
+    ) -> "Part":
         function_response = FunctionResponse(name=name, response=response)
         return cls(function_response=function_response)
 
     @classmethod
-    def from_inline_data(cls, data: bytes, mime_type: str) -> 'Part':
+    def from_inline_data(cls, data: bytes, mime_type: str) -> "Part":
         return cls(inline_data=Blob(data=data, mime_type=mime_type))
 
     @classmethod
-    def from_json(cls, data: str) -> 'Part':
+    def from_json(cls, data: str) -> "Part":
         return cls(inline_data=Blob.from_json(data=data))
 
     @classmethod
     def from_audio(
-            cls,
-            audio_uri: str,
-            cancellable: bool = False,
-            interruptable: bool = True,
-    ) -> 'Part':
-        data = json_lib.dumps({
-                'audioUri': audio_uri,
-                'cancellable': cancellable,
-                'interruptable': interruptable,
-        })
+        cls,
+        audio_uri: str,
+        cancellable: bool = False,
+        interruptable: bool = True,
+    ) -> "Part":
+        data = json_lib.dumps(
+            {
+                "audioUri": audio_uri,
+                "cancellable": cancellable,
+                "interruptable": interruptable,
+            }
+        )
         return cls(
-                inline_data=Blob(
-                        data=base64.b64encode(data.encode('utf-8')),
-                        mime_type='application/json+audio',
-                )
+            inline_data=Blob(
+                data=base64.b64encode(data.encode("utf-8")),
+                mime_type="application/json+audio",
+            )
         )
 
     @classmethod
-    def from_agent_transfer(cls, agent: str) -> 'Part':
+    def from_agent_transfer(cls, agent: str) -> "Part":
         function_call = FunctionCall(
-                name='transfer_to_agent', args={'agent_name': agent}
+            name="transfer_to_agent", args={"agent_name": agent}
         )
         return cls(function_call=function_call)
 
     @classmethod
     def from_end_session(
-            cls, *, reason: str, escalated: bool = False
-    ) -> 'Part':
+        cls, *, reason: str, escalated: bool = False
+    ) -> "Part":
         function_call = FunctionCall(
-                name='end_session',
-                args={'reason': reason, 'session_escalated': escalated},
+            name="end_session",
+            args={"reason": reason, "session_escalated": escalated},
         )
         return cls(function_call=function_call)
 
     @classmethod
     def from_customized_response(
-            cls,
-            *,
-            content: str = '',
-            disable_barge_in: bool = False,
-            enable_dtmf: bool = False,
-            dtmf_finish_digit: str = '#',
-            dtmf_endpointing_timeout: int = 3,
-    ) -> 'Part':
-        data = json_lib.dumps({
-                'content': content,
-                'disableBargeIn': disable_barge_in,
-                'enableDtmf': enable_dtmf,
-                'dtmfFinishDigit': dtmf_finish_digit,
-                'dtmfEndpointingTimeout': dtmf_endpointing_timeout,
-        })
+        cls,
+        *,
+        content: str = "",
+        disable_barge_in: bool = False,
+        enable_dtmf: bool = False,
+        dtmf_finish_digit: str = "#",
+        dtmf_endpointing_timeout: int = 3,
+    ) -> "Part":
+        data = json_lib.dumps(
+            {
+                "content": content,
+                "disableBargeIn": disable_barge_in,
+                "enableDtmf": enable_dtmf,
+                "dtmfFinishDigit": dtmf_finish_digit,
+                "dtmfEndpointingTimeout": dtmf_endpointing_timeout,
+            }
+        )
         return cls(
-                inline_data=Blob(
-                        data=base64.b64encode(data.encode('utf-8')),
-                        mime_type='application/json+agentResponse',
-                )
+            inline_data=Blob(
+                data=base64.b64encode(data.encode("utf-8")),
+                mime_type="application/json+agentResponse",
+            )
         )
 
 
@@ -210,24 +213,24 @@ class Content(BaseModel):
     """Datamodel for the content."""
 
     parts: Optional[list[Part]] = pydantic.Field(
-            default=None,
+        default=None,
     )
     role: Optional[str] = pydantic.Field(
-            default=None,
+        default=None,
     )
 
     def is_user(self) -> bool:
-        return self.role == 'user'
+        return self.role == "user"
 
     def is_model(self) -> bool:
-        return self.role == 'model'
+        return self.role == "model"
 
 
 class FunctionDeclaration(BaseModel):
     """Datamodel for the function declaration."""
 
     name: Optional[str] = pydantic.Field(
-            default=None,
+        default=None,
     )
 
 
@@ -235,7 +238,7 @@ class ToolDeclaration(BaseModel):
     """Datamodel for the tool declaration."""
 
     function_declarations: Optional[list[FunctionDeclaration]] = pydantic.Field(
-            default=None, alias='functionDeclarations'
+        default=None, alias="functionDeclarations"
     )
 
 
@@ -243,13 +246,13 @@ class GenerateContentConfig(BaseModel):
     """Datamodel for the generate content config."""
 
     system_instruction: Optional[Content] = pydantic.Field(
-            default=None, alias='systemInstruction'
+        default=None, alias="systemInstruction"
     )
     tools: Optional[list[ToolDeclaration]] = pydantic.Field(
-            default=None,
+        default=None,
     )
     excluded_tools: Optional[list[str]] = pydantic.Field(
-            default=None, alias='excludedTools'
+        default=None, alias="excludedTools"
     )
 
     def hide_tool(self, tool_name: str):
@@ -262,23 +265,23 @@ class EventActions(BaseModel):
     """Event actions data model for the tool context."""
 
     skip_summarization: Optional[bool] = pydantic.Field(
-            default=None, alias='skipSummarization'
+        default=None, alias="skipSummarization"
     )
     state_delta: dict[str, Any] = pydantic.Field(
-            default_factory=dict, alias='stateDelta'
+        default_factory=dict, alias="stateDelta"
     )
     artifact_delta: dict[str, Any] = pydantic.Field(
-            default_factory=dict, alias='artifactDelta'
+        default_factory=dict, alias="artifactDelta"
     )
     transfer_to_agent: Optional[str] = pydantic.Field(
-            default=None, alias='transferToAgent'
+        default=None, alias="transferToAgent"
     )
     escalate: Optional[bool] = None
     requested_auth_configs: dict[str, dict[str, Any]] = pydantic.Field(
-            default_factory=dict, alias='requestedAuthConfigs'
+        default_factory=dict, alias="requestedAuthConfigs"
     )
     end_invocation: Optional[bool] = pydantic.Field(
-            default=None, alias='endInvocation'
+        default=None, alias="endInvocation"
     )
 
 
@@ -288,32 +291,32 @@ class Event(BaseModel):
     id: str
     author: str
     timestamp: int
-    invocation_id: str = pydantic.Field(alias='invocationId')
+    invocation_id: str = pydantic.Field(alias="invocationId")
     content: Optional[Content] = None
     actions: EventActions = EventActions()
     long_running_tool_ids: Optional[Set[str]] = pydantic.Field(
-            default=None, alias='longRunningToolIds'
+        default=None, alias="longRunningToolIds"
     )
     partial: Optional[bool] = None
     turn_complete: Optional[bool] = pydantic.Field(
-            default=None, alias='turnComplete'
+        default=None, alias="turnComplete"
     )
-    error_code: Optional[str] = pydantic.Field(default=None, alias='errorCode')
+    error_code: Optional[str] = pydantic.Field(default=None, alias="errorCode")
     error_message: Optional[str] = pydantic.Field(
-            default=None, alias='errorMessage'
+        default=None, alias="errorMessage"
     )
     interrupted: Optional[bool] = None
     branch: Optional[str] = None
     grounding_metadata: Any = pydantic.Field(
-            default=None, alias='groundingMetadata'
+        default=None, alias="groundingMetadata"
     )
 
     def is_user(self) -> bool:
-        return self.author == 'user'
+        return self.author == "user"
 
     def is_agent(self, agent_name: Optional[str] = None) -> bool:
         if agent_name is None:
-            return self.author != 'user'
+            return self.author != "user"
         return self.author == agent_name
 
     def has_error(self) -> bool:
@@ -329,23 +332,23 @@ class CallbackContext(BaseModel):
     """Datamodel for the callback context."""
 
     user_content: Optional[Content] = pydantic.Field(
-            default=None, alias='userContent'
+        default=None, alias="userContent"
     )
-    invocation_id: str = pydantic.Field(default='', alias='invocationId')
-    agent_name: str = pydantic.Field(default='', alias='agentName')
-    session_id: str = pydantic.Field(default='', alias='sessionId')
+    invocation_id: str = pydantic.Field(default="", alias="invocationId")
+    agent_name: str = pydantic.Field(default="", alias="agentName")
+    session_id: str = pydantic.Field(default="", alias="sessionId")
     state: dict[str, Any] = {}
     actions: EventActions = EventActions()
     events: list[Event] = []
     streaming_stage: Optional[str] = pydantic.Field(
-            default=None, alias='streamingStage'
+        default=None, alias="streamingStage"
     )
-    language_code: str = pydantic.Field(default='', alias='languageCode')
-    project_id: str = pydantic.Field(default='', alias='projectId')
-    project_number: int = pydantic.Field(default=0, alias='projectNumber')
-    location: str = pydantic.Field(default='', alias='location')
-    app_id: str = pydantic.Field(default='', alias='appId')
-    turn_index: int = pydantic.Field(default=0, alias='turnIndex')
+    language_code: str = pydantic.Field(default="", alias="languageCode")
+    project_id: str = pydantic.Field(default="", alias="projectId")
+    project_number: int = pydantic.Field(default=0, alias="projectNumber")
+    location: str = pydantic.Field(default="", alias="location")
+    app_id: str = pydantic.Field(default="", alias="appId")
+    turn_index: int = pydantic.Field(default=0, alias="turnIndex")
 
     # Alias to state. `variables` is the legacy CES name for state.
     @property
@@ -397,7 +400,7 @@ class ToolContext(CallbackContext):
     """Tool context that could be used by the user code."""
 
     function_call_id: Optional[str] = pydantic.Field(
-            default=None, alias='functionCallId'
+        default=None, alias="functionCallId"
     )
 
 
@@ -422,9 +425,9 @@ class LlmResponse(BaseModel):
     content: Optional[Content] = None
     partial: Optional[bool] = None
     turn_complete: Optional[bool] = pydantic.Field(
-            default=None, alias='turnComplete'
+        default=None, alias="turnComplete"
     )
 
     @classmethod
-    def from_parts(cls, parts: list[Part]) -> 'LlmResponse':
-        return cls(content=Content(parts=parts, role='model'))
+    def from_parts(cls, parts: list[Part]) -> "LlmResponse":
+        return cls(content=Content(parts=parts, role="model"))

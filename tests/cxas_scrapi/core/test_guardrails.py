@@ -68,7 +68,10 @@ def test_create_guardrail(mock_client_cls, mock_req_cls, mock_gr_cls):
 
     grs = Guardrails("projects/p/locations/l/apps/A")
 
-    payload = {"model_safety": {"safety_settings": []}, "display_name": "ignore_me"}
+    payload = {
+        "model_safety": {"safety_settings": []},
+        "display_name": "ignore_me",
+    }
     res = grs.create_guardrail("app1", "gr_id", "my_gr", payload=payload)
     mock_client.create_guardrail.assert_called_once()
 

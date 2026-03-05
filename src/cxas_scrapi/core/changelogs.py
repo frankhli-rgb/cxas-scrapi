@@ -32,7 +32,9 @@ class Changelogs(Agents):
         super().__init__(app_id=app_id)
         self.resource_type = "changelogs"
 
-    def list_changelogs(self, app_id: Optional[str] = None) -> List[types.Changelog]:
+    def list_changelogs(
+        self, app_id: Optional[str] = None
+    ) -> List[types.Changelog]:
         """Lists changelogs within a specific app.
 
         Args:

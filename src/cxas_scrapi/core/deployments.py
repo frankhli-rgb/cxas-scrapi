@@ -54,7 +54,9 @@ class Deployments(Apps):
         response = self.client.list_deployments(request=request)
         return list(response)
 
-    def get_deployments_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
+    def get_deployments_map(
+        self, app_id: str, reverse: bool = False
+    ) -> Dict[str, str]:
         """Creates a map of Deployment full names to display names.
 
         Args:
@@ -104,7 +106,9 @@ class Deployments(Apps):
         )
         return self.client.create_deployment(request=request)
 
-    def update_deployment(self, deployment_id: str, **kwargs) -> types.Deployment:
+    def update_deployment(
+        self, deployment_id: str, **kwargs
+    ) -> types.Deployment:
         """Updates specific fields of an existing Deployment."""
         deployment = types.Deployment(name=deployment_id)
         mask_paths = []

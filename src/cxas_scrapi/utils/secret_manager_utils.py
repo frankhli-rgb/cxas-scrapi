@@ -67,7 +67,10 @@ class SecretManagerUtils:
         # Add the initial version (payload)
         payload_bytes = payload.encode("UTF-8")
         self.client.add_secret_version(
-            request={"parent": created_secret.name, "payload": {"data": payload_bytes}}
+            request={
+                "parent": created_secret.name,
+                "payload": {"data": payload_bytes},
+            }
         )
 
         return f"{created_secret.name}/versions/latest"

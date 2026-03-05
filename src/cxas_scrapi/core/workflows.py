@@ -33,7 +33,9 @@ class Reasoning:
     def to_dict(self) -> Dict[str, Any]:
         result = {"prompt": self.prompt}
         if self.output_variables:
-            result["output_variables"] = [asdict(v) for v in self.output_variables]
+            result["output_variables"] = [
+                asdict(v) for v in self.output_variables
+            ]
         return result
 
 
@@ -63,7 +65,9 @@ class WorkflowAction:
 @dataclass
 class Transition:
     workflow_step_id: str
-    condition_type: Optional[str] = None  # Placeholder for oneof condition logic
+    condition_type: Optional[str] = (
+        None  # Placeholder for oneof condition logic
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         return {"workflow_step_id": self.workflow_step_id}

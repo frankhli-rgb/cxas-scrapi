@@ -54,7 +54,9 @@ class Guardrails(Apps):
         response = self.client.list_guardrails(request=request)
         return list(response)
 
-    def get_guardrails_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
+    def get_guardrails_map(
+        self, app_id: str, reverse: bool = False
+    ) -> Dict[str, str]:
         """Creates a map of Guardrail full names to display names.
 
         Args:
@@ -123,7 +125,8 @@ class Guardrails(Apps):
             mask_paths.append(key)
 
         request = types.UpdateGuardrailRequest(
-            guardrail=guardrail, update_mask=field_mask_pb2.FieldMask(paths=mask_paths)
+            guardrail=guardrail,
+            update_mask=field_mask_pb2.FieldMask(paths=mask_paths),
         )
         return self.client.update_guardrail(request=request)
 

@@ -73,7 +73,10 @@ def test_get_tool(mock_client_cls, mock_ts_req_cls, mock_t_req_cls):
     mock_client.get_toolset.return_value = MagicMock(name="ts1")
     res = t.get_tool("apps/A/toolsets/TS")
     mock_client.get_toolset.assert_called_once()
-    assert mock_client.get_toolset.call_args[1]["request"].name == "apps/A/toolsets/TS"
+    assert (
+        mock_client.get_toolset.call_args[1]["request"].name
+        == "apps/A/toolsets/TS"
+    )
 
 
 @patch("cxas_scrapi.core.tools.types.Tool")
@@ -304,7 +307,9 @@ def test_execute_tool_not_found(mock_client_cls):
         t, "get_tools_map", return_value={"existing_tool": "apps/A/tools/o1"}
     ):
         with pytest.raises(ValueError, match="Tool 'missing_tool' not found"):
-            t.execute_tool(app_id="apps/A", tool_display_name="missing_tool", args={})
+            t.execute_tool(
+                app_id="apps/A", tool_display_name="missing_tool", args={}
+            )
 
 
 @patch("requests.post")
@@ -331,7 +336,18 @@ def test_execute_tool_with_context(mock_client_cls, mock_post):
             tool_display_name="my_tool",
             args={"query": "test"},
             variables={"var2": "var2"},
-            context={"state": {"var1": "val1"}, "events": [ {"author": "user", "content": {"parts": [{"text": "Hello"}], "role": "user"}}]}
+            context={
+                "state": {"var1": "val1"},
+                "events": [
+                    {
+                        "author": "user",
+                        "content": {
+                            "parts": [{"text": "Hello"}],
+                            "role": "user",
+                        },
+                    }
+                ],
+            },
         )
 
     mock_post.assert_called_once()
@@ -339,7 +355,15 @@ def test_execute_tool_with_context(mock_client_cls, mock_post):
     assert args[0] == "https://ces.googleapis.com/v1beta/apps/app1:executeTool"
     assert kwargs["json"]["tool"] == "apps/app1/tools/t1"
     assert kwargs["json"]["args"] == {"query": "test"}
-    assert kwargs["json"]["context"] == {"state": {"var1": "val1"}, "events": [ {"author": "user", "content": {"parts": [{"text": "Hello"}], "role": "user"}}]}
+    assert kwargs["json"]["context"] == {
+        "state": {"var1": "val1"},
+        "events": [
+            {
+                "author": "user",
+                "content": {"parts": [{"text": "Hello"}], "role": "user"},
+            }
+        ],
+    }
     assert "variables" not in kwargs["json"]
 
     assert res["result"] == "fake"

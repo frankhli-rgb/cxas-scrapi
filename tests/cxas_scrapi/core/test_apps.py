@@ -59,5 +59,11 @@ def test_get_apps_map(mock_client_cls):
 
     apps_map_reverse = apps_client.get_apps_map(reverse=True)
     assert len(apps_map_reverse) == 2
-    assert apps_map_reverse["Test App 1"] == "projects/p/locations/l/apps/test-app-1"
-    assert apps_map_reverse["Test App 2"] == "projects/p/locations/l/apps/test-app-2"
+    assert (
+        apps_map_reverse["Test App 1"]
+        == "projects/p/locations/l/apps/test-app-1"
+    )
+    assert (
+        apps_map_reverse["Test App 2"]
+        == "projects/p/locations/l/apps/test-app-2"
+    )

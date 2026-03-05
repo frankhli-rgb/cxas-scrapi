@@ -37,7 +37,9 @@ class Sessions(Common):
         """
         if not os.path.exists(file_path):
             logger.error(f"File not found at path: {file_path}")
-            raise FileNotFoundError(f"The file specified at {file_path} was not found.")
+            raise FileNotFoundError(
+                f"The file specified at {file_path} was not found."
+            )
 
         mime_type, _ = mimetypes.guess_type(file_path)
         if mime_type is None:
@@ -95,7 +97,11 @@ class Sessions(Common):
                             if role.lower() == "user":
                                 display(HTML(f"{query_font} {chunk.text}"))
                             else:
-                                display(HTML(f"{response_font} [{role}] {chunk.text}"))
+                                display(
+                                    HTML(
+                                        f"{response_font} [{role}] {chunk.text}"
+                                    )
+                                )
 
                         elif chunk_type == "tool_call":
                             tc = chunk.tool_call
@@ -148,7 +154,9 @@ class Sessions(Common):
                     for tc in tool_calls_msg.tool_calls:
                         tool_name = tc.tool or tc.display_name
                         display(
-                            HTML(f"{tool_call_font} {tool_name} -- Args: {tc.args}")
+                            HTML(
+                                f"{tool_call_font} {tool_name} -- Args: {tc.args}"
+                            )
                         )
 
     def session_id_setup(self, session_id: str, restart_session: bool) -> str:
@@ -175,7 +183,9 @@ class Sessions(Common):
             session_id = f"{self.app_id}/sessions/{str(uuid.uuid4())}"
 
         self.current_session_id = session_id
-        logger.info(f"Starting new session with Session ID: {self.current_session_id}")
+        logger.info(
+            f"Starting new session with Session ID: {self.current_session_id}"
+        )
         return self.current_session_id
 
     def run(
@@ -198,7 +208,9 @@ class Sessions(Common):
     ):
         """Sends inputs to a Conversational Agents Session and returns the response."""
 
-        session_id = self.session_id_setup(session_id, restart_session=restart_session)
+        session_id = self.session_id_setup(
+            session_id, restart_session=restart_session
+        )
 
         # Construct SessionConfig
         config = {"session": session_id}
@@ -240,13 +252,17 @@ class Sessions(Common):
 
         # Wrap tool responses correctly
         if tool_responses is not None:
-            inputs.append({"tool_responses": {"tool_responses": tool_responses}})
+            inputs.append(
+                {"tool_responses": {"tool_responses": tool_responses}}
+            )
 
         request = types.RunSessionRequest(config=config, inputs=inputs)
 
         return self.client.run_session(request=request)
 
-    def send_event(self, unique_id: str, event_name: str, event_vars: Dict[str, Any]):
+    def send_event(
+        self, unique_id: str, event_name: str, event_vars: Dict[str, Any]
+    ):
         session_id = f"{self.app_id}/sessions/{unique_id}"
 
         config = {"session": session_id}

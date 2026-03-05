@@ -74,7 +74,9 @@ class GuardrailUtils:
         except IndexError:
             raise ValueError(f"Invalid resource name format: {name}")
 
-    def _search_span_dict(self, span_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _search_span_dict(
+        self, span_dict: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Recursively searches a trace span dictionary for a guardrail trigger.
 
         Looks for span attributes with keys 'name' and ('type', 'guardrailType',
@@ -91,7 +93,9 @@ class GuardrailUtils:
             return span_dict
 
         # Recurse into child spans
-        child_spans = span_dict.get("childSpans", span_dict.get("child_spans", []))
+        child_spans = span_dict.get(
+            "childSpans", span_dict.get("child_spans", [])
+        )
         for child in child_spans:
             res = self._search_span_dict(child)
             if res:
@@ -127,7 +131,9 @@ class GuardrailUtils:
         required_cols = ["user_input"]
         for col in required_cols:
             if col not in df.columns:
-                raise ValueError(f"Required column '{col}' not found in DataFrame.")
+                raise ValueError(
+                    f"Required column '{col}' not found in DataFrame."
+                )
 
         sessions_client = Sessions(app_id=self.app_id, creds=self.creds)
 
@@ -166,7 +172,8 @@ class GuardrailUtils:
         ):
             # Replace NaNs with None for Pydantic validation
             row_dict = {
-                k: (v if pd.notna(v) else None) for k, v in row.to_dict().items()
+                k: (v if pd.notna(v) else None)
+                for k, v in row.to_dict().items()
             }
 
             # Use test_id for name if available
@@ -178,7 +185,9 @@ class GuardrailUtils:
             try:
                 test_case = GuardrailTestCase(**row_dict)
             except (TypeError, ValueError) as e:
-                logger.error(f"Failed to parse row {index} into GuardrailTestCase: {e}")
+                logger.error(
+                    f"Failed to parse row {index} into GuardrailTestCase: {e}"
+                )
                 results.append({"pass": False, "error": str(e)})
                 continue
 
@@ -196,7 +205,9 @@ class GuardrailUtils:
                     f"projects/{project}/locations/{location}/quality"
                     f"/conversations/{session_uuid}"
                 )
-                session_id_link = f'=HYPERLINK("{base_url}/{path}", "{session_uuid}")'
+                session_id_link = (
+                    f'=HYPERLINK("{base_url}/{path}", "{session_uuid}")'
+                )
             except (IndexError, ValueError):
                 session_id_link = session_id
 
@@ -224,7 +235,9 @@ class GuardrailUtils:
 
                 for output in outputs:
                     diagnostic_info = getattr(output, "diagnostic_info", None)
-                    if diagnostic_info and hasattr(diagnostic_info, "root_span"):
+                    if diagnostic_info and hasattr(
+                        diagnostic_info, "root_span"
+                    ):
                         root_span = diagnostic_info.root_span
 
                         try:
@@ -241,7 +254,9 @@ class GuardrailUtils:
                             ValueError,
                         ):
                             span_dict = (
-                                dict(root_span) if isinstance(root_span, dict) else {}
+                                dict(root_span)
+                                if isinstance(root_span, dict)
+                                else {}
                             )
 
                         triggered_span = self._search_span_dict(span_dict)
@@ -251,7 +266,9 @@ class GuardrailUtils:
                             actual_guardrail_name = attrs.get("name")
                             actual_guardrail_type = attrs.get(
                                 "type",
-                                attrs.get("guardrailType", attrs.get("guardrail_type")),
+                                attrs.get(
+                                    "guardrailType", attrs.get("guardrail_type")
+                                ),
                             )
                             actual_reason = attrs.get("reason")
                             break  # Found the triggered guardrail
@@ -288,7 +305,8 @@ class GuardrailUtils:
             elif actual_triggered and expected_triggered:
                 if (
                     has_expected_name
-                    and test_case.expected_guardrail_name != actual_guardrail_name
+                    and test_case.expected_guardrail_name
+                    != actual_guardrail_name
                 ):
                     passed = False
                     error_details.append(
@@ -302,7 +320,9 @@ class GuardrailUtils:
                         .replace("_", "")
                     )
                     norm_actual = (
-                        actual_guardrail_type.lower().replace(" ", "").replace("_", "")
+                        actual_guardrail_type.lower()
+                        .replace(" ", "")
+                        .replace("_", "")
                     )
 
                     matched = False
@@ -367,7 +387,9 @@ class GuardrailUtils:
             failed_count = len(results) - passed_count
 
             for i, res in enumerate(results):
-                test_id = df.iloc[i].get("test_id", df.iloc[i].get("name", f"Test_{i}"))
+                test_id = df.iloc[i].get(
+                    "test_id", df.iloc[i].get("name", f"Test_{i}")
+                )
                 status = "SUCCESS" if res["pass"] else "FAILURE"
                 print(f"{status}: {test_id}")
                 if not res["pass"] and res.get("error_details"):

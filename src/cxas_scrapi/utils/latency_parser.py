@@ -45,7 +45,8 @@ class LatencyParser:
             chunk = conv_list[i : i + chunk_size]
             with ThreadPoolExecutor(max_workers=chunk_size) as executor:
                 future_to_id = {
-                    executor.submit(get_conversation_func, cid): cid for cid in chunk
+                    executor.submit(get_conversation_func, cid): cid
+                    for cid in chunk
                 }
                 for future in as_completed(future_to_id):
                     cid = future_to_id[future]
@@ -137,7 +138,9 @@ class LatencyParser:
         return sums
 
     @staticmethod
-    def build_summary_df(df_d: pd.DataFrame, group_cols: List[str]) -> pd.DataFrame:
+    def build_summary_df(
+        df_d: pd.DataFrame, group_cols: List[str]
+    ) -> pd.DataFrame:
         """Aggregates a detailed DataFrame into counts and latency percentiles."""
         if df_d.empty:
             return pd.DataFrame(
@@ -170,7 +173,9 @@ class LatencyParser:
             inplace=True,
         )
 
-        agg_df = agg_df.sort_values(by="count", ascending=False).reset_index(drop=True)
+        agg_df = agg_df.sort_values(by="count", ascending=False).reset_index(
+            drop=True
+        )
         return agg_df
 
     @staticmethod
@@ -192,7 +197,9 @@ class LatencyParser:
         guardrail_details_rows = []
 
         for cid, conv in traces.items():
-            conv_dict = type(conv).to_dict(conv) if not isinstance(conv, dict) else conv
+            conv_dict = (
+                type(conv).to_dict(conv) if not isinstance(conv, dict) else conv
+            )
             conv_turns = conv_dict.get("turns", [])
             for turn_idx, t in enumerate(conv_turns):
                 root = t.get("root_span", {})
@@ -211,7 +218,9 @@ class LatencyParser:
         callback_details = pd.DataFrame(callback_details_rows)
         guardrail_details = pd.DataFrame(guardrail_details_rows)
 
-        tool_summary = LatencyParser.build_summary_df(tool_details, ["tool_name"])
+        tool_summary = LatencyParser.build_summary_df(
+            tool_details, ["tool_name"]
+        )
         callback_summary = LatencyParser.build_summary_df(
             callback_details, ["agent", "stage", "description"]
         )

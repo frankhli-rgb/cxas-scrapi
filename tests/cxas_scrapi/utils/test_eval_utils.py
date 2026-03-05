@@ -29,7 +29,9 @@ def test_evals_to_dataframe_with_data():
         "golden_result": {
             "metrics": {
                 "semantic_similarity_result": {"score": 5},
-                "overall_tool_invocation_result": {"tool_invocation_score": 1.0},
+                "overall_tool_invocation_result": {
+                    "tool_invocation_score": 1.0
+                },
                 "expectation_results": [
                     {
                         "expectation": "Agent should pass",
@@ -153,14 +155,10 @@ def test_load_golden_eval_from_compressed_yaml():
 
 def test_load_golden_eval_from_exported_yaml():
     test_file_path = "tests/testdata/exported_eval_example.yaml"
-<<<<<<< HEAD
-    with (patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,):
-=======
     with (
         patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,
         patch("cxas_scrapi.utils.eval_utils.Evaluations") as mock_eval_cls,
     ):
->>>>>>> 12ac414 (feat: support creation of evaluation expecations in YAML based eval.)
         mock_uuid.return_value = "mock_uuid"
         utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
         result = utils.load_golden_eval_from_yaml(test_file_path)
@@ -169,7 +167,9 @@ def test_load_golden_eval_from_exported_yaml():
         assert result["displayName"] == "Basic Product Search Simplified"
         assert len(result["golden"]["turns"]) == 4
         assert (
-            result["golden"]["turns"][0]["steps"][0]["userInput"]["event"]["event"]
+            result["golden"]["turns"][0]["steps"][0]["userInput"]["event"][
+                "event"
+            ]
             == "WelcomeEvent"
         )
         assert (

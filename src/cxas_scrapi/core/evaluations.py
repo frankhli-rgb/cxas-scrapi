@@ -21,7 +21,11 @@ import hashlib
 import requests
 from google.protobuf import field_mask_pb2
 from google.protobuf import json_format
-from google.cloud.ces_v1beta import EvaluationServiceClient, AgentServiceClient, types
+from google.cloud.ces_v1beta import (
+    EvaluationServiceClient,
+    AgentServiceClient,
+    types,
+)
 import yaml
 from cxas_scrapi.core.common import Common
 from cxas_scrapi.core.tools import Tools
@@ -92,7 +96,9 @@ class Evaluations(Common):
                     elif "event" in ui:
                         event = ui["event"]
                         if isinstance(event, dict) and "event" in event:
-                            out_yaml["turns"].append({"user_event": event["event"]})
+                            out_yaml["turns"].append(
+                                {"user_event": event["event"]}
+                            )
                         else:
                             out_yaml["turns"].append({"user_event": str(event)})
 
@@ -118,7 +124,9 @@ class Evaluations(Common):
                         tc = exp["tool_call"]
                         args = tc.get("args", {})
                         unwrapped_args = Common.unwrap_struct(args)
-                        display_name = tc.get("display_name", tc.get("tool", ""))
+                        display_name = tc.get(
+                            "display_name", tc.get("tool", "")
+                        )
                         out_yaml["turns"].append(
                             {
                                 "tool_call": {
@@ -133,7 +141,9 @@ class Evaluations(Common):
                         tr = exp["tool_response"]
                         res = tr.get("response", {})
                         unwrapped_res = Common.unwrap_struct(res)
-                        tool_name = id_to_tool.get(tr.get("id", ""), tr.get("tool", ""))
+                        tool_name = id_to_tool.get(
+                            tr.get("id", ""), tr.get("tool", "")
+                        )
 
                         out_yaml["mocks"].append(
                             {"tool": tool_name, "response": unwrapped_res}
@@ -182,7 +192,9 @@ class Evaluations(Common):
         else:
             return None
 
-    def list_evaluations(self, app_id: Optional[str] = None) -> List[types.Evaluation]:
+    def list_evaluations(
+        self, app_id: Optional[str] = None
+    ) -> List[types.Evaluation]:
         """Lists evaluations within a specific app.
 
         Args:
@@ -243,13 +255,16 @@ class Evaluations(Common):
             evaluation_run_id: Full resource name of the evaluation run.
         """
         if "/evaluationRuns/" not in evaluation_run_id:
-            raise ValueError(f"Invalid evaluation_run_id format: {evaluation_run_id}")
+            raise ValueError(
+                f"Invalid evaluation_run_id format: {evaluation_run_id}"
+            )
 
         app_name = evaluation_run_id.split("/evaluationRuns/")[0]
         wildcard_parent = f"{app_name}/evaluations/-"
 
         request = types.ListEvaluationResultsRequest(
-            parent=wildcard_parent, filter=f'evaluation_run:"{evaluation_run_id}"'
+            parent=wildcard_parent,
+            filter=f'evaluation_run:"{evaluation_run_id}"',
         )
         response = self.client.list_evaluation_results(request=request)
         return list(response)
@@ -354,7 +369,10 @@ class Evaluations(Common):
         app_id = app_id or self.app_id
 
         evaluations = self.list_evaluations(app_id)
-        evaluations_dict: Dict[str, Dict[str, str]] = {"goldens": {}, "scenarios": {}}
+        evaluations_dict: Dict[str, Dict[str, str]] = {
+            "goldens": {},
+            "scenarios": {},
+        }
 
         for evaluation in evaluations:
             display_name = evaluation.display_name
@@ -389,7 +407,9 @@ class Evaluations(Common):
         request = types.GetEvaluationRequest(name=evaluation_id)
         return self.client.get_evaluation(request=request)
 
-    def export_evaluation(self, evaluation_id: str, output_format: str = "yaml") -> str:
+    def export_evaluation(
+        self, evaluation_id: str, output_format: str = "yaml"
+    ) -> str:
         """
         Fetches a specific evaluation and exports it to the specified format.
 
@@ -472,7 +492,9 @@ class Evaluations(Common):
                 )
 
         if not resolved_names:
-            raise ValueError("No matching evaluation resource names found to run.")
+            raise ValueError(
+                "No matching evaluation resource names found to run."
+            )
 
         request = types.RunEvaluationRequest(
             app=app_id, evaluations=list(resolved_names)
@@ -509,8 +531,10 @@ class Evaluations(Common):
         elif csv_content:
             request.csv_content = csv_content
         elif conversations:
-            request.conversation_list = types.ImportEvaluationsRequest.ConversationList(
-                conversations=conversations
+            request.conversation_list = (
+                types.ImportEvaluationsRequest.ConversationList(
+                    conversations=conversations
+                )
             )
         else:
             raise ValueError(
@@ -518,8 +542,10 @@ class Evaluations(Common):
             )
 
         if conflict_strategy:
-            request.import_options = types.ImportEvaluationsRequest.ImportOptions(
-                conflict_resolution_strategy=conflict_strategy
+            request.import_options = (
+                types.ImportEvaluationsRequest.ImportOptions(
+                    conflict_resolution_strategy=conflict_strategy
+                )
             )
 
         return self.client.import_evaluations(request=request)
@@ -540,7 +566,9 @@ class Evaluations(Common):
         response = self.client.list_evaluation_expectations(request=request)
         return list(response)
 
-    def get_evaluation_expectation(self, name: str) -> types.EvaluationExpectation:
+    def get_evaluation_expectation(
+        self, name: str
+    ) -> types.EvaluationExpectation:
         """Gets details of the specified evaluation expectation.
 
         Args:
@@ -551,7 +579,9 @@ class Evaluations(Common):
 
     def create_evaluation_expectation(
         self,
-        evaluation_expectation: Union[types.EvaluationExpectation, Dict[str, Any]],
+        evaluation_expectation: Union[
+            types.EvaluationExpectation, Dict[str, Any]
+        ],
         app_id: Optional[str] = None,
     ) -> types.EvaluationExpectation:
         """Creates an evaluation expectation.
@@ -586,7 +616,8 @@ class Evaluations(Common):
             update_mask: Optional mask defining which fields to update.
         """
         request = types.UpdateEvaluationExpectationRequest(
-            evaluation_expectation=evaluation_expectation, update_mask=update_mask
+            evaluation_expectation=evaluation_expectation,
+            update_mask=update_mask,
         )
         return self.client.update_evaluation_expectation(request=request)
 
@@ -708,7 +739,9 @@ class Evaluations(Common):
 
             golden = thresholds.get("golden_evaluation_metrics_thresholds", {})
             turn_level = golden.get("turn_level_metrics_thresholds", {})
-            expectation_level = golden.get("expectation_level_metrics_thresholds", {})
+            expectation_level = golden.get(
+                "expectation_level_metrics_thresholds", {}
+            )
 
             divisors = {
                 "semantic_similarity_success_threshold": "/4",

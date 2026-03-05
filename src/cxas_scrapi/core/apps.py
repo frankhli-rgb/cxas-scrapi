@@ -129,7 +129,9 @@ class Apps(Common):
         if root_agent:
             app.root_agent = root_agent
 
-        request = types.CreateAppRequest(parent=self.parent, app=app, app_id=app_id)
+        request = types.CreateAppRequest(
+            parent=self.parent, app=app, app_id=app_id
+        )
         return self.client.create_app(request=request)
 
     def update_app(self, app_id: str, **kwargs) -> types.App:
@@ -190,6 +192,8 @@ class Apps(Common):
             display_name: The display name for the new app.
         """
         request = types.ImportAppRequest(
-            parent=self.parent, app_content=app_content, display_name=display_name
+            parent=self.parent,
+            app_content=app_content,
+            display_name=display_name,
         )
         return self.client.import_app(request=request)

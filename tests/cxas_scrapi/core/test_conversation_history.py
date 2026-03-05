@@ -57,7 +57,9 @@ def test_conversation_dict_to_yaml():
     assert res["turns"][1] == {"agent": "hello"}
 
 
-@patch("cxas_scrapi.core.conversation_history.ConversationHistory.get_conversation")
+@patch(
+    "cxas_scrapi.core.conversation_history.ConversationHistory.get_conversation"
+)
 def test_export_conversation_to_yaml(mock_get_conv):
     """Test ConversationHistory.export_conversation_to_yaml."""
     mock_obj = MagicMock()
@@ -68,7 +70,9 @@ def test_export_conversation_to_yaml(mock_get_conv):
         mock_type.return_value.to_dict = mock_to_dict
 
         with patch("cxas_scrapi.core.conversation_history.AgentServiceClient"):
-            conv_client = ConversationHistory(app_id="projects/p/locations/l/apps/a")
+            conv_client = ConversationHistory(
+                app_id="projects/p/locations/l/apps/a"
+            )
             yaml_str = conv_client.export_conversation_to_yaml("c1")
             assert "name: Converted_Conversation" in yaml_str
 
@@ -93,4 +97,6 @@ def test_delete_conversation(mock_client_cls, mock_req_cls):
 
     # Verify the requested name
     called_request = mock_client.delete_conversation.call_args[1]["request"]
-    assert called_request.name == "projects/p/locations/l/apps/a/conversations/c1"
+    assert (
+        called_request.name == "projects/p/locations/l/apps/a/conversations/c1"
+    )

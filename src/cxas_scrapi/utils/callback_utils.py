@@ -14,13 +14,13 @@ class CallbackUtils:
     """Provides methods for orchestrating and executing agent callback tests."""
 
     def run_callback_tests(
-            self,
-            app_root_dir: str,
-            *,
-            agent_name: str = "*",
-            callback_type: str = "*_callbacks",
-            callback_name: str = "*",
-            verbose: bool = True,
+        self,
+        app_root_dir: str,
+        *,
+        agent_name: str = "*",
+        callback_type: str = "*_callbacks",
+        callback_name: str = "*",
+        verbose: bool = True,
     ) -> pd.DataFrame:
         """Runs pytest against all callback tests in the given agent directory.
 
@@ -42,19 +42,25 @@ class CallbackUtils:
         # Discover all test.py files within the agent directory
         # Expected: agents/<agent_name>/<type>_callbacks/<callback_name>/test.py
         search_pattern = os.path.join(
-                app_root_dir,
-                "agents",
-                agent_name,
-                callback_type,
-                callback_name,
-                "test.py",
+            app_root_dir,
+            "agents",
+            agent_name,
+            callback_type,
+            callback_name,
+            "test.py",
         )
         test_files = glob.glob(search_pattern, recursive=True)
 
         if not test_files:
             print(f"No callback tests found in {app_root_dir}")
             return pd.DataFrame(
-                columns=["agent_name", "callback_type", "test_name", "status", "error_message"]
+                columns=[
+                    "agent_name",
+                    "callback_type",
+                    "test_name",
+                    "status",
+                    "error_message",
+                ]
             )
 
         print(f"Found {len(test_files)} callback tests.")
@@ -67,8 +73,8 @@ class CallbackUtils:
 
             if not os.path.exists(python_code_path):
                 print(
-                        f"Warning: {test_file} found, but no "
-                        "python_code.py exists alongside it. Skipping."
+                    f"Warning: {test_file} found, but no "
+                    "python_code.py exists alongside it. Skipping."
                 )
                 continue
 
@@ -92,7 +98,7 @@ class CallbackUtils:
                 def _get_error_message(self, report):
                     if getattr(report, "longrepr", None):
                         if hasattr(report.longrepr, "reprcrash") and getattr(
-                                report.longrepr, "reprcrash", None
+                            report.longrepr, "reprcrash", None
                         ):
                             return report.longrepr.reprcrash.message
                         return str(report.longrepr)
@@ -100,31 +106,43 @@ class CallbackUtils:
 
                 def pytest_runtest_logreport(self, report):
                     if report.when == "call":
-                        self.results.append({
-                            "agent_name": self.agent_name,
-                            "callback_type": self.callback_type,
-                            "test_name": report.nodeid.split("::")[-1],
-                            "status": report.outcome,
-                            "error_message": self._get_error_message(report),
-                        })
+                        self.results.append(
+                            {
+                                "agent_name": self.agent_name,
+                                "callback_type": self.callback_type,
+                                "test_name": report.nodeid.split("::")[-1],
+                                "status": report.outcome,
+                                "error_message": self._get_error_message(
+                                    report
+                                ),
+                            }
+                        )
                     elif report.failed:
-                        self.results.append({
-                            "agent_name": self.agent_name,
-                            "callback_type": self.callback_type,
-                            "test_name": report.nodeid.split("::")[-1],
-                            "status": report.outcome,
-                            "error_message": self._get_error_message(report),
-                        })
+                        self.results.append(
+                            {
+                                "agent_name": self.agent_name,
+                                "callback_type": self.callback_type,
+                                "test_name": report.nodeid.split("::")[-1],
+                                "status": report.outcome,
+                                "error_message": self._get_error_message(
+                                    report
+                                ),
+                            }
+                        )
 
                 def pytest_collectreport(self, report):
                     if report.failed:
-                        self.results.append({
-                            "agent_name": self.agent_name,
-                            "callback_type": self.callback_type,
-                            "test_name": "collection_error",
-                            "status": "failed",
-                            "error_message": self._get_error_message(report),
-                        })
+                        self.results.append(
+                            {
+                                "agent_name": self.agent_name,
+                                "callback_type": self.callback_type,
+                                "test_name": "collection_error",
+                                "status": "failed",
+                                "error_message": self._get_error_message(
+                                    report
+                                ),
+                            }
+                        )
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 epoch = time.time()
@@ -132,12 +150,14 @@ class CallbackUtils:
 
                 # Unique module names prevent pytest from caching imported files
                 test_module_name = f"test_callback_{int(epoch * 1000)}"
-                temp_test_path = os.path.join(temp_dir, f"{test_module_name}.py")
+                temp_test_path = os.path.join(
+                    temp_dir, f"{test_module_name}.py"
+                )
 
                 with open(callback_path, "w", encoding="utf-8") as f:
                     f.write(
-                            "from cxas_scrapi.utils.callback_libs import *\n\n"
-                            + code_content
+                        "from cxas_scrapi.utils.callback_libs import *\n\n"
+                        + code_content
                     )
 
                 with open(temp_test_path, "w", encoding="utf-8") as f:
@@ -155,15 +175,17 @@ class CallbackUtils:
 
                     agent_name = self._get_agent_name(test_file)
                     callback_type = self._get_callback_type(test_file)
-                    collector = TestResultCollector(test_file, agent_name, callback_type)
+                    collector = TestResultCollector(
+                        test_file, agent_name, callback_type
+                    )
                     pytest.main(
-                            [
-                                    temp_test_path,
-                                    "--disable-warnings",
-                                    "--no-header",
-                                    "-v" if verbose else "-qq",
-                            ],
-                            plugins=[collector],
+                        [
+                            temp_test_path,
+                            "--disable-warnings",
+                            "--no-header",
+                            "-v" if verbose else "-qq",
+                        ],
+                        plugins=[collector],
                     )
                     all_results.extend(collector.results)
                 finally:
@@ -172,7 +194,13 @@ class CallbackUtils:
 
         return pd.DataFrame(
             all_results,
-            columns=["agent_name", "callback_type", "test_name", "status", "error_message"],
+            columns=[
+                "agent_name",
+                "callback_type",
+                "test_name",
+                "status",
+                "error_message",
+            ],
         )
 
     def _get_agent_name(self, original_file: str) -> str:

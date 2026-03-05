@@ -53,7 +53,9 @@ class Callbacks(Agents):
         original_name = code.__name__
         # Convert "before_model" to "beforeModelCallback"
         parts = callback_type.split("_")
-        new_name = parts[0] + "".join(p.capitalize() for p in parts[1:]) + "Callback"
+        new_name = (
+            parts[0] + "".join(p.capitalize() for p in parts[1:]) + "Callback"
+        )
 
         try:
             code_as_string = textwrap.dedent(inspect.getsource(code))
@@ -150,10 +152,14 @@ class Callbacks(Agents):
         callbacks = getattr(agent, field_name)
 
         if not (0 <= index < len(callbacks)):
-            raise IndexError(f"Callback index {index} out of range for {field_name}")
+            raise IndexError(
+                f"Callback index {index} out of range for {field_name}"
+            )
 
         if code is not None:
-            callbacks[index].python_code = self._format_python_code(callback_type, code)
+            callbacks[index].python_code = self._format_python_code(
+                callback_type, code
+            )
         if description is not None:
             callbacks[index].description = description
         if disabled is not None:
@@ -175,7 +181,9 @@ class Callbacks(Agents):
         callbacks = getattr(agent, field_name)
 
         if not (0 <= index < len(callbacks)):
-            raise IndexError(f"Callback index {index} out of range for {field_name}")
+            raise IndexError(
+                f"Callback index {index} out of range for {field_name}"
+            )
 
         # Remove the specific element
         del callbacks[index]

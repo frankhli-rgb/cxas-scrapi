@@ -52,7 +52,9 @@ class Versions(Apps):
         response = self.client.list_app_versions(request=request)
         return list(response)
 
-    def get_versions_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
+    def get_versions_map(
+        self, app_id: str, reverse: bool = False
+    ) -> Dict[str, str]:
         """Returns a map of version display names to full resource names.
 
         Args:

@@ -16,7 +16,12 @@
 
 from typing import Dict, List, Any, Optional
 from google.protobuf import struct_pb2, json_format, field_mask_pb2
-from google.cloud.ces_v1beta import types, ToolServiceClient, AgentServiceClient, types
+from google.cloud.ces_v1beta import (
+    types,
+    ToolServiceClient,
+    AgentServiceClient,
+    types,
+)
 from google.protobuf.json_format import MessageToDict
 
 from cxas_scrapi.core.apps import Apps
@@ -113,11 +118,16 @@ class Tools(Apps):
                         else:
                             parsed_tools[tool_name] = tool_display_name
         except Exception as e:
-            print(f"[WARNING] Failed to parse OpenAPI schema for {display_name}: {e}")
+            print(
+                f"[WARNING] Failed to parse OpenAPI schema for {display_name}: {e}"
+            )
         return parsed_tools
 
     def _get_final_variables(
-        self, app_id: str, variables: Optional[Any], context: Optional[Dict[str, Any]]
+        self,
+        app_id: str,
+        variables: Optional[Any],
+        context: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Resolves the variables to pass to the tool payload."""
         # Variables logic, context takes precedence over variables
@@ -127,7 +137,6 @@ class Tools(Apps):
             final_variables = context["state"]
         elif isinstance(variables, dict):
             final_variables = variables
-
 
         if not final_variables:
             # Fetch variables from the app and filter by this list of names.
@@ -141,14 +150,18 @@ class Tools(Apps):
                     var_dict = MessageToDict(var)
 
                 schema = var_dict.get("schema", {})
-                actual_data = schema.get("default") or var_dict.get("value") or {}
+                actual_data = (
+                    schema.get("default") or var_dict.get("value") or {}
+                )
                 app_default_vars_cache[var.name] = actual_data
 
             if isinstance(variables, list):
                 # If variables is a list, filter the app's default variables by this list
                 for var_name in variables:
                     if var_name in app_default_vars_cache:
-                        final_variables[var_name] = app_default_vars_cache[var_name]
+                        final_variables[var_name] = app_default_vars_cache[
+                            var_name
+                        ]
                     else:
                         print(
                             f"[WARNING] App variable '{var_name}' requested but not found in app."
@@ -158,7 +171,9 @@ class Tools(Apps):
                 final_variables = app_default_vars_cache
         return final_variables
 
-    def get_tools_map(self, app_id: str, reverse: bool = False) -> Dict[str, str]:
+    def get_tools_map(
+        self, app_id: str, reverse: bool = False
+    ) -> Dict[str, str]:
         """Creates a map of Tool and Toolset full names to display names.
 
         Args:
@@ -193,15 +208,21 @@ class Tools(Apps):
                     try:
                         tools = self.retrieve_tool(name)
                         for tool in tools.tools:
-                            tool_display_name = self._get_tool_display_name(tool)
+                            tool_display_name = self._get_tool_display_name(
+                                tool
+                            )
                             if tool_display_name and tool.name:
                                 tool_display_name = (
                                     f"{display_name}_{tool_display_name}"
                                 )
                                 if reverse:
-                                    resources_dict[tool_display_name] = tool.name
+                                    resources_dict[tool_display_name] = (
+                                        tool.name
+                                    )
                                 else:
-                                    resources_dict[tool.name] = tool_display_name
+                                    resources_dict[tool.name] = (
+                                        tool_display_name
+                                    )
                     except Exception as e:
                         print(
                             f"[WARNING] Failed to retrieve tools for toolset {display_name}: {e}"
@@ -280,7 +301,9 @@ class Tools(Apps):
 
             kwargs = {"display_name": display_name, tool_type: payload_copy}
             tool = types.Tool(**kwargs)
-            request = types.CreateToolRequest(parent=app_id, tool_id=tool_id, tool=tool)
+            request = types.CreateToolRequest(
+                parent=app_id, tool_id=tool_id, tool=tool
+            )
             return self.client.create_tool(request=request)
 
     def update_tool(self, tool_id: str, **kwargs) -> Any:
@@ -293,7 +316,8 @@ class Tools(Apps):
                 setattr(toolset, key, value)
 
             request = types.UpdateToolsetRequest(
-                toolset=toolset, update_mask=field_mask_pb2.FieldMask(paths=mask_paths)
+                toolset=toolset,
+                update_mask=field_mask_pb2.FieldMask(paths=mask_paths),
             )
             return self.client.update_toolset(request=request)
         else:
@@ -302,7 +326,8 @@ class Tools(Apps):
                 setattr(tool, key, value)
 
             request = types.UpdateToolRequest(
-                tool=tool, update_mask=field_mask_pb2.FieldMask(paths=mask_paths)
+                tool=tool,
+                update_mask=field_mask_pb2.FieldMask(paths=mask_paths),
             )
             return self.client.update_tool(request=request)
 
@@ -363,7 +388,10 @@ class Tools(Apps):
 
         if "toolsets/" in tool_id and "/tools/" in tool_id:
             toolset_name, operation_id = tool_id.split("/tools/")
-            payload["toolsetTool"] = {"toolset": toolset_name, "toolId": operation_id}
+            payload["toolsetTool"] = {
+                "toolset": toolset_name,
+                "toolId": operation_id,
+            }
         elif "toolsets/" in tool_id:  # fallback for generic toolsets
             payload["toolsetTool"] = {
                 "toolset": tool_id,

@@ -19,7 +19,9 @@ class ChangelogUtils:
             return default
         try:
             value = functools.reduce(
-                lambda d, key: d.get(key) if isinstance(d, dict) else None, path, data
+                lambda d, key: d.get(key) if isinstance(d, dict) else None,
+                path,
+                data,
             )
             return value if value is not None else default
         except TypeError:
@@ -95,7 +97,9 @@ class ChangelogUtils:
                         [item.split("/")[-1] for item in value]
                     )  # Just IDs
                 elif field in ["variableDeclarations"]:
-                    parts[field] = sorted([v.get("name") for v in value])  # Just names
+                    parts[field] = sorted(
+                        [v.get("name") for v in value]
+                    )  # Just names
                 elif field in [
                     "beforeModelCallbacks",
                     "afterModelCallbacks",
@@ -116,7 +120,9 @@ class ChangelogUtils:
                             value, sort_keys=True, separators=(",", ":")
                         )
                     except TypeError:
-                        parts[field] = str(value)  # Fallback if not JSON serializable
+                        parts[field] = str(
+                            value
+                        )  # Fallback if not JSON serializable
                 else:
                     parts[field] = value
         return parts
@@ -198,7 +204,9 @@ class ChangelogUtils:
                 valid_versions, key=lambda version: version["createTime"]
             )
             latest_version_timestamp_str = latest_version["createTime"]
-            print(f"Latest version was created at: {latest_version_timestamp_str}")
+            print(
+                f"Latest version was created at: {latest_version_timestamp_str}"
+            )
             latest_version_dt = datetime.datetime.fromisoformat(
                 latest_version_timestamp_str.replace("Z", "+00:00")
             )

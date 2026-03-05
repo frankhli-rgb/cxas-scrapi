@@ -80,9 +80,13 @@ class ToolUtils:
         self.tools_client = Tools(app_id=self.app_id, creds=self.creds)
         self.var_client = Variables(app_id=self.app_id, creds=self.creds)
         try:
-            self.tool_map = self.tools_client.get_tools_map(self.app_id, reverse=True)
+            self.tool_map = self.tools_client.get_tools_map(
+                self.app_id, reverse=True
+            )
         except (AttributeError, KeyError, RuntimeError, ValueError) as e:
-            logger.warning("Failed to fetch tool map for %s: %s", self.app_id, e)
+            logger.warning(
+                "Failed to fetch tool map for %s: %s", self.app_id, e
+            )
             self.tool_map = {}
 
     @staticmethod
@@ -165,7 +169,9 @@ class ToolUtils:
             return matches[0].value
         return None
 
-    def _check_expectation(self, actual: Any, expectation: "Expectation") -> bool:
+    def _check_expectation(
+        self, actual: Any, expectation: "Expectation"
+    ) -> bool:
         """Checks if actual value meets the expectation."""
         op = expectation.operator
         expected = expectation.value
@@ -220,9 +226,13 @@ class ToolUtils:
         if properties:
             template_args = self._parse_properties(properties)
         else:
-            python_code = tool_dict.get("python_function", {}).get("python_code", "")
+            python_code = tool_dict.get("python_function", {}).get(
+                "python_code", ""
+            )
             if python_code:
-                template_args, expected_returns = self._parse_python_code(python_code)
+                template_args, expected_returns = self._parse_python_code(
+                    python_code
+                )
 
         return template_args, expected_returns
 
@@ -233,7 +243,9 @@ class ToolUtils:
         template_args = {}
         expected_returns = []
 
-        schema_str = tool_dict.get("open_api_toolset", {}).get("open_api_schema", "")
+        schema_str = tool_dict.get("open_api_toolset", {}).get(
+            "open_api_schema", ""
+        )
         if schema_str:
             try:
                 schema = yaml.safe_load(schema_str)
@@ -251,16 +263,18 @@ class ToolUtils:
                                 p_schema = param.get("schema", {})
                                 if p_name and p_schema:
                                     template_args.update(
-                                        self._parse_properties({p_name: p_schema})
+                                        self._parse_properties(
+                                            {p_name: p_schema}
+                                        )
                                     )
 
                             # Request body
                             req_body = details.get("requestBody", {})
                             if req_body:
                                 content = req_body.get("content", {})
-                                json_schema = content.get("application/json", {}).get(
-                                    "schema", {}
-                                )
+                                json_schema = content.get(
+                                    "application/json", {}
+                                ).get("schema", {})
                                 if "properties" in json_schema:
                                     template_args.update(
                                         self._parse_properties(
@@ -309,7 +323,11 @@ class ToolUtils:
                     )
             else:
                 expectations = [
-                    {"path": "$.result", "operator": "contains", "value": "SUCCESS"}
+                    {
+                        "path": "$.result",
+                        "operator": "contains",
+                        "value": "SUCCESS",
+                    }
                 ]
 
         test_dict = {
@@ -333,11 +351,15 @@ class ToolUtils:
 
         if not os.path.exists(file_path):
             with open(file_path, "w", encoding="utf-8") as f:
-                yaml.dump(test_content, f, sort_keys=False, default_flow_style=False)
+                yaml.dump(
+                    test_content, f, sort_keys=False, default_flow_style=False
+                )
             print(f"Generated test template: {file_path}")
         elif overwrite:
             with open(file_path, "w", encoding="utf-8") as f:
-                yaml.dump(test_content, f, sort_keys=False, default_flow_style=False)
+                yaml.dump(
+                    test_content, f, sort_keys=False, default_flow_style=False
+                )
             print(f"Overwrote existing test template: {file_path}")
         else:
             print(f"Skipping existing test file: {file_path}")
@@ -346,7 +368,9 @@ class ToolUtils:
         """Mines recent conversations for actual tool payloads to populate tests."""
         mined_data = {}
         try:
-            history_client = ConversationHistory(app_id=self.app_id, creds=self.creds)
+            history_client = ConversationHistory(
+                app_id=self.app_id, creds=self.creds
+            )
             convs = list(history_client.list_conversations())[:limit]
             for c in convs:
                 full_c = history_client.get_conversation(c.name)
@@ -375,8 +399,11 @@ class ToolUtils:
                                         for d_name, t_id in getattr(
                                             self, "tool_map", {}
                                         ).items():
-                                            if t_id == full_tool or full_tool.endswith(
-                                                t_id.split("/")[-1]
+                                            if (
+                                                t_id == full_tool
+                                                or full_tool.endswith(
+                                                    t_id.split("/")[-1]
+                                                )
                                             ):
                                                 tool_name = d_name
                                                 break
@@ -392,7 +419,9 @@ class ToolUtils:
                                 tr = chunk["toolResponse"]
                                 tc_id = tr.get("id")
                                 if tc_id:
-                                    turn_responses[tc_id] = tr.get("response", {})
+                                    turn_responses[tc_id] = tr.get(
+                                        "response", {}
+                                    )
 
                     # Match calls to responses across the entire turn
                     for tc_id, call_info in turn_calls.items():
@@ -407,7 +436,9 @@ class ToolUtils:
                                 "args": call_info["args"],
                                 "response": response,
                             }
-            logger.info(f"Successfully mined payload data for {len(mined_data)} tools.")
+            logger.info(
+                f"Successfully mined payload data for {len(mined_data)} tools."
+            )
         except Exception as e:
             logger.warning(f"Failed to mine tool data: {e}")
 
@@ -441,7 +472,9 @@ class ToolUtils:
 
         return all_tests
 
-    def load_tool_test_cases_from_yaml(self, yaml_data: str) -> List["ToolTestCase"]:
+    def load_tool_test_cases_from_yaml(
+        self, yaml_data: str
+    ) -> List["ToolTestCase"]:
         """Loads tool tests from a YAML string."""
         raw_data = yaml.safe_load(yaml_data)
         if not raw_data or "tests" not in raw_data:
@@ -457,7 +490,9 @@ class ToolUtils:
         cleaned_data = []
         for case in test_data:
             case_copy = case.copy()
-            if "variables" in case_copy and isinstance(case_copy["variables"], dict):
+            if "variables" in case_copy and isinstance(
+                case_copy["variables"], dict
+            ):
                 cleaned_vars = {}
                 for k, v in case_copy["variables"].items():
                     cleaned_vars[k] = Variables.variable_to_dict(v)
@@ -672,8 +707,8 @@ class ToolUtils:
                 # Handle Python Tools
                 if "toolsets/" not in tool_id:
                     if "python_function" in tool_dict:
-                        template_args, expected_returns = self._parse_python_function(
-                            tool_dict
+                        template_args, expected_returns = (
+                            self._parse_python_function(tool_dict)
                         )
                     elif not any(
                         key in tool_dict
@@ -695,7 +730,9 @@ class ToolUtils:
                     )
 
             except Exception as e:
-                logger.warning(f"Could not fetch tool schema for {display_name}: {e}")
+                logger.warning(
+                    f"Could not fetch tool schema for {display_name}: {e}"
+                )
 
             self._write_tool_test_template(
                 display_name,
@@ -706,7 +743,9 @@ class ToolUtils:
                 mined_data.get(display_name),
             )
 
-    def tool_tests_to_dataframe(self, results: List[Dict[str, Any]]) -> pd.DataFrame:
+    def tool_tests_to_dataframe(
+        self, results: List[Dict[str, Any]]
+    ) -> pd.DataFrame:
         """Converts tool test results to a pandas DataFrame for reporting."""
         rows = []
         for res in results:
@@ -730,8 +769,10 @@ class ToolTestCase(BaseModel):
     tool: str
 
     # We wrap the type in Annotated to add the BeforeValidator
-    args: Annotated[Dict[str, Any], BeforeValidator(Common.empty_to_dict)] = Field(
-        default_factory=dict, validation_alias=AliasChoices("args", "agrs")
+    args: Annotated[Dict[str, Any], BeforeValidator(Common.empty_to_dict)] = (
+        Field(
+            default_factory=dict, validation_alias=AliasChoices("args", "agrs")
+        )
     )
 
     variables: Annotated[

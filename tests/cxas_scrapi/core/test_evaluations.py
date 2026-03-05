@@ -75,7 +75,9 @@ def test_evaluations_get(mock_client_cls):
     mock_client.get_evaluation.return_value = mock_eval
 
     evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
-    res = evals_client.get_evaluation("projects/p/locations/l/apps/a/evaluations/e1")
+    res = evals_client.get_evaluation(
+        "projects/p/locations/l/apps/a/evaluations/e1"
+    )
 
     assert res.name == "projects/p/locations/l/apps/a/evaluations/e1"
     mock_client.get_evaluation.assert_called_once()
@@ -92,7 +94,9 @@ def test_eval_dict_to_yaml():
                         {"user_input": {"text": "hi"}},
                         {
                             "expectation": {
-                                "agent_response": {"chunks": [{"text": "hello"}]}
+                                "agent_response": {
+                                    "chunks": [{"text": "hello"}]
+                                }
                             }
                         },
                     ]
@@ -117,7 +121,10 @@ def test_export_evaluation(mock_get_eval):
     # Mock the to_dict method
     with patch("cxas_scrapi.core.evaluations.type") as mock_type:
         mock_to_dict = MagicMock(
-            return_value={"display_name": "Exported Eval", "golden": {"turns": []}}
+            return_value={
+                "display_name": "Exported Eval",
+                "golden": {"turns": []},
+            }
         )
         mock_type.return_value.to_dict = mock_to_dict
 
@@ -130,7 +137,8 @@ def test_export_evaluation(mock_get_eval):
             assert "name: Exported Eval" in yaml_str
 
             json_str = evals_client.export_evaluation(
-                "projects/p/locations/l/apps/a/evaluations/e1", output_format="json"
+                "projects/p/locations/l/apps/a/evaluations/e1",
+                output_format="json",
             )
             assert '"name": "Exported Eval"' in json_str
 
@@ -142,7 +150,9 @@ def test_import_evaluations(mock_client_cls):
     evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
 
     # Test GCS URI
-    evals_client.import_evaluations(gcs_uri="gs://bucket/file.csv", conflict_strategy=1)
+    evals_client.import_evaluations(
+        gcs_uri="gs://bucket/file.csv", conflict_strategy=1
+    )
     mock_client.import_evaluations.assert_called_once()
 
     mock_client.import_evaluations.reset_mock()
@@ -201,7 +211,9 @@ def test_create_evaluation_expectation(mock_client_cls):
     evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
 
     # Test with dict
-    res = evals_client.create_evaluation_expectation({"display_name": "New Exp"})
+    res = evals_client.create_evaluation_expectation(
+        {"display_name": "New Exp"}
+    )
 
     mock_client.create_evaluation_expectation.assert_called_once()
 
@@ -246,7 +258,9 @@ def test_get_evaluation_thresholds(mock_agent_client_cls):
     thresholds = (
         app_obj.evaluation_metrics_thresholds.golden_evaluation_metrics_thresholds
     )
-    thresholds.turn_level_metrics_thresholds.semantic_similarity_success_threshold = 3
+    thresholds.turn_level_metrics_thresholds.semantic_similarity_success_threshold = (
+        3
+    )
     thresholds.turn_level_metrics_thresholds.overall_tool_invocation_correctness_threshold = (
         1.0
     )
@@ -272,9 +286,9 @@ def test_get_evaluation_thresholds(mock_agent_client_cls):
 
     assert "golden_evaluation_metrics_thresholds" in res
     assert (
-        res["golden_evaluation_metrics_thresholds"]["turn_level_metrics_thresholds"][
-            "semantic_similarity_success_threshold"
-        ]
+        res["golden_evaluation_metrics_thresholds"][
+            "turn_level_metrics_thresholds"
+        ]["semantic_similarity_success_threshold"]
         == 3
     )
 
@@ -292,13 +306,19 @@ def test_run_evaluation(mock_client_cls, mock_types):
             "First Golden": "projects/p/locations/l/apps/a/evaluations/g1",
             "Second Golden": "projects/p/locations/l/apps/a/evaluations/g2",
         },
-        "scenarios": {"First Scenario": "projects/p/locations/l/apps/a/evaluations/s1"},
+        "scenarios": {
+            "First Scenario": "projects/p/locations/l/apps/a/evaluations/s1"
+        },
     }
 
-    with patch.object(evals_client, "_get_or_load_evals_map", return_value=mock_map):
+    with patch.object(
+        evals_client, "_get_or_load_evals_map", return_value=mock_map
+    ):
         # Test running by display name list
         mock_types.RunEvaluationRequest.reset_mock()
-        evals_client.run_evaluation(evaluations=["First Golden", "First Scenario"])
+        evals_client.run_evaluation(
+            evaluations=["First Golden", "First Scenario"]
+        )
         request_kwargs = mock_types.RunEvaluationRequest.call_args[1]
         assert set(request_kwargs["evaluations"]) == {
             "projects/p/locations/l/apps/a/evaluations/g1",
@@ -350,7 +370,10 @@ def test_get_evaluation_run(mock_client_cls, mock_types):
 
     mock_client.get_evaluation_run.assert_called_once()
     request_kwargs = mock_types.GetEvaluationRunRequest.call_args[1]
-    assert request_kwargs["name"] == "projects/p/locations/l/apps/a/evaluationRuns/r1"
+    assert (
+        request_kwargs["name"]
+        == "projects/p/locations/l/apps/a/evaluationRuns/r1"
+    )
 
 
 @patch("cxas_scrapi.core.evaluations.types")
@@ -367,7 +390,10 @@ def test_list_evaluation_results_by_run(mock_client_cls, mock_types):
 
     mock_client.list_evaluation_results.assert_called_once()
     request_kwargs = mock_types.ListEvaluationResultsRequest.call_args[1]
-    assert request_kwargs["parent"] == "projects/p/locations/l/apps/other/evaluations/-"
+    assert (
+        request_kwargs["parent"]
+        == "projects/p/locations/l/apps/other/evaluations/-"
+    )
     assert (
         request_kwargs["filter"]
         == 'evaluation_run:"projects/p/locations/l/apps/other/evaluationRuns/r1"'
@@ -375,7 +401,9 @@ def test_list_evaluation_results_by_run(mock_client_cls, mock_types):
 
     # Test error condition
     with pytest.raises(ValueError):
-        evals_client.list_evaluation_results_by_run(evaluation_run_id="invalid_format")
+        evals_client.list_evaluation_results_by_run(
+            evaluation_run_id="invalid_format"
+        )
 
 
 class MockEval:
@@ -396,7 +424,9 @@ def test_build_search_index(mock_client_cls):
     evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
     evals_client.list_evaluations = MagicMock(
         return_value=[
-            MockEval("My Eval 1", {"foo": "bar", "tools": "projects/p/tools/t1"}),
+            MockEval(
+                "My Eval 1", {"foo": "bar", "tools": "projects/p/tools/t1"}
+            ),
             MockEval("My Eval 2", {"foo": "baz", "variables": "var_1"}),
         ]
     )
@@ -426,12 +456,16 @@ def test_search_evaluations(mock_client_cls, mock_tools_cls, mock_agents_cls):
     evals_client.list_evaluations = MagicMock(
         return_value=[
             MockEval(
-                "Eval Tool 1", {"tools": "projects/p/tools/t1", "variables": "var1"}
+                "Eval Tool 1",
+                {"tools": "projects/p/tools/t1", "variables": "var1"},
             ),
             MockEval("Eval Agent 1", {"agents": "projects/p/agents/a1"}),
             MockEval(
                 "Eval Both",
-                {"tools": "projects/p/tools/t2", "agents": "projects/p/agents/a1"},
+                {
+                    "tools": "projects/p/tools/t2",
+                    "agents": "projects/p/agents/a1",
+                },
             ),
         ]
     )
@@ -484,5 +518,7 @@ def test_search_evaluations(mock_client_cls, mock_tools_cls, mock_agents_cls):
             app_id="projects/p/locations/l/apps/a", agents=["Invalid Agent"]
         )
 
-    with pytest.raises(ValueError, match="Must provide at least one search term"):
+    with pytest.raises(
+        ValueError, match="Must provide at least one search term"
+    ):
         evals_client.search_evaluations(app_id="projects/p/locations/l/apps/a")

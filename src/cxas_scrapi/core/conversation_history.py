@@ -91,7 +91,9 @@ class ConversationHistory(Common):
                 chunks = au.get("messages", [])
                 if not isinstance(chunks, list):
                     chunks = [chunks]
-                text = " ".join([c.get("text", "") for c in chunks if "text" in c])
+                text = " ".join(
+                    [c.get("text", "") for c in chunks if "text" in c]
+                )
                 if text:
                     out_yaml["turns"].append({"agent": text})
 
@@ -101,7 +103,9 @@ class ConversationHistory(Common):
             for tc in tool_calls:
                 args = tc.get("args", {})
                 unwrapped = Common.unwrap_struct(args)
-                name = tc.get("display_name", tc.get("name", tc.get("tool", "")))
+                name = tc.get(
+                    "display_name", tc.get("name", tc.get("tool", ""))
+                )
                 out_yaml["turns"].append(
                     {"tool_call": {"tool": name, "args": unwrapped}}
                 )
@@ -119,7 +123,10 @@ class ConversationHistory(Common):
         return out_yaml
 
     def list_conversations(
-        self, app_id: str = None, time_filter: str = None, source_filter: str = None
+        self,
+        app_id: str = None,
+        time_filter: str = None,
+        source_filter: str = None,
     ) -> Any:
         """Lists conversations in the configured app.
 
@@ -200,7 +207,9 @@ class ConversationHistory(Common):
             )
 
         convs = self.list_conversations(
-            app_id=target_app, time_filter=time_filter, source_filter=source_filter
+            app_id=target_app,
+            time_filter=time_filter,
+            source_filter=source_filter,
         )
         if not convs:
             logger.warning(
@@ -221,7 +230,9 @@ class ConversationHistory(Common):
         traces = LatencyParser.fetch_conversation_traces(
             conv_ids, self.get_conversation
         )
-        return LatencyParser.extract_trace_metrics(traces, context_type="conversation")
+        return LatencyParser.extract_trace_metrics(
+            traces, context_type="conversation"
+        )
 
     def get_conversation(self, conversation_id: str) -> types.Conversation:
         """Gets a specific conversation by its ID."""

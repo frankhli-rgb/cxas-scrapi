@@ -3,9 +3,7 @@ import pytest
 from unittest.mock import MagicMock
 
 # Global Test Constants
-TEST_APP_ID = (
-    "projects/df-reference/locations/us/apps/f39d3ab5-a463-4025-8437-31fd09685d6b"
-)
+TEST_APP_ID = "projects/df-reference/locations/us/apps/f39d3ab5-a463-4025-8437-31fd09685d6b"
 
 
 def pytest_addoption(parser):
@@ -18,7 +16,9 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    config.addinivalue_line("markers", "online: mark test as requiring live API access")
+    config.addinivalue_line(
+        "markers", "online: mark test as requiring live API access"
+    )
 
 
 def pytest_collection_modifyitems(config, items):

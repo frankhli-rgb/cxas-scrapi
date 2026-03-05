@@ -130,7 +130,11 @@ class Common:
             if "locations/" in resource_id:
                 return resource_id.split("locations/")[1].split("/")[0]
             parts = resource_id.split("/")
-            if len(parts) >= 4 and parts[0] == "projects" and parts[2] == "locations":
+            if (
+                len(parts) >= 4
+                and parts[0] == "projects"
+                and parts[2] == "locations"
+            ):
                 return parts[3]
         except Exception:
             pass
@@ -261,7 +265,9 @@ class Common:
         return res
 
     @staticmethod
-    def get_agent_text_from_outputs(outputs: List[Any], separator: str = "\n") -> str:
+    def get_agent_text_from_outputs(
+        outputs: List[Any], separator: str = "\n"
+    ) -> str:
         """Extracts and concatenates text responses from a list of output objects.
 
         Args:
@@ -275,7 +281,9 @@ class Common:
         for output in outputs:
             if hasattr(output, "text") and getattr(output, "text", ""):
                 agent_texts.append(output.text)
-            elif isinstance(output, dict) and "text" in output and output["text"]:
+            elif (
+                isinstance(output, dict) and "text" in output and output["text"]
+            ):
                 agent_texts.append(output["text"])
         return separator.join(agent_texts)
 

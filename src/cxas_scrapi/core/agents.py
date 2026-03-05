@@ -153,10 +153,12 @@ class Agents(Apps):
 
         elif agent_type == "dfcx":
             if not dfcx_agent_resource:
-                raise ValueError("dfcx_agent_resource is required for DFCX agents.")
+                raise ValueError(
+                    "dfcx_agent_resource is required for DFCX agents."
+                )
 
-            agent_data["remote_dialogflow_agent"] = types.Agent.RemoteDialogflowAgent(
-                agent=dfcx_agent_resource
+            agent_data["remote_dialogflow_agent"] = (
+                types.Agent.RemoteDialogflowAgent(agent=dfcx_agent_resource)
             )
 
         elif agent_type == "workflow":
@@ -184,7 +186,9 @@ class Agents(Apps):
 
             # Refresh token just in case
             if self.creds.expired:
-                from google.auth.transport.requests import Request as GoogleAuthRequest
+                from google.auth.transport.requests import (
+                    Request as GoogleAuthRequest,
+                )
 
                 self.creds.refresh(GoogleAuthRequest())
 

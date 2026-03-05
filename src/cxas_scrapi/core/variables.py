@@ -74,15 +74,21 @@ class Variables(Apps):
 
         # 2. Handle MapComposite (Dict)
         if isinstance(variable, maps.MapComposite):
-            return {k: Variables.variable_to_dict(v) for k, v in variable.items()}
+            return {
+                k: Variables.variable_to_dict(v) for k, v in variable.items()
+            }
 
         # 3. If it's already a dict or primitive, return as is
-        if isinstance(variable, (dict, list, str, int, float, bool, type(None))):
+        if isinstance(
+            variable, (dict, list, str, int, float, bool, type(None))
+        ):
             return variable
 
         # 4. Priority: Check for schema.default (VariableDeclaration pattern)
         try:
-            if hasattr(variable, "schema") and hasattr(variable.schema, "default"):
+            if hasattr(variable, "schema") and hasattr(
+                variable.schema, "default"
+            ):
                 return Variables.variable_to_dict(variable.schema.default)
         except (AttributeError, KeyError, TypeError):
             pass
@@ -157,7 +163,8 @@ class Variables(Apps):
         for i, var in enumerate(vars_list):
             if var.name == variable_name:
                 var.schema.type_ = getattr(
-                    types.App.VariableDeclaration.Schema.Type, variable_type.upper()
+                    types.App.VariableDeclaration.Schema.Type,
+                    variable_type.upper(),
                 )
                 var.schema.default = variable_value
                 updated = True
@@ -166,7 +173,10 @@ class Variables(Apps):
         if not updated:
             new_var = types.App.VariableDeclaration(
                 name=variable_name,
-                schema={"type_": variable_type.upper(), "default": variable_value},
+                schema={
+                    "type_": variable_type.upper(),
+                    "default": variable_value,
+                },
             )
             vars_list.append(new_var)
 

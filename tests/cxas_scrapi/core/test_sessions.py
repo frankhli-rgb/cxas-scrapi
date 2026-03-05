@@ -12,7 +12,9 @@ def test_sessions_init(mock_client_cls):
     """Test Sessions initialization."""
     mock_client = mock_client_cls.return_value
     sessions = Sessions(
-        app_id="projects/p/locations/l/apps/a", deployment_id="d1", version_id="v1"
+        app_id="projects/p/locations/l/apps/a",
+        deployment_id="d1",
+        version_id="v1",
     )
     assert sessions.app_id == "projects/p/locations/l/apps/a"
     assert sessions.deployment_id == "d1"
@@ -47,7 +49,10 @@ def test_run_session_basic(mock_client_cls):
 
     # Verify the request args
     call_args = mock_client.run_session.call_args[1]["request"]
-    assert getattr(call_args, "config", getattr(call_args, "_config", None)) is not None
+    assert (
+        getattr(call_args, "config", getattr(call_args, "_config", None))
+        is not None
+    )
     # We just ensure it was called since proto-plus handles the object construction
 
 
@@ -109,7 +114,9 @@ def test_parse_result_with_diagnostic_info(mock_client_cls):
     mock_display = MagicMock()
     mock_html = MagicMock(side_effect=lambda x: x)
     sys.modules["IPython"] = MagicMock()
-    sys.modules["IPython.display"] = MagicMock(display=mock_display, HTML=mock_html)
+    sys.modules["IPython.display"] = MagicMock(
+        display=mock_display, HTML=mock_html
+    )
 
     session = Sessions(app_id="projects/p/locations/l/apps/a")
 
@@ -123,7 +130,12 @@ def test_parse_result_with_diagnostic_info(mock_client_cls):
                             "role": "agent",
                             "chunks": [
                                 {"text": "Hi back"},
-                                {"tool_call": {"tool": "my_tool", "args": {"k": "v"}}},
+                                {
+                                    "tool_call": {
+                                        "tool": "my_tool",
+                                        "args": {"k": "v"},
+                                    }
+                                },
                             ],
                         },
                     ]
@@ -145,7 +157,9 @@ def test_parse_result_fallback(mock_client_cls):
     mock_display = MagicMock()
     mock_html = MagicMock(side_effect=lambda x: x)
     sys.modules["IPython"] = MagicMock()
-    sys.modules["IPython.display"] = MagicMock(display=mock_display, HTML=mock_html)
+    sys.modules["IPython.display"] = MagicMock(
+        display=mock_display, HTML=mock_html
+    )
 
     session = Sessions(app_id="projects/p/locations/l/apps/a")
 
@@ -154,7 +168,9 @@ def test_parse_result_fallback(mock_client_cls):
             {
                 "text": "Fallback text",
                 "tool_calls": {
-                    "tool_calls": [{"tool": "basic_tool", "args": {"foo": "bar"}}]
+                    "tool_calls": [
+                        {"tool": "basic_tool", "args": {"foo": "bar"}}
+                    ]
                 },
             }
         ]

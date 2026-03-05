@@ -91,7 +91,11 @@ def test_update_callback(mock_client_cls, mock_get_agent):
     cb_client = Callbacks(app_id="projects/p/locations/l/apps/a")
 
     cb_client.update_callback(
-        "agent1", "before_model", index=0, code="new_code", description="new_desc"
+        "agent1",
+        "before_model",
+        index=0,
+        code="new_code",
+        description="new_desc",
     )
 
     assert mock_cb.python_code == "new_code"
