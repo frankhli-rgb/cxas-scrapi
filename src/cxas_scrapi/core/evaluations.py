@@ -33,7 +33,7 @@ from cxas_scrapi.core.agents import Agents
 
 
 class Evaluations(Common):
-    def __init__(self, app_id: str, env: str = "PROD"):
+    def __init__(self, app_id: str, env: str = "PROD", **kwargs):
         """Initializes the Evaluations client.
 
         Args:
@@ -41,7 +41,7 @@ class Evaluations(Common):
             env: Environment override (default: PROD).
         """
         # Pass app_id to Common for client_options determination
-        super().__init__(agent_id=app_id)
+        super().__init__(agent_id=app_id, **kwargs)
 
         self.app_id = app_id
 

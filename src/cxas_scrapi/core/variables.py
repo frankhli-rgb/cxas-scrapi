@@ -31,7 +31,7 @@ class Variables(Apps):
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
-        scope: List[str] = None,
+        scope: List[str] = None, **kwargs
     ):
         """Initializes the Variables client.
         Note that Variables are resources of the App itself, not a standalone resource.
@@ -46,7 +46,7 @@ class Variables(Apps):
             creds_path=creds_path,
             creds_dict=creds_dict,
             creds=creds,
-            scope=scope,
+            scope=scope, **kwargs
         )
         self.app_id = app_id
         self.resource_type = "variables"

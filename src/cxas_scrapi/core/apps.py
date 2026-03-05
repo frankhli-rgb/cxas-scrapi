@@ -32,13 +32,13 @@ class Apps(Common):
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
-        scope: List[str] = None,
+        scope: List[str] = None, **kwargs
     ):
         super().__init__(
             creds_path=creds_path,
             creds_dict=creds_dict,
             creds=creds,
-            scope=scope,
+            scope=scope, **kwargs
         )
         self.project_id = project_id
         self.location = location

@@ -77,17 +77,16 @@ class GuardrailTestCase(BaseModel):
 class GuardrailUtils:
     """Utility class for testing CXAS Guardrails."""
 
-    def __init__(self, app_id: str, creds=None):
+    def __init__(self, app_id: str, **kwargs):
         """Initializes the GuardrailUtils class.
 
         Args:
             app_id: CXAS App ID
                 (projects/{project}/locations/{location}/apps/{app}).
-            creds: Optional Google Cloud credentials.
         """
         self.app_id = app_id
-        self.creds = creds
-        self.agents_client = Agents(app_id=self.app_id, creds=self.creds)
+        self.kwargs = kwargs
+        self.agents_client = Agents(app_id=self.app_id, **kwargs)
 
     def _get_project_id(self, name: str) -> str:
         """Extracts the project ID from a resource name."""
@@ -164,7 +163,7 @@ class GuardrailUtils:
                     f"Required column '{col}' not found in DataFrame."
                 )
 
-        sessions_client = Sessions(app_id=self.app_id, creds=self.creds)
+        sessions_client = Sessions(app_id=self.app_id, **self.kwargs)
 
         # Try to get the app display name and configured model
         app_display_name = "Unknown App"
@@ -173,7 +172,7 @@ class GuardrailUtils:
             apps_client = Apps(
                 project_id=self._get_project_id(self.app_id),
                 location=self._get_location(self.app_id),
-                creds=self.creds,
+                **self.kwargs,
             )
             app_obj = apps_client.get_app(self.app_id)
             app_display_name = app_obj.display_name

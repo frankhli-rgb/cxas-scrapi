@@ -16,9 +16,10 @@ class Sessions(Common):
         app_id: str,
         deployment_id: str = None,
         version_id: str = None,
+        **kwargs,
     ):
         """Initializes the Sessions client."""
-        super().__init__(agent_id=app_id)
+        super().__init__(agent_id=app_id, **kwargs)
 
         # Initialize Sessions Client
         self.client = SessionServiceClient(
