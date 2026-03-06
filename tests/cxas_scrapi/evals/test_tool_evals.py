@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from cxas_scrapi.utils.tool_utils import (
+from cxas_scrapi.evals.tool_evals import (
     Operator,
     Expectation,
-    ToolUtils,
+    ToolEvals,
     ToolTestCase,
 )
 
@@ -21,13 +21,13 @@ def test_expectation_model():
     assert exp.value == "PASSED"
 
 
-@patch("cxas_scrapi.utils.tool_utils.Tools")
-@patch("cxas_scrapi.utils.tool_utils.Variables")
-def test_tool_utils_init(mock_variables, mock_tools):
+@patch("cxas_scrapi.evals.tool_evals.Tools")
+@patch("cxas_scrapi.evals.tool_evals.Variables")
+def test_tool_evals_init(mock_variables, mock_tools):
     mock_tools_instance = mock_tools.return_value
     mock_tools_instance.get_tools_map.return_value = {"tool1": "id1"}
 
-    tu = ToolUtils(app_id="test_app", creds=None)
+    tu = ToolEvals(app_id="test_app", creds=None)
     assert tu.app_id == "test_app"
     assert tu.tool_map == {"tool1": "id1"}
     mock_tools_instance.get_tools_map.assert_called_once_with(
@@ -36,12 +36,12 @@ def test_tool_utils_init(mock_variables, mock_tools):
 
 
 def test_parse_variables_input():
-    assert ToolUtils.parse_variables_input(None) == {}
-    assert ToolUtils.parse_variables_input('{"a": 1}') == {"a": 1}
-    assert ToolUtils.parse_variables_input("invalid") == {}
-    assert ToolUtils.parse_variables_input(["a", "b"]) == {"a": None, "b": None}
-    assert ToolUtils.parse_variables_input({"a": 1}) == {"a": 1}
-    assert ToolUtils.parse_variables_input(123) == {}
+    assert ToolEvals.parse_variables_input(None) == {}
+    assert ToolEvals.parse_variables_input('{"a": 1}') == {"a": 1}
+    assert ToolEvals.parse_variables_input("invalid") == {}
+    assert ToolEvals.parse_variables_input(["a", "b"]) == {"a": None, "b": None}
+    assert ToolEvals.parse_variables_input({"a": 1}) == {"a": 1}
+    assert ToolEvals.parse_variables_input(123) == {}
 
 
 def test_parse_python_code():
@@ -49,20 +49,20 @@ def test_parse_python_code():
 def my_tool(arg1, arg2):
     return {"status": "SUCCESS", "id": 123}
 """
-    args, returns = ToolUtils._parse_python_code(code)
+    args, returns = ToolEvals._parse_python_code(code)
     assert args == {"arg1": "[arg1]", "arg2": "[arg2]"}
     assert set(returns) == {"status", "id"}
 
 
 def test_parse_python_code_invalid():
-    args, returns = ToolUtils._parse_python_code("def foo( *invalid syntax")
+    args, returns = ToolEvals._parse_python_code("def foo( *invalid syntax")
     assert args == {}
     assert returns == []
 
 
 def test_parse_properties():
-    # Helper to avoid instantiating ToolUtils to test isolated util
-    tu = ToolUtils.__new__(ToolUtils)
+    # Helper to avoid instantiating ToolEvals to test isolated util
+    tu = ToolEvals.__new__(ToolEvals)
     props = {
         "str_prop": {"type": "string"},
         "int_prop": {"type": "integer"},
@@ -84,7 +84,7 @@ def test_parse_properties():
 
 
 def test_get_value_at_path():
-    tu = ToolUtils.__new__(ToolUtils)
+    tu = ToolEvals.__new__(ToolEvals)
     data = {"a": {"b": [{"c": 1}, {"c": 2}]}}
     assert tu._get_value_at_path(data, "$.a.b[0].c") == 1
     assert tu._get_value_at_path(data, "$.a.b[*].c") == [1, 2]
@@ -92,7 +92,7 @@ def test_get_value_at_path():
 
 
 def test_check_expectation():
-    tu = ToolUtils.__new__(ToolUtils)
+    tu = ToolEvals.__new__(ToolEvals)
     assert tu._check_expectation(
         1, Expectation(path="", operator=Operator.EQUALS, value=1)
     )
@@ -155,7 +155,7 @@ def test_tool_test_case_validation():
 
 
 def test_parse_python_function():
-    tu = ToolUtils.__new__(ToolUtils)
+    tu = ToolEvals.__new__(ToolEvals)
     # Tool with properties in schema
     t1 = {
         "python_function": {
@@ -178,7 +178,7 @@ def test_parse_python_function():
 
 
 def test_parse_openapi_toolset():
-    tu = ToolUtils.__new__(ToolUtils)
+    tu = ToolEvals.__new__(ToolEvals)
     schema = """
 paths:
   /test:
@@ -210,7 +210,7 @@ paths:
 
 
 def test_validate_tool_test():
-    tu = ToolUtils.__new__(ToolUtils)
+    tu = ToolEvals.__new__(ToolEvals)
 
     tc = ToolTestCase(
         name="test1",
@@ -234,8 +234,8 @@ def test_validate_tool_test():
     assert "Variable expectation failed" in errors[1]
 
 
-@patch("cxas_scrapi.utils.tool_utils.Tools")
-@patch("cxas_scrapi.utils.tool_utils.Variables")
+@patch("cxas_scrapi.evals.tool_evals.Tools")
+@patch("cxas_scrapi.evals.tool_evals.Variables")
 def test_run_tool_tests(mock_variables, mock_tools):
     mock_tools_instance = mock_tools.return_value
     mock_tools_instance.get_tools_map.return_value = {"tool1": "id1"}
@@ -246,7 +246,7 @@ def test_run_tool_tests(mock_variables, mock_tools):
     mock_var_instance = mock_variables.return_value
     mock_var_instance.list_variables.return_value = []
 
-    tu = ToolUtils(app_id="test_app", creds=None)
+    tu = ToolEvals(app_id="test_app", creds=None)
 
     tc = ToolTestCase(
         name="test1",
