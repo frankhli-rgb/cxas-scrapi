@@ -79,6 +79,7 @@ class LatencyParser:
         tool_rows: List,
         callback_rows: List,
         guardrail_rows: List,
+        llm_rows: List,
         context_key: str = "conversation_id",
     ) -> Dict[str, float]:
         """Recursively walks span trees and accumulates granular component attributes."""
@@ -122,6 +123,21 @@ class LatencyParser:
                         "duration_ms": duration,
                     }
                 )
+            elif name == "LLM":
+                llm_rows.append(
+                    {
+                        "agent": attrs.get("agent", ""),
+                        "model": attrs.get("model", ""),
+                        "input_tokens": attrs.get("input token count", 0),
+                        "output_tokens": attrs.get("output token count", 0),
+                        "time_to_first_token_ms": attrs.get("time to first chunk (ms)", 0),
+                        "time_to_first_audio_ms": attrs.get("time to first audio (ms)", 0),
+                        "audio_duration_ms": attrs.get("audio duration (ms)", 0),
+                        context_key: context_id,
+                        "turn_index": t_idx,
+                        "duration_ms": duration,
+                    }
+                )
 
             if "child_spans" in s:
                 child_sums = LatencyParser._process_spans(
@@ -131,6 +147,7 @@ class LatencyParser:
                     tool_rows,
                     callback_rows,
                     guardrail_rows,
+                    llm_rows,
                     context_key,
                 )
                 for k in sums:
@@ -179,6 +196,56 @@ class LatencyParser:
         return agg_df
 
     @staticmethod
+    def _build_llm_summary_df(
+        df_d: pd.DataFrame, group_cols: List[str]
+    ) -> pd.DataFrame:
+        """Aggregates a detailed LLM DataFrame into counts, percentiles, and average tokens."""
+        if df_d.empty:
+            return pd.DataFrame(
+                columns=group_cols
+                + [
+                    "count",
+                    "Average Input Tokens",
+                    "Average (ms)",
+                    "p50 (ms)",
+                    "p90 (ms)",
+                    "p99 (ms)",
+                ]
+            )
+
+        agg_df = (
+            df_d.groupby(group_cols)
+            .agg(
+                count=("duration_ms", "count"),
+                Average_Input_Tokens=("input_tokens", "mean"),
+                Average=("duration_ms", "mean"),
+                p50=("duration_ms", lambda x: x.quantile(0.50)),
+                p90=("duration_ms", lambda x: x.quantile(0.90)),
+                p99=("duration_ms", lambda x: x.quantile(0.99)),
+            )
+            .reset_index()
+        )
+
+        for col in ["Average_Input_Tokens", "Average", "p50", "p90", "p99"]:
+            agg_df[col] = agg_df[col].fillna(0).astype(int)
+
+        agg_df.rename(
+            columns={
+                "Average_Input_Tokens": "Average Input Tokens",
+                "Average": "Average (ms)",
+                "p50": "p50 (ms)",
+                "p90": "p90 (ms)",
+                "p99": "p99 (ms)",
+            },
+            inplace=True,
+        )
+
+        agg_df = agg_df.sort_values(by="count", ascending=False).reset_index(
+            drop=True
+        )
+        return agg_df
+
+    @staticmethod
     def extract_trace_metrics(
         traces: Dict[str, Any], context_type: str = "conversation"
     ) -> Dict[str, pd.DataFrame]:
@@ -195,6 +262,7 @@ class LatencyParser:
         tool_details_rows = []
         callback_details_rows = []
         guardrail_details_rows = []
+        llm_details_rows = []
 
         for cid, conv in traces.items():
             conv_dict = (
@@ -212,11 +280,13 @@ class LatencyParser:
                         tool_details_rows,
                         callback_details_rows,
                         guardrail_details_rows,
+                        llm_details_rows,
                     )
 
         tool_details = pd.DataFrame(tool_details_rows)
         callback_details = pd.DataFrame(callback_details_rows)
         guardrail_details = pd.DataFrame(guardrail_details_rows)
+        llm_details = pd.DataFrame(llm_details_rows)
 
         tool_summary = LatencyParser.build_summary_df(
             tool_details, ["tool_name"]
@@ -227,6 +297,9 @@ class LatencyParser:
         guardrail_summary = LatencyParser.build_summary_df(
             guardrail_details, ["agent", "name"]
         )
+        llm_summary = LatencyParser._build_llm_summary_df(
+            llm_details, ["agent", "model"]
+        )
 
         return {
             "tool_summary": tool_summary,
@@ -235,4 +308,6 @@ class LatencyParser:
             "callback_details": callback_details,
             "guardrail_summary": guardrail_summary,
             "guardrail_details": guardrail_details,
+            "llm_summary": llm_summary,
+            "llm_details": llm_details,
         }

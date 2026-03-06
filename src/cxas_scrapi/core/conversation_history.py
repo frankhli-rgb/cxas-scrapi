@@ -43,7 +43,6 @@ class ConversationHistory(Common):
             scope=scope, **kwargs
         )
 
-        # APP_ID format: projects/{project}/locations/{location}/apps/{app}
         self.app_id = app_id
 
         # Initialize Client
@@ -198,6 +197,7 @@ class ConversationHistory(Common):
         Returns:
             Dictionary containing DataFrames: tool_summary, tool_details, callback_summary, callback_details, guardrail_summary, guardrail_details
         """
+        # pylint: disable=import-outside-toplevel
         from cxas_scrapi.utils.latency_parser import LatencyParser
 
         target_app = app_id or self.app_id
@@ -222,6 +222,8 @@ class ConversationHistory(Common):
                 "callback_details": pd.DataFrame(),
                 "guardrail_summary": pd.DataFrame(),
                 "guardrail_details": pd.DataFrame(),
+                "llm_summary": pd.DataFrame(),
+                "llm_details": pd.DataFrame(),
             }
 
         # Extract the string IDs, limiting to the requested amount
