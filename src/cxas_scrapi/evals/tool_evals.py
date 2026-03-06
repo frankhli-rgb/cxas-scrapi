@@ -64,11 +64,11 @@ class Expectation(BaseModel):
     value: Optional[Any] = None
 
 
-class ToolUtils:
+class ToolEvals:
     """Utility class for testing CXAS Tools."""
 
     def __init__(self, app_id: str, creds=None):
-        """Initializes the ToolUtils class.
+        """Initializes the ToolEvals class.
 
         Args:
             app_id: CXAS App ID
@@ -776,7 +776,7 @@ class ToolTestCase(BaseModel):
     )
 
     variables: Annotated[
-        Dict[str, Any], BeforeValidator(ToolUtils.parse_variables_input)
+        Dict[str, Any], BeforeValidator(ToolEvals.parse_variables_input)
     ] = Field(default_factory=dict)
 
     response_expectations: Annotated[

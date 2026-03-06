@@ -17,8 +17,11 @@ from cxas_scrapi.utils.eval_utils import EvalUtils
 from cxas_scrapi.utils.secret_manager_utils import SecretManagerUtils
 from cxas_scrapi.utils.changelog_utils import ChangelogUtils
 from cxas_scrapi.utils.google_sheets_utils import GoogleSheetsUtils
-from cxas_scrapi.utils.tool_utils import ToolUtils
-from cxas_scrapi.utils.guardrail_utils import GuardrailUtils
+from cxas_scrapi.evals.tool_evals import ToolEvals
+from cxas_scrapi.evals.guardrail_evals import GuardrailEvals
+from cxas_scrapi.evals.simulation_evals import SimulationEvals
+from cxas_scrapi.evals.callback_evals import CallbackEvals
+from cxas_scrapi.evals.turn_evals import TurnEvals
 
 __all__ = [
     "Common",
@@ -38,6 +41,9 @@ __all__ = [
     "SecretManagerUtils",
     "ChangelogUtils",
     "GoogleSheetsUtils",
-    "ToolUtils",
-    "GuardrailUtils",
+    "ToolEvals",
+    "GuardrailEvals",
+    "SimulationEvals",
+    "CallbackEvals",
+    "TurnEvals",
 ]

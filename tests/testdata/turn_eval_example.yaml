@@ -1,0 +1,34 @@
+tests:
+  - name: "Welcome Event Check"
+    user: "<event>WelcomeEvent</event>"
+    expectations:
+      - type: "contains"
+        value: "Shopping Assistant"
+
+  - name: "Party Planner transfer"
+    user: "Plan a party for my 4 year old"
+    expectations:
+      - type: "agent_transfer"
+        value: "party_planner"
+
+  - name: "Product search tool I/O"
+    user: "cupcake decorations"
+    variables:
+      first_turn: true
+    expectations:
+      - type: "tool_called"
+        value: "search_products"
+      - type: "tool_input"
+        value:
+          query: "cupcake decorations"
+      - type: "tool_output"
+        value:
+          search_products: {}
+
+  - name: "Direct Response Only"
+    user: "Thank you!"
+    expectations:
+      - type: "no_tools_called"
+        value: null
+      - type: "equals"
+        value: "You're very welcome! Let me know if you need anything else."

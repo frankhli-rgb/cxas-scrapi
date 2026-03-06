@@ -29,7 +29,7 @@ import pytest
 logger = logging.getLogger(__name__)
 
 
-class CallbackUtils:
+class CallbackEvals:
     """Provides methods for orchestrating and executing agent callback tests."""
 
     def run_callback_tests(

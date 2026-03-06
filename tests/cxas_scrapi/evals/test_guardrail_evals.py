@@ -1,10 +1,10 @@
-"""Tests for GuardrailUtils class in cxas_scrapi."""
+"""Tests for GuardrailEvals class in cxas_scrapi."""
 
 import pytest
 import pandas as pd
 from unittest.mock import MagicMock, patch
 
-from cxas_scrapi.utils.guardrail_utils import GuardrailUtils
+from cxas_scrapi.evals.guardrail_evals import GuardrailEvals
 
 @pytest.fixture
 def dummy_app_id():
@@ -19,9 +19,9 @@ def mock_df():
     }
     return pd.DataFrame(data)
 
-@patch("cxas_scrapi.utils.guardrail_utils.Sessions")
-@patch("cxas_scrapi.utils.guardrail_utils.Apps")
-@patch("cxas_scrapi.utils.guardrail_utils.Agents")
+@patch("cxas_scrapi.evals.guardrail_evals.Sessions")
+@patch("cxas_scrapi.evals.guardrail_evals.Apps")
+@patch("cxas_scrapi.evals.guardrail_evals.Agents")
 def test_guardrail_execution_flow(
     mock_agents_class,
     mock_apps_class,
@@ -30,7 +30,7 @@ def test_guardrail_execution_flow(
     mock_df
 ):
     """
-    Tests the end-to-end execution flow of GuardrailUtils similar to the
+    Tests the end-to-end execution flow of GuardrailEvals similar to the
     Google Sheets/Notebook workflow without making live GCP API calls.
     """
     # Setup Mocks
@@ -76,8 +76,8 @@ def test_guardrail_execution_flow(
     # Assign side effects to Sessions.run()
     mock_sessions.run.side_effect = [response_triggered, response_clean]
 
-    # Initialize GuardrailUtils securely with mock args
-    guard_utils = GuardrailUtils(app_id=dummy_app_id)
+    # Initialize GuardrailEvals securely with mock args
+    guard_utils = GuardrailEvals(app_id=dummy_app_id)
 
     # Execute tests
     results_df = guard_utils.run_guardrail_tests(mock_df, console_logging=False)

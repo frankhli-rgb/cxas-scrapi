@@ -74,11 +74,11 @@ class GuardrailTestCase(BaseModel):
     expected_parameters: Optional[str] = None
 
 
-class GuardrailUtils:
+class GuardrailEvals:
     """Utility class for testing CXAS Guardrails."""
 
     def __init__(self, app_id: str, **kwargs):
-        """Initializes the GuardrailUtils class.
+        """Initializes the GuardrailEvals class.
 
         Args:
             app_id: CXAS App ID
@@ -485,7 +485,7 @@ class GuardrailUtils:
     ) -> pd.DataFrame:
         """Generates a summary stats report for recent tests."""
         report_timestamp = datetime.datetime.now()
-        stats = GuardrailUtils._calculate_stats(df)
+        stats = GuardrailEvals._calculate_stats(df)
 
         df_report = pd.DataFrame(
             columns=SUMMARY_SCHEMA_COLUMNS,

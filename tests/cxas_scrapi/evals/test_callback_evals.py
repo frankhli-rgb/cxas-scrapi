@@ -1,11 +1,11 @@
-"""Unit tests for the CallbackUtils testing utility."""
+"""Unit tests for the CallbackEvals testing utility."""
 
 import pandas as pd
-from cxas_scrapi.utils.callback_utils import CallbackUtils
+from cxas_scrapi.evals.callback_evals import CallbackEvals
 
 
 def test_run_callback_tests_no_files(tmp_path):
-    utils = CallbackUtils()
+    utils = CallbackEvals()
     result = utils.run_callback_tests(app_root_dir=str(tmp_path))
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 0
@@ -19,7 +19,7 @@ def test_run_callback_tests_no_files(tmp_path):
 
 
 def test_run_callback_tests_missing_python_code(tmp_path):
-    utils = CallbackUtils()
+    utils = CallbackEvals()
 
     agent_dir = tmp_path / "agents" / "agentA" / "my_callbacks" / "cb1"
     agent_dir.mkdir(parents=True)
@@ -32,7 +32,7 @@ def test_run_callback_tests_missing_python_code(tmp_path):
 
 
 def test_run_callback_tests_success(tmp_path):
-    utils = CallbackUtils()
+    utils = CallbackEvals()
 
     agent_dir = tmp_path / "agents" / "agentA" / "my_callbacks" / "cb1"
     agent_dir.mkdir(parents=True)
@@ -54,7 +54,7 @@ def test_run_callback_tests_success(tmp_path):
 
 
 def test_run_callback_tests_failure(tmp_path):
-    utils = CallbackUtils()
+    utils = CallbackEvals()
 
     agent_dir = tmp_path / "agents" / "agentA" / "my_callbacks" / "cb1"
     agent_dir.mkdir(parents=True)
