@@ -796,3 +796,51 @@ class Evaluations(Common):
             print("\n")
 
         return thresholds
+
+    def bulk_export_evals(self, eval_type: str, output_dir: str) -> None:
+        """Exports all evaluations of a specific type to a local directory.
+        
+        Args:
+            eval_type: Type of evaluation ('goldens' or 'scenarios').
+            output_dir: Local directory path to export files into.
+        """
+        import os
+
+        print("Fetching evaluations map...")
+        evals_map = self.get_evaluations_map(app_id=self.app_id, reverse=True)
+
+        if eval_type not in ["goldens", "scenarios"]:
+            raise ValueError("eval_type must be either 'goldens' or 'scenarios'.")
+
+        target_evals = evals_map.get(eval_type, {})
+
+        if not target_evals:
+            print(f"No {eval_type} found in the specified App.")
+            return
+
+        # Ensure the <output_dir>/evals directory exists
+        evals_dir = os.path.join(output_dir, "evals")
+        os.makedirs(evals_dir, exist_ok=True)
+
+        print(f"Found {len(target_evals)} {eval_type}. Starting export to {evals_dir}...")
+
+        success_count = 0
+        for display_name, resource_id in target_evals.items():
+            try:
+                # Clean display name to make a safe filename
+                safe_name = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in display_name)
+                file_path = os.path.join(evals_dir, f"{safe_name}.yaml")
+
+                # Export the eval
+                yaml_content = self.export_evaluation(resource_id, output_format="yaml")
+
+                # Write to file
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(yaml_content)
+
+                print(f"✅ Exported: {safe_name}.yaml")
+                success_count += 1
+            except Exception as e:
+                print(f"❌ Failed to export '{display_name}': {e}")
+
+        print(f"\nDone! Successfully exported {success_count}/{len(target_evals)} {eval_type}.")

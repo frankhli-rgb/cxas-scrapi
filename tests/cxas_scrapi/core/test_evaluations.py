@@ -563,3 +563,75 @@ def test_evaluations_create_evaluation(
     evals_client.app_id = None
     with pytest.raises(ValueError, match="app_id is required"):
         evals_client.create_evaluation(evaluation=evaluation_dict)
+
+
+@patch("os.makedirs")
+@patch.object(Evaluations, "export_evaluation")
+@patch.object(Evaluations, "get_evaluations_map")
+def test_bulk_export_evals(mock_get_map, mock_export, mock_makedirs):
+    """Test Evaluations.bulk_export_evals."""
+    from unittest.mock import mock_open
+
+    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+
+    # Mock get_evaluations_map
+    mock_get_map.return_value = {
+        "goldens": {
+            "Golden 1": "projects/p/locations/l/apps/a/evaluations/g1",
+            "Golden-2!": "projects/p/locations/l/apps/a/evaluations/g2"
+        },
+        "scenarios": {
+            "Scenario 1": "projects/p/locations/l/apps/a/evaluations/s1"
+        }
+    }
+
+    # Mock export_evaluation
+    mock_export.return_value = "yaml_content"
+
+    # Test 1: Exporting goldens
+    m_open = mock_open()
+    with patch("builtins.open", m_open):
+        evals_client.bulk_export_evals("goldens", "/valid/dir")
+    
+    # 2 exports should happen
+    assert mock_export.call_count == 2
+    mock_export.assert_any_call("projects/p/locations/l/apps/a/evaluations/g1", output_format="yaml")
+    mock_export.assert_any_call("projects/p/locations/l/apps/a/evaluations/g2", output_format="yaml")
+    
+    # 2 files should be opened
+    assert m_open.call_count == 2
+    
+    # Check that dir was made
+    mock_makedirs.assert_called_with("/valid/dir/evals", exist_ok=True)
+    
+    # Reset mocks
+    mock_export.reset_mock()
+    mock_makedirs.reset_mock()
+
+    # Test 2: Exporting scenarios
+    m_open = mock_open()
+    with patch("builtins.open", m_open):
+        evals_client.bulk_export_evals("scenarios", "/valid/dir")
+    
+    assert mock_export.call_count == 1
+    mock_export.assert_called_once_with("projects/p/locations/l/apps/a/evaluations/s1", output_format="yaml")
+    assert m_open.call_count == 1
+
+    # Test 3: Bad type
+    with pytest.raises(ValueError, match="eval_type must be either 'goldens' or 'scenarios'"):
+        evals_client.bulk_export_evals("typo", "/valid/dir")
+
+    # Test 4: File write exception inside the loop (invalid file path logic, caught by try/except)
+    mock_export.reset_mock()
+    mock_export.side_effect = Exception("Export failed")
+    
+    # This shouldn't crash, it should catch Exception and print failure
+    m_open = mock_open()
+    with patch("builtins.open", m_open):
+        evals_client.bulk_export_evals("scenarios", "/valid/dir")
+    assert mock_export.call_count == 1
+
+    # Test 5: Invalid directory (os.makedirs fails)
+    mock_makedirs.side_effect = PermissionError("Permission denied")
+    with pytest.raises(PermissionError):
+        evals_client.bulk_export_evals("scenarios", "/invalid/dir")
