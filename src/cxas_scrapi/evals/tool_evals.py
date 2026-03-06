@@ -32,6 +32,7 @@ from pydantic import (
     BeforeValidator,
     Field,
     TypeAdapter,
+    model_validator,
 )
 
 from cxas_scrapi.core.common import Common
@@ -90,7 +91,7 @@ class ToolEvals:
             self.tool_map = {}
 
     @staticmethod
-    def parse_variables_input(v: Any) -> Dict[str, Any]:
+    def _parse_dict_input(v: Any) -> Dict[str, Any]:
         """Allows YAML to accept a list of strings OR a custom dictionary."""
         if v is None:
             return {}
@@ -583,6 +584,19 @@ class ToolEvals:
                 )
                 continue
 
+            if "toolsets/" in tool_id and test_case.context:
+                error = f"Context can only be specified for python tools."
+                print(f"FAILURE: {error}")
+                results.append(
+                    {
+                        "test": test_case.name,
+                        "tool": test_case.tool,
+                        "status": "FAILURE",
+                        "errors": [error],
+                    }
+                )
+                continue
+
             # Filter and merge variables for this specific test case
             final_variables = {}
             for var_name, custom_val in test_case.variables.items():
@@ -610,6 +624,7 @@ class ToolEvals:
                     tool_display_name=test_case.tool,
                     args=test_case.args,
                     variables=final_variables,
+                    context=test_case.context,
                 )
 
                 if debug:
@@ -776,7 +791,11 @@ class ToolTestCase(BaseModel):
     )
 
     variables: Annotated[
-        Dict[str, Any], BeforeValidator(ToolEvals.parse_variables_input)
+        Dict[str, Any], BeforeValidator(ToolEvals._parse_dict_input)
+    ] = Field(default_factory=dict)
+
+    context: Annotated[
+        Dict[str, Any], BeforeValidator(ToolEvals._parse_dict_input)
     ] = Field(default_factory=dict)
 
     response_expectations: Annotated[
@@ -792,3 +811,11 @@ class ToolTestCase(BaseModel):
         default_factory=list,
         validation_alias=AliasPath("expectations", "variables"),
     )
+
+    @model_validator(mode="after")
+    def validate_variables_and_context(self) -> "ToolTestCase":
+        if self.variables and self.context:
+            raise ValueError(
+                "A test case can provide either 'variables' or 'context', but not both."
+            )
+        return self

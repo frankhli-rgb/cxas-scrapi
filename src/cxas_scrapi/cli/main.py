@@ -32,7 +32,8 @@ from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.common import Common
 from cxas_scrapi.core.evaluations import Evaluations
 from cxas_scrapi.utils.eval_utils import EvalUtils
-from cxas_scrapi.utils.callback_utils import CallbackUtils
+from cxas_scrapi.evals.callback_evals import CallbackEvals
+from cxas_scrapi.evals.tool_evals import ToolEvals
 
 logger = logging.getLogger(__name__)
 
@@ -217,18 +218,18 @@ def test_tools(args: argparse.Namespace) -> None:
     print(
         f"Running tool tests for App: {args.app_id} using file: {args.test_file}"
     )
-    eval_utils = EvalUtils(app_id=args.app_id)
+    tool_evals = ToolEvals(app_id=args.app_id)
 
     try:
-        test_cases = eval_utils.load_tool_test_cases_from_file(args.test_file)
+        test_cases = tool_evals.load_tool_test_cases_from_file(args.test_file)
         if not test_cases:
             print(f"No valid test cases found in {args.test_file}")
             sys.exit(1)
 
-        results = eval_utils.run_tool_tests(test_cases, debug=args.debug)
+        results = tool_evals.run_tool_tests(test_cases, debug=args.debug)
 
         # Check overall status
-        failed_count = sum(1 for r in results if r.get("status") != "PASSED")
+        failed_count = sum(1 for r in results["status"] if r != "PASSED")
 
         if failed_count > 0:
             print(f"\nFINAL RESULT: FAIL ({failed_count} tools failed)")
@@ -246,10 +247,10 @@ def test_callbacks(args: argparse.Namespace) -> None:
     """Handles the 'test-callbacks' command."""
 
     print(f"Running callback tests in Agent directory: {args.agent_dir}")
-    callback_utils = CallbackUtils()
+    callback_evals = CallbackEvals()
 
     try:
-        results = callback_utils.run_callback_tests(app_root_dir=args.agent_dir)
+        results = callback_evals.run_callback_tests(app_root_dir=args.agent_dir)
         if results.empty:
             print(f"No valid callback tests found in {args.agent_dir}")
             sys.exit(1)

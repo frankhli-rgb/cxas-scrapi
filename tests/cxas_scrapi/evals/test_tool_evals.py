@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 from unittest.mock import MagicMock, patch
 
 from cxas_scrapi.evals.tool_evals import (
@@ -35,13 +36,13 @@ def test_tool_evals_init(mock_variables, mock_tools):
     )
 
 
-def test_parse_variables_input():
-    assert ToolEvals.parse_variables_input(None) == {}
-    assert ToolEvals.parse_variables_input('{"a": 1}') == {"a": 1}
-    assert ToolEvals.parse_variables_input("invalid") == {}
-    assert ToolEvals.parse_variables_input(["a", "b"]) == {"a": None, "b": None}
-    assert ToolEvals.parse_variables_input({"a": 1}) == {"a": 1}
-    assert ToolEvals.parse_variables_input(123) == {}
+def test_parse_dict_input():
+    assert ToolEvals._parse_dict_input(None) == {}
+    assert ToolEvals._parse_dict_input('{"a": 1}') == {"a": 1}
+    assert ToolEvals._parse_dict_input("invalid") == {}
+    assert ToolEvals._parse_dict_input(["a", "b"]) == {"a": None, "b": None}
+    assert ToolEvals._parse_dict_input({"a": 1}) == {"a": 1}
+    assert ToolEvals._parse_dict_input(123) == {}
 
 
 def test_parse_python_code():
@@ -152,6 +153,24 @@ def test_tool_test_case_validation():
         },
     )
     assert tc2.response_expectations[0].path == "$.x"
+
+    # Test context/variables mutual exclusivity
+    with pytest.raises(
+        ValidationError, match="either 'variables' or 'context'"
+    ):
+        ToolTestCase(
+            name="t3", tool="tool3", variables={"a": 1}, context={"b": 2}
+        )
+
+    # Context only works
+    tc4 = ToolTestCase(name="t4", tool="tool4", context={"a": 1})
+    assert tc4.context == {"a": 1}
+    assert tc4.variables == {}
+
+    # Variables only works
+    tc5 = ToolTestCase(name="t5", tool="tool5", variables={"a": 1})
+    assert tc5.variables == {"a": 1}
+    assert tc5.context == {}
 
 
 def test_parse_python_function():
@@ -267,5 +286,83 @@ def test_run_tool_tests(mock_variables, mock_tools):
 
     # Ensure it calls execute_tool correctly
     mock_tools_instance.execute_tool.assert_called_once_with(
-        app_id="test_app", tool_display_name="tool1", args={}, variables={}
+        app_id="test_app",
+        tool_display_name="tool1",
+        args={},
+        variables={},
+        context={},
     )
+
+
+@patch("cxas_scrapi.evals.tool_evals.Tools")
+@patch("cxas_scrapi.evals.tool_evals.Variables")
+def test_run_tool_tests_with_context(mock_variables, mock_tools):
+    mock_tools_instance = mock_tools.return_value
+    mock_tools_instance.get_tools_map.return_value = {"tool1": "id1"}
+    mock_tools_instance.execute_tool.return_value = {
+        "response": {"status": "OK"}
+    }
+
+    mock_var_instance = mock_variables.return_value
+    mock_var_instance.list_variables.return_value = []
+
+    tu = ToolEvals(app_id="test_app", creds=None)
+
+    tc = ToolTestCase(
+        name="test2",
+        tool="tool1",
+        context={"ctx1": "value2"},
+        expectations={
+            "response": [
+                {"path": "$.status", "operator": "equals", "value": "OK"}
+            ]
+        },
+    )
+
+    # Run tests
+    df = tu.run_tool_tests([tc])
+
+    assert len(df) == 1
+    assert df.iloc[0]["status"] == "PASSED"
+    assert df.iloc[0]["test_name"] == "test2"
+
+    # Ensure it calls execute_tool correctly
+    mock_tools_instance.execute_tool.assert_called_once_with(
+        app_id="test_app",
+        tool_display_name="tool1",
+        args={},
+        variables={},
+        context={"ctx1": "value2"},
+    )
+
+
+@patch("cxas_scrapi.evals.tool_evals.Tools")
+@patch("cxas_scrapi.evals.tool_evals.Variables")
+def test_run_tool_tests_openapi_with_context_fails(mock_variables, mock_tools):
+    mock_tools_instance = mock_tools.return_value
+    mock_tools_instance.get_tools_map.return_value = {
+        "tool1": "toolsets/my_openapi_tool"
+    }
+
+    mock_var_instance = mock_variables.return_value
+    mock_var_instance.list_variables.return_value = []
+
+    tu = ToolEvals(app_id="test_app", creds=None)
+
+    tc = ToolTestCase(
+        name="test_openapi",
+        tool="tool1",
+        context={"ctx1": "value2"},
+    )
+
+    # Run tests
+    df = tu.run_tool_tests([tc])
+
+    assert len(df) == 1
+    assert df.iloc[0]["status"] == "FAILURE"
+    assert (
+        "Context can only be specified for python tools" in df.iloc[0]["errors"]
+    )
+
+    # execute_tool should not be called
+    mock_tools_instance.execute_tool.assert_not_called()
