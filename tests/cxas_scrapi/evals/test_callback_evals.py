@@ -69,7 +69,7 @@ def test_run_callback_tests_failure(tmp_path):
     result = utils.run_callback_tests(app_root_dir=str(tmp_path))
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
-    assert result.iloc[0]["status"] == "failed"
+    assert result.iloc[0]["status"] == "FAILED"
     assert result.iloc[0]["test_name"] == "test_dummy_fail"
     assert result.iloc[0]["agent_name"] == "agentA"
     assert result.iloc[0]["callback_type"] == "my_callbacks"

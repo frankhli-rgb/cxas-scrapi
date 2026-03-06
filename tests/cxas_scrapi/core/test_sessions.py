@@ -1,9 +1,12 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from cxas_scrapi.core.sessions import Sessions, Modality
+from cxas_scrapi.core.sessions import Sessions, Modality, AgentTurnManager, BidiSessionHandler
 from google.cloud.ces_v1beta import types
 import os
 import sys
+import time
+import json
+from google.protobuf import json_format
 import IPython.display
 
 
@@ -260,3 +263,75 @@ def test_run_session_text_multi_inputs_aggregation(mock_client_cls, mock_types):
     assert len(res.outputs) == 2
     assert res.outputs[0].text == "Response 1"
     assert res.outputs[1].text == "Response 2"
+
+def test_agent_turn_manager_basic():
+    manager = AgentTurnManager(sample_rate=16000, sample_width=2)
+    assert not manager.is_agent_done_talking()
+    
+    # 1 second of audio (16000 * 2 = 32000 bytes)
+    manager.add_audio(b"\x00" * 32000)
+    manager.mark_turn_completed()
+    
+    # Just completed, current time is roughly 0 seconds since start
+    assert not manager.is_agent_done_talking()
+    
+    # Force the start time to be 2 seconds ago
+    manager.first_audio_received_time = time.time() - 2.0
+    assert manager.is_agent_done_talking()
+
+def test_agent_turn_manager_no_audio():
+    manager = AgentTurnManager()
+    manager.mark_turn_completed()
+    # If no audio was ever received, it should be done immediately
+    assert manager.is_agent_done_talking()
+
+@patch("cxas_scrapi.core.sessions.websocket.WebSocketApp")
+@patch("cxas_scrapi.core.sessions.threading.Thread")
+def test_bidi_session_handler_run(mock_thread, mock_ws_app):
+    config = {"session": "projects/p/locations/us/apps/a/sessions/s1"}
+    inputs = [{"text": "Hello"}]
+    handler = BidiSessionHandler(location="us", token="fake_token", config=config, inputs=inputs)
+    
+    res = handler.run()
+    
+    mock_ws_app.assert_called_once()
+    mock_thread.assert_called_once()
+    
+    assert handler.outputs == []
+
+def test_bidi_session_handler_on_message():
+    config = {"session": "s"}
+    handler = BidiSessionHandler(location="us", token="fake", config=config, inputs=[])
+    
+    # Construct a valid JSON representing BidiSessionServerMessage
+    # with a session_output containing turn_completed
+    from google.cloud.ces_v1beta import types
+    mock_response = types.BidiSessionServerMessage(
+        session_output=types.SessionOutput(
+            turn_completed=True
+        )
+    )
+    json_data = json_format.MessageToJson(mock_response._pb, preserving_proto_field_name=False)
+    
+    mock_ws = MagicMock()
+    handler._on_message(mock_ws, json_data)
+    
+    assert len(handler.outputs) == 1
+    assert handler.agent_turn_manager.turn_completed_flag is True
+
+@patch("cxas_scrapi.core.sessions.time.sleep")
+def test_bidi_session_handler_send_inputs(mock_sleep):
+    config = {"session": "session_123"}
+    audio_msg = {"audio": b"fake_audio", "text": "Hello"}
+    inputs = [{"audio": audio_msg}]
+    handler = BidiSessionHandler(location="us", token="fake", config=config, inputs=inputs)
+    
+    handler.ws_app = MagicMock()
+    handler.agent_turn_manager.is_agent_done_talking = MagicMock(return_value=True)
+    
+    handler._send_inputs()
+    
+    assert handler.ws_app.send.call_count > 0
+    # First send should be config
+    first_call_arg = handler.ws_app.send.call_args_list[0][0][0]
+    assert isinstance(first_call_arg, str)

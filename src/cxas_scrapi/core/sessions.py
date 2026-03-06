@@ -4,7 +4,7 @@ import mimetypes
 import base64
 import uuid
 from google.cloud.ces_v1beta import SessionServiceClient, types
-from google.cloud import ces_v1
+from google.cloud import ces_v1beta
 from cxas_scrapi.core.common import Common
 from cxas_scrapi.core.audio_transformer import AudioTransformer
 import logging
@@ -87,8 +87,8 @@ class BidiSessionHandler:
     def _send_silence(self, num_chunks: int):
         silence_chunk = b"\x00" * AUDIO_CHUNK_SIZE
         for _ in range(num_chunks):
-            query_message = ces_v1.BidiSessionClientMessage(
-                realtime_input=ces_v1.SessionInput(audio=silence_chunk)
+            query_message = ces_v1beta.BidiSessionClientMessage(
+                realtime_input=ces_v1beta.SessionInput(audio=silence_chunk)
             )
             query_json = json_format.MessageToJson(
                 query_message._pb, preserving_proto_field_name=False, indent=None
@@ -101,7 +101,7 @@ class BidiSessionHandler:
         text_label = audio_payload.get("text")
         
         if text_label and text_label != "Audio Input":
-            self.outputs.append(ces_v1.SessionOutput({
+            self.outputs.append(ces_v1beta.SessionOutput({
                 "diagnostic_info": {
                     "messages": [
                         {
@@ -119,8 +119,8 @@ class BidiSessionHandler:
         
         for i in range(0, len(audio_bytes), AUDIO_CHUNK_SIZE):
             chunk = audio_bytes[i:i+AUDIO_CHUNK_SIZE]
-            query_message = ces_v1.BidiSessionClientMessage(
-                realtime_input=ces_v1.SessionInput(audio=chunk)
+            query_message = ces_v1beta.BidiSessionClientMessage(
+                realtime_input=ces_v1beta.SessionInput(audio=chunk)
             )
             query_json = json_format.MessageToJson(
                 query_message._pb, preserving_proto_field_name=False, indent=None
@@ -141,8 +141,8 @@ class BidiSessionHandler:
     def _send_inputs(self):
         try:
             logging.debug("Config dict: %s", self.config)
-            config_message = ces_v1.BidiSessionClientMessage(
-                config=ces_v1.SessionConfig(
+            config_message = ces_v1beta.BidiSessionClientMessage(
+                config=ces_v1beta.SessionConfig(
                     session=self.config["session"],
                     input_audio_config=self.config.get("input_audio_config"),
                     output_audio_config=self.config.get("output_audio_config")
@@ -181,13 +181,13 @@ class BidiSessionHandler:
         logging.debug("===============")
         logging.debug("Received message: %s...", message[:100])
         try:
-            response_pb = ces_v1.BidiSessionServerMessage()._pb
+            response_pb = ces_v1beta.BidiSessionServerMessage()._pb
             json_format.Parse(
                 message,
                 response_pb,
                 ignore_unknown_fields=True,
             )
-            response = ces_v1.BidiSessionServerMessage(response_pb)
+            response = ces_v1beta.BidiSessionServerMessage(response_pb)
 
             if response.session_output:
                 self.outputs.append(response.session_output)
@@ -230,7 +230,7 @@ class BidiSessionHandler:
         logging.debug("Waiting for session to complete...")
         wst.join()
 
-        return ces_v1.RunSessionResponse(outputs=self.outputs)
+        return ces_v1beta.RunSessionResponse(outputs=self.outputs)
 
 
 class Sessions(Common):
@@ -486,12 +486,12 @@ class Sessions(Common):
         inputs = []
         
         if modality == Modality.AUDIO:
-            config["input_audio_config"] = input_audio_config or ces_v1.InputAudioConfig(
-                    audio_encoding=ces_v1.AudioEncoding.LINEAR16,
+            config["input_audio_config"] = input_audio_config or ces_v1beta.InputAudioConfig(
+                    audio_encoding=ces_v1beta.AudioEncoding.LINEAR16,
                     sample_rate_hertz=SAMPLE_RATE,
                 )
-            config["output_audio_config"] = output_audio_config or ces_v1.OutputAudioConfig(
-                    audio_encoding=ces_v1.AudioEncoding.LINEAR16,
+            config["output_audio_config"] = output_audio_config or ces_v1beta.OutputAudioConfig(
+                    audio_encoding=ces_v1beta.AudioEncoding.LINEAR16,
                     sample_rate_hertz=SAMPLE_RATE,
                 )
 
