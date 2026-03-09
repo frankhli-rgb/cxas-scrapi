@@ -63,6 +63,7 @@ setup(
         "google-genai",
         "pandas-gbq",
         "google-cloud-bigquery",
+        "pytest",
     ],
     entry_points={
         'console_scripts': [

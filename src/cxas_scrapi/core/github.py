@@ -495,7 +495,6 @@ def init_github_action(args: argparse.Namespace) -> None:
         print(f"Generating requirements.txt at {requirements_path}...")
         with open(requirements_path, "w") as f:
             f.write("# Add your agent dependencies here\n")
-            f.write("cxas-scrapi  # Required for CI/CD workflows\n")
             f.write("# google-cloud-ces  # Uncomment if needed\n")
     else:
         print(f"requirements.txt already exists at {requirements_path}. Skipping generation.")
