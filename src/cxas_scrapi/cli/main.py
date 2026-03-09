@@ -616,6 +616,15 @@ def get_parser() -> argparse.ArgumentParser:
         help="Optional: Override path where the workflow file will be saved. Defaults to .github/workflows/test_{agent_name}.yml",
     )
     parser_init_gh.add_argument(
+        "--project_id",
+        help="Optional: The GCP Project ID (e.g., wire-box).",
+    )
+    parser_init_gh.add_argument(
+        "--location",
+        default="us",
+        help="Optional: The GCP Location (e.g., us). Defaults to us.",
+    )
+    parser_init_gh.add_argument(
         "--branch",
         default="main",
         help="Optional: Target branch for deploy trigger (e.g. main). Defaults to 'main'.",

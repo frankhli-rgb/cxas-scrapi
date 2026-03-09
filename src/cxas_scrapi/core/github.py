@@ -15,6 +15,7 @@ on:
     paths:
       - '{path_filter}/*.yaml'
       - '{path_filter}/*.json'
+  workflow_call:
 
 env:
   PROJECT_ID: "{project_id}"
@@ -48,6 +49,9 @@ jobs:
 
 {setup_gcloud_step}
 
+      - name: Download cxas-scrapi CLI Wheel
+        run: |
+          gsutil cp gs://cxas-scrapi-github/cxas_scrapi-0.1.3-py3-none-any.whl {github_context_path}/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -95,7 +99,12 @@ env:
 {auth_env}
 
 jobs:
+  test-{agent_name_lower}:
+    uses: ./.github/workflows/ci_test_{agent_name_lower}.yml
+    secrets: inherit
+
   deploy-{agent_name_lower}:
+    needs: test-{agent_name_lower}
     runs-on: ubuntu-latest
 
     permissions:
@@ -120,8 +129,8 @@ jobs:
           python -m pip install --upgrade pip
           wget https://storage.googleapis.com/gassets-api-ai/ces-client-libraries/v1beta/ces-v1beta-py.tar
           pip install ces-v1beta-py.tar --quiet
-          gsutil cp gs://cxas-scrapi/dist/cxas_scrapi-0.1.0-py3-none-any.whl .
-          pip install cxas_scrapi-0.1.0-py3-none-any.whl
+          gsutil cp gs://cxas-scrapi-github/cxas_scrapi-0.1.3-py3-none-any.whl .
+          pip install cxas_scrapi-0.1.3-py3-none-any.whl
 
       - name: Deploy to CX Agent Studio
         run: |
@@ -173,7 +182,8 @@ jobs:
           python -m pip install --upgrade pip
           wget https://storage.googleapis.com/gassets-api-ai/ces-client-libraries/v1beta/ces-v1beta-py.tar
           pip install ces-v1beta-py.tar --quiet
-          pip install cxas-scrapi
+          gsutil cp gs://cxas-scrapi-github/cxas_scrapi-0.1.3-py3-none-any.whl .
+          pip install cxas_scrapi-0.1.3-py3-none-any.whl
 
       - name: Run Cleanup
         run: |
@@ -199,11 +209,15 @@ RUN wget https://storage.googleapis.com/gassets-api-ai/ces-client-libraries/v1be
     pip install ces-v1beta-py.tar --quiet && \\
     rm ces-v1beta-py.tar
 
+# Copy the CLI wheel downloaded by GitHub Actions into the container
+COPY cxas_scrapi-*.whl /dist/
+
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 
-# Install dependencies - Cached Layer
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies and local CLI wheel
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install /dist/cxas_scrapi-*.whl
 
 # Copy the agent code into the container
 COPY . .
@@ -240,13 +254,20 @@ def init_github_action(args: argparse.Namespace) -> None:
     if not agent_name:
         agent_name = "agent"
 
+    # Extract project_id and location from app_id if it exists
+    extracted_project = Common._get_project_id(app_id) if app_id else None
+    extracted_location = Common._get_location(app_id) if app_id else None
+
+    project_id = getattr(args, "project_id", None) or extracted_project or "YOUR_PROJECT_ID"
+    location = getattr(args, "location", None) or extracted_location or "global"
+
     if not app_id:
-        # Prompt developer if it's missing entirely from the config and CLI
-        app_id = "projects/YOUR_PROJECT_ID/locations/YOUR_LOCATION/apps/YOUR_APP_ID"
+        app_basename = os.path.basename(os.path.abspath(agent_dir))
+        app_id = f"projects/{project_id}/locations/{location}/apps/{app_basename}"
         print(
             f"Warning: No --app_id provided and could not retrieve 'name' from {app_yaml_path}."
         )
-        print("A placeholder has been injected into the generated workflow.")
+        print(f"Synthesizing app identifier from directory name: {app_id}")
 
     output_path = (
         args.output
@@ -295,10 +316,6 @@ def init_github_action(args: argparse.Namespace) -> None:
     elif not eval_id:
         eval_id = f"{app_id}/evaluations/YOUR_EVAL_ID"
 
-
-    # Extract project_id and location from app_id using core abstractions
-    project_id = Common._get_project_id(app_id) or "YOUR_PROJECT_ID"
-    location = Common._get_location(app_id) or "YOUR_LOCATION"
 
     wip = (
         args.workload_identity_provider
