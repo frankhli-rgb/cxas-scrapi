@@ -15,9 +15,14 @@ import websocket
 import ssl
 import certifi
 from google.protobuf import json_format
+from enum import Enum
 
 
 logger = logging.getLogger(__name__)
+
+class Modality(str, Enum):
+    TEXT = "text"
+    AUDIO = "audio"
 
 BIDI_SESSION_URI = "wss://ces.googleapis.com/ws/google.cloud.ces.v1.SessionService/BidiRunSession/locations/"
 AUDIO_CHUNK_SIZE = 3200
@@ -76,22 +81,8 @@ class BidiSessionHandler:
         self.inputs = inputs
         self.agent_turn_manager = AgentTurnManager()
         self.ws_app = None
+        self.outputs = []
 
-    def _expand_struct(self, pb_struct):
-        try:
-            return json.loads(type(pb_struct).to_json(pb_struct))
-        except Exception:
-            pass
-
-        if hasattr(pb_struct, "items"):
-            res = {}
-            for k, v in pb_struct.items():
-                res[k] = self._expand_struct(v)
-            return res
-        elif hasattr(pb_struct, "__iter__") and not isinstance(pb_struct, str):
-            return [self._expand_struct(item) for item in pb_struct]
-        else:
-            return pb_struct
 
     def _send_silence(self, num_chunks: int):
         silence_chunk = b"\x00" * AUDIO_CHUNK_SIZE
@@ -107,14 +98,24 @@ class BidiSessionHandler:
 
     def _send_audio_message(self, audio_payload: Dict[str, Any], turn_index: int):
         audio_bytes = audio_payload["audio"]
+        text_label = audio_payload.get("text")
+        
+        if text_label and text_label != "Audio Input":
+            self.outputs.append(ces_v1.SessionOutput({
+                "diagnostic_info": {
+                    "messages": [
+                        {
+                            "role": "USER",
+                            "chunks": [{"text": text_label}]
+                        }
+                    ]
+                }
+            }))
         
         logging.debug("Sending leading silence before turn %d...", turn_index)
         self._send_silence(SILENCE_PADDING_CHUNKS)  # 0.3 seconds of leading silence
 
         logging.debug("Sending audio chunks for turn %d...", turn_index)
-        
-        text_label = audio_payload.get("text", "Audio Input")
-        print(f"USER QUERY: {text_label}")
         
         for i in range(0, len(audio_bytes), AUDIO_CHUNK_SIZE):
             chunk = audio_bytes[i:i+AUDIO_CHUNK_SIZE]
@@ -189,34 +190,10 @@ class BidiSessionHandler:
             response = ces_v1.BidiSessionServerMessage(response_pb)
 
             if response.session_output:
+                self.outputs.append(response.session_output)
+
                 if response.session_output.audio:
                     self.agent_turn_manager.add_audio(response.session_output.audio)
-
-                if response.session_output.tool_calls:
-                    for tc in response.session_output.tool_calls.tool_calls:
-                        print(f"TOOL CALL: {tc.tool} -- Args: {self._expand_struct(tc.args)}")
-
-                if response.session_output.text:
-                    print(f"AGENT RESPONSE: {response.session_output.text}")
-
-                if response.session_output.diagnostic_info:
-                    for message in response.session_output.diagnostic_info.messages:
-                        for chunk in message.chunks:
-                            if chunk.tool_call and chunk.tool_call.tool:
-                                print(
-                                    f"TOOL CALL: {chunk.tool_call.tool} -- Args:"
-                                    f" {self._expand_struct(chunk.tool_call.args)}"
-                                )
-                            if chunk.tool_response and chunk.tool_response.tool:
-                                print(
-                                    f"TOOL RESULT: {chunk.tool_response.tool} -- Result:"
-                                    f" {self._expand_struct(chunk.tool_response.response)}"
-                                )
-                            if chunk.agent_transfer and chunk.agent_transfer.target_agent:
-                                print(
-                                    "AGENT TRANSFER: Transferred to"
-                                    f" {(chunk.agent_transfer.target_agent)}"
-                                )
 
                 if response.session_output.turn_completed:
                     logging.debug("Agent turn network payload completed. Waiting for audio playback.")
@@ -253,8 +230,7 @@ class BidiSessionHandler:
         logging.debug("Waiting for session to complete...")
         wst.join()
 
-        # Return a dummy response to satisfy parse_result
-        return types.RunSessionResponse(outputs=[])
+        return ces_v1.RunSessionResponse(outputs=self.outputs)
 
 
 class Sessions(Common):
@@ -297,6 +273,24 @@ class Sessions(Common):
             raw_bytes = f.read()
 
         return {"mime_type": mime_type, "data": raw_bytes}
+
+    @staticmethod
+    def _expand_pb_struct(pb_struct):
+        try:
+            return json.loads(json_format.MessageToJson(pb_struct))
+        except Exception:
+            pass
+        
+        if hasattr(pb_struct, "items"):
+            res = {}
+            for k, v in pb_struct.items():
+                res[k] = Sessions._expand_pb_struct(v)
+            return res
+        elif hasattr(pb_struct, "__iter__") and not isinstance(pb_struct, str):
+            return [Sessions._expand_pb_struct(item) for item in pb_struct]
+        else:
+            return pb_struct
+
 
     def parse_result(self, res: Any):
         """
@@ -343,8 +337,10 @@ class Sessions(Common):
 
                         if chunk_type == "text":
                             if role.lower() == "user":
+                                logging.debug(f"USER QUERY: {chunk.text}")
                                 display(HTML(f"{query_font} {chunk.text}"))
                             else:
+                                logging.debug(f"AGENT RESPONSE: [{role}] {chunk.text}")
                                 display(
                                     HTML(
                                         f"{response_font} [{role}] {chunk.text}"
@@ -354,23 +350,28 @@ class Sessions(Common):
                         elif chunk_type == "tool_call":
                             tc = chunk.tool_call
                             tool_name = tc.tool or tc.display_name
+                            expanded_args = Sessions._expand_pb_struct(tc.args)
+                            logging.debug(f"TOOL CALL: [{role}] {tool_name} -- Args: {expanded_args}")
                             display(
                                 HTML(
-                                    f"{tool_call_font} [{role}] {tool_name} -- Args: {tc.args}"
+                                    f"{tool_call_font} [{role}] {tool_name} -- Args: {expanded_args}"
                                 )
                             )
 
                         elif chunk_type == "tool_response":
                             tr = chunk.tool_response
                             tool_name = tr.tool or tr.display_name
+                            expanded_response = Sessions._expand_pb_struct(tr.response)
+                            logging.debug(f"TOOL RESULT: [{role}] {tool_name} -- Result: {expanded_response}")
                             display(
                                 HTML(
-                                    f"{tool_res_font} [{role}] {tool_name} -- Result: {tr.response}"
+                                    f"{tool_res_font} [{role}] {tool_name} -- Result: {expanded_response}"
                                 )
                             )
 
                         elif chunk_type == "agent_transfer":
                             at = chunk.agent_transfer
+                            logging.debug(f"AGENT TRANSFER: [{role}] Transferred to {at.display_name}")
                             display(
                                 HTML(
                                     f"{transfer_font} [{role}] Transferred to {at.display_name}"
@@ -378,6 +379,7 @@ class Sessions(Common):
                             )
 
                         elif chunk_type == "payload":
+                            logging.debug(f"CUSTOM PAYLOAD: [{role}] {chunk.payload}")
                             display(
                                 HTML(
                                     f"<font color='brown'><b>CUSTOM PAYLOAD:</b></font> [{role}] {chunk.payload}"
@@ -388,9 +390,11 @@ class Sessions(Common):
                 # Fallback to high-level outputs if no diagnostic trace is available
                 text = getattr(output, "text", None)
                 if text:
+                    logging.debug(f"AGENT RESPONSE: {text}")
                     display(HTML(f"{response_font} {text}"))
                 payload = getattr(output, "payload", None)
                 if payload:
+                    logging.debug(f"CUSTOM PAYLOAD: {payload}")
                     display(
                         HTML(
                             f"<font color='brown'><b>CUSTOM PAYLOAD:</b></font> {payload}"
@@ -401,9 +405,11 @@ class Sessions(Common):
                 if tool_calls_msg and hasattr(tool_calls_msg, "tool_calls"):
                     for tc in tool_calls_msg.tool_calls:
                         tool_name = tc.tool or tc.display_name
+                        expanded_args = Sessions._expand_pb_struct(tc.args)
+                        logging.debug(f"TOOL CALL: {tool_name} -- Args: {expanded_args}")
                         display(
                             HTML(
-                                f"{tool_call_font} {tool_name} -- Args: {tc.args}"
+                                f"{tool_call_font} {tool_name} -- Args: {expanded_args}"
                             )
                         )
 
@@ -462,9 +468,15 @@ class Sessions(Common):
         restart_session: bool = False,
         deployment_id: Optional[str] = None,
         version_id: Optional[str] = None,
-        modality: str = "text",
+        modality: Modality | str = Modality.TEXT,
     ):
         """Sends inputs to a Conversational Agents Session and returns the response."""
+
+        if isinstance(modality, str):
+            try:
+                modality = Modality(modality.lower())
+            except ValueError:
+                raise ValueError(f"Invalid modality: {modality}. Must be 'text' or 'audio'.")
 
         session_id = self.session_id_setup(
             session_id, restart_session=restart_session
@@ -473,7 +485,7 @@ class Sessions(Common):
         config = {"session": session_id}
         inputs = []
         
-        if modality == "audio":
+        if modality == Modality.AUDIO:
             config["input_audio_config"] = input_audio_config or ces_v1.InputAudioConfig(
                     audio_encoding=ces_v1.AudioEncoding.LINEAR16,
                     sample_rate_hertz=SAMPLE_RATE,
@@ -512,7 +524,7 @@ class Sessions(Common):
         if tool_responses is not None:
             inputs.append({"tool_responses": {"tool_responses": tool_responses}})
         
-        if modality == "audio":
+        if modality == Modality.AUDIO:
             if text is not None:
                 if isinstance(text, str):
                     logger.warning("Single string input for audio modality introduces minor latency before user utterances.")
@@ -538,7 +550,7 @@ class Sessions(Common):
                 return self.async_bidi_run_session(config=config, inputs=batch_inputs)
             else:
                  raise ValueError("Text utterance inputs must be provided for audio modality.")
-        elif modality == "text":
+        elif modality == Modality.TEXT:
             if text is not None and isinstance(text, str):
                 text = [text]
             
