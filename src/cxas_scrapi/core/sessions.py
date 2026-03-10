@@ -4,10 +4,257 @@ import mimetypes
 import base64
 import uuid
 from google.cloud.ces_v1beta import SessionServiceClient, types
+from google.cloud import ces_v1
 from cxas_scrapi.core.common import Common
+from cxas_scrapi.core.audio_transformer import AudioTransformer
 import logging
+import threading
+import time
+import json
+import websocket
+import ssl
+import certifi
+from google.protobuf import json_format
+
 
 logger = logging.getLogger(__name__)
+
+BIDI_SESSION_URI = "wss://ces.googleapis.com/ws/google.cloud.ces.v1.SessionService/BidiRunSession/locations/"
+AUDIO_CHUNK_SIZE = 3200
+CHUNK_DELAY = 0.1
+SILENCE_PADDING_CHUNKS = 3
+SAMPLE_RATE = 16000
+SAMPLE_WIDTH = 2
+
+class AgentTurnManager:
+  """Manages the agent's turn by simulating audio playback time."""
+  def __init__(self, sample_rate: int = SAMPLE_RATE, sample_width: int = SAMPLE_WIDTH):
+    self.sample_rate = sample_rate
+    self.sample_width = sample_width
+    self.bytes_per_second = sample_rate * sample_width
+
+    self.len_audio_bytes_received = 0
+    self.turn_completed_flag = False
+    self.first_audio_received_time = None
+    self.lock = threading.Lock()
+
+  def add_audio(self, audio_bytes: bytes):
+    with self.lock:
+      if self.first_audio_received_time is None:
+        self.first_audio_received_time = time.time()
+      self.len_audio_bytes_received += len(audio_bytes)
+
+  def mark_turn_completed(self):
+    with self.lock:
+      self.turn_completed_flag = True
+
+  def reset(self):
+    with self.lock:
+      self.len_audio_bytes_received = 0
+      self.turn_completed_flag = False
+      self.first_audio_received_time = None
+
+  def is_agent_done_talking(self) -> bool:
+    with self.lock:
+      if not self.turn_completed_flag:
+        return False
+
+      if self.first_audio_received_time is None:
+        return True # Agent didn't send any audio
+
+      audio_duration_seconds = self.len_audio_bytes_received / self.bytes_per_second
+      current_playback_time = time.time() - self.first_audio_received_time
+
+      return current_playback_time >= audio_duration_seconds
+
+class BidiSessionHandler:
+    """Handles the Bidi WebSocket session with the session service."""
+    def __init__(self, location: str, token: str, config: Dict[str, Any], inputs: List[Dict[str, Any]]):
+        self.uri = BIDI_SESSION_URI + location
+        self.token = token
+        self.config = config
+        self.inputs = inputs
+        self.agent_turn_manager = AgentTurnManager()
+        self.ws_app = None
+
+    def _expand_struct(self, pb_struct):
+        try:
+            return json.loads(type(pb_struct).to_json(pb_struct))
+        except Exception:
+            pass
+
+        if hasattr(pb_struct, "items"):
+            res = {}
+            for k, v in pb_struct.items():
+                res[k] = self._expand_struct(v)
+            return res
+        elif hasattr(pb_struct, "__iter__") and not isinstance(pb_struct, str):
+            return [self._expand_struct(item) for item in pb_struct]
+        else:
+            return pb_struct
+
+    def _send_silence(self, num_chunks: int):
+        silence_chunk = b"\x00" * AUDIO_CHUNK_SIZE
+        for _ in range(num_chunks):
+            query_message = ces_v1.BidiSessionClientMessage(
+                realtime_input=ces_v1.SessionInput(audio=silence_chunk)
+            )
+            query_json = json_format.MessageToJson(
+                query_message._pb, preserving_proto_field_name=False, indent=None
+            )
+            self.ws_app.send(query_json)
+            time.sleep(CHUNK_DELAY)
+
+    def _send_audio_message(self, audio_payload: Dict[str, Any], turn_index: int):
+        audio_bytes = audio_payload["audio"]
+        
+        logging.debug("Sending leading silence before turn %d...", turn_index)
+        self._send_silence(SILENCE_PADDING_CHUNKS)  # 0.3 seconds of leading silence
+
+        logging.debug("Sending audio chunks for turn %d...", turn_index)
+        
+        text_label = audio_payload.get("text", "Audio Input")
+        print(f"USER QUERY: {text_label}")
+        
+        for i in range(0, len(audio_bytes), AUDIO_CHUNK_SIZE):
+            chunk = audio_bytes[i:i+AUDIO_CHUNK_SIZE]
+            query_message = ces_v1.BidiSessionClientMessage(
+                realtime_input=ces_v1.SessionInput(audio=chunk)
+            )
+            query_json = json_format.MessageToJson(
+                query_message._pb, preserving_proto_field_name=False, indent=None
+            )
+            self.ws_app.send(query_json)
+            time.sleep(CHUNK_DELAY)
+
+        logging.debug("Sending trailing silence for turn %d to trigger endpointing...", turn_index)
+        self._send_silence(SILENCE_PADDING_CHUNKS) # 0.3 seconds of trailing silence
+
+        logging.debug("Waiting for agent to finish turn %d...", turn_index)
+        while not self.agent_turn_manager.is_agent_done_talking():
+            self._send_silence(1)
+
+        self.agent_turn_manager.reset()
+        time.sleep(1) # Small pause between turns
+
+    def _send_inputs(self):
+        try:
+            logging.debug("Config dict: %s", self.config)
+            config_message = ces_v1.BidiSessionClientMessage(
+                config=ces_v1.SessionConfig(
+                    session=self.config["session"],
+                    input_audio_config=self.config.get("input_audio_config"),
+                    output_audio_config=self.config.get("output_audio_config")
+                )
+            )
+            config_json = json_format.MessageToJson(
+                config_message._pb, preserving_proto_field_name=False, indent=None
+            )
+            logging.debug("Sending config: %s", config_json)
+            self.ws_app.send(config_json)
+            
+            if not self.inputs:
+                logging.debug("No inputs provided.")
+                self.ws_app.close()
+                return
+
+            for idx, input_item in enumerate(self.inputs):
+                if "audio" in input_item:
+                    self._send_audio_message(input_item["audio"], idx)
+                    continue
+
+            logging.debug("All inputs sent and turns completed.")
+            time.sleep(1)  # arbitrary short wait before disconnecting
+            self.ws_app.close()
+
+        except Exception as e:
+            logging.debug("Error during send_inputs: %s", e)
+            if self.ws_app:
+                self.ws_app.close()
+
+    def _on_open(self, ws):
+        logging.debug("WebSocket connection opened")
+        threading.Thread(target=self._send_inputs, daemon=True).start()
+
+    def _on_message(self, ws, message):
+        logging.debug("===============")
+        logging.debug("Received message: %s...", message[:100])
+        try:
+            response_pb = ces_v1.BidiSessionServerMessage()._pb
+            json_format.Parse(
+                message,
+                response_pb,
+                ignore_unknown_fields=True,
+            )
+            response = ces_v1.BidiSessionServerMessage(response_pb)
+
+            if response.session_output:
+                if response.session_output.audio:
+                    self.agent_turn_manager.add_audio(response.session_output.audio)
+
+                if response.session_output.tool_calls:
+                    for tc in response.session_output.tool_calls.tool_calls:
+                        print(f"TOOL CALL: {tc.tool} -- Args: {self._expand_struct(tc.args)}")
+
+                if response.session_output.text:
+                    print(f"AGENT RESPONSE: {response.session_output.text}")
+
+                if response.session_output.diagnostic_info:
+                    for message in response.session_output.diagnostic_info.messages:
+                        for chunk in message.chunks:
+                            if chunk.tool_call and chunk.tool_call.tool:
+                                print(
+                                    f"TOOL CALL: {chunk.tool_call.tool} -- Args:"
+                                    f" {self._expand_struct(chunk.tool_call.args)}"
+                                )
+                            if chunk.tool_response and chunk.tool_response.tool:
+                                print(
+                                    f"TOOL RESULT: {chunk.tool_response.tool} -- Result:"
+                                    f" {self._expand_struct(chunk.tool_response.response)}"
+                                )
+                            if chunk.agent_transfer and chunk.agent_transfer.target_agent:
+                                print(
+                                    "AGENT TRANSFER: Transferred to"
+                                    f" {(chunk.agent_transfer.target_agent)}"
+                                )
+
+                if response.session_output.turn_completed:
+                    logging.debug("Agent turn network payload completed. Waiting for audio playback.")
+                    self.agent_turn_manager.mark_turn_completed()
+
+        except Exception as e:
+            logging.debug("Failed to parse message: %s", e)
+
+    def _on_error(self, ws, error):
+        logging.debug("WebSocket error: %s", error)
+
+    def _on_close(self, ws, close_status_code, close_msg):
+        logging.debug(
+            "WebSocket connection closed with code %s and reason: %s",
+            close_status_code,
+            close_msg,
+        )
+
+    def run(self):
+        logging.debug("Connecting to WebSocket: %s", self.uri)
+        self.ws_app = websocket.WebSocketApp(
+            self.uri,
+            header={"Authorization": f"Bearer {self.token}"},
+            on_open=self._on_open,
+            on_message=self._on_message,
+            on_error=self._on_error,
+            on_close=self._on_close,
+        )
+
+        wst = threading.Thread(target=self.ws_app.run_forever, kwargs={"sslopt": {"ca_certs": certifi.where()}})
+        wst.daemon = True
+        wst.start()
+
+        logging.debug("Waiting for session to complete...")
+        wst.join()
+
+        # Return a dummy response to satisfy parse_result
+        return types.RunSessionResponse(outputs=[])
 
 
 class Sessions(Common):
@@ -188,11 +435,20 @@ class Sessions(Common):
             f"Starting new session with Session ID: {self.current_session_id}"
         )
         return self.current_session_id
+    
+    
+    def async_bidi_run_session(self, config: dict, inputs: list[dict[str, Any]]):
+        handler = BidiSessionHandler(self.location, self.token, config, inputs)
+        return handler.run()
+    
+    def make_text_request(self, config: dict, inputs: list[dict[str, Any]]):
+        request = types.RunSessionRequest(config=config, inputs=inputs)
+        return self.client.run_session(request=request)
 
     def run(
         self,
         session_id: str,
-        text: Optional[str] = None,
+        text: Optional[str | list[str]] = None,
         event: Optional[str] = None,
         event_vars: Optional[Dict[str, Any]] = None,
         blob: bytes = None,
@@ -206,6 +462,7 @@ class Sessions(Common):
         restart_session: bool = False,
         deployment_id: Optional[str] = None,
         version_id: Optional[str] = None,
+        modality: str = "text",
     ):
         """Sends inputs to a Conversational Agents Session and returns the response."""
 
@@ -213,24 +470,24 @@ class Sessions(Common):
             session_id, restart_session=restart_session
         )
 
-        # Construct SessionConfig
         config = {"session": session_id}
-        if input_audio_config:
-            config["input_audio_config"] = input_audio_config
-        if output_audio_config:
-            config["output_audio_config"] = output_audio_config
+        inputs = []
+        
+        if modality == "audio":
+            config["input_audio_config"] = input_audio_config or ces_v1.InputAudioConfig(
+                    audio_encoding=ces_v1.AudioEncoding.LINEAR16,
+                    sample_rate_hertz=SAMPLE_RATE,
+                )
+            config["output_audio_config"] = output_audio_config or ces_v1.OutputAudioConfig(
+                    audio_encoding=ces_v1.AudioEncoding.LINEAR16,
+                    sample_rate_hertz=SAMPLE_RATE,
+                )
 
         # Determine deployment/version
         if deployment_id:
             config["deployment"] = deployment_id
         if version_id:
             config["app_version"] = version_id
-
-        # Construct SessionInputs based on user args
-        inputs = []
-
-        if text is not None:
-            inputs.append({"text": text})
 
         if variables is not None:
             inputs.append({"variables": variables})
@@ -253,13 +510,68 @@ class Sessions(Common):
 
         # Wrap tool responses correctly
         if tool_responses is not None:
-            inputs.append(
-                {"tool_responses": {"tool_responses": tool_responses}}
-            )
+            inputs.append({"tool_responses": {"tool_responses": tool_responses}})
+        
+        if modality == "audio":
+            if text is not None:
+                if isinstance(text, str):
+                    logger.warning("Single string input for audio modality introduces minor latency before user utterances.")
+                    text = [text]
+                audio_transformer = AudioTransformer()
+                input_audio_bytes = []
+                for input in text:
+                    input_audio_bytes.append(
+                      audio_transformer.text_to_speech_bytes(
+                        text=input,
+                        credentials=self.creds,
+                        project_id=self.project_id
+                      )
+                    )
+                batch_inputs = []
+                for input_data in input_audio_bytes:
+                    # Construct input payload matching sessions.py expectation
+                    audio_payload = {
+                        "audio": input_data["audio_bytes"],
+                        "text": input_data["text"]
+                    }
+                    batch_inputs.append({"audio": audio_payload})
+                return self.async_bidi_run_session(config=config, inputs=batch_inputs)
+            else:
+                 raise ValueError("Text utterance inputs must be provided for audio modality.")
+        elif modality == "text":
+            if text is not None and isinstance(text, str):
+                text = [text]
+            
+            all_outputs = []
+            final_response = None
+            
+            if text:
+                for input in text:
+                    inputs.append({"text": input})
+                    response = self.make_text_request(config, inputs)
+                    inputs.pop()
+                    
+                    if response:
+                        if hasattr(response, "outputs"):
+                             all_outputs.extend(response.outputs)
+                        final_response = response
+            elif inputs:
+                # Handle case where only event/blob/variables are provided without text
+                response = self.make_text_request(config, inputs)
+                if response:
+                    if hasattr(response, "outputs"):
+                         all_outputs.extend(response.outputs)
+                    final_response = response
+            else:
+                 raise ValueError("Text or valid inputs (e.g. event) must be provided.")
 
-        request = types.RunSessionRequest(config=config, inputs=inputs)
-
-        return self.client.run_session(request=request)
+            if final_response:
+                return types.RunSessionResponse(outputs=all_outputs)
+            return final_response
+        else:
+            if text is None and not inputs:
+                 raise ValueError("Text or inputs must be provided.")
+            raise ValueError("Modality must be either 'text' or 'audio'.")
 
     def send_event(
         self, unique_id: str, event_name: str, event_vars: Dict[str, Any]
