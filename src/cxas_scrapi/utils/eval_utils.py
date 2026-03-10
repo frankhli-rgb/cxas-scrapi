@@ -107,7 +107,7 @@ class EvalUtils(Evaluations):
     @staticmethod
     def _extract_tool_call_args(tool_call: Dict[str, Any]) -> Dict[str, Any]:
         """Extracts tool arguments from various possible alias keys."""
-        for key in ["input_action_parameters", "args", "arguments"]:
+        for key in ["args", "arguments"]:
             if key in tool_call:
                 return tool_call[key]
         return {}
