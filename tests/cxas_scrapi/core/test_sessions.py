@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from cxas_scrapi.core.sessions import Sessions
+from cxas_scrapi.core.sessions import Sessions, Modality
 from google.cloud.ces_v1beta import types
 import os
 import sys
@@ -215,7 +215,7 @@ def test_run_session_audio_modality_text_inputs(mock_async_run, mock_client_cls)
         sessions.run(
             session_id="s1",
             text=["Hello", "World"],
-            modality="audio"
+            modality=Modality.AUDIO
         )
         
         mock_async_run.assert_called_once()
@@ -250,7 +250,7 @@ def test_run_session_text_multi_inputs_aggregation(mock_client_cls, mock_types):
     res = sessions.run(
         session_id="s1",
         text=["Input 1", "Input 2"],
-        modality="text"
+        modality=Modality.TEXT
     )
 
     # Verify run_session was called twice
