@@ -32,13 +32,15 @@ class Apps(Common):
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
-        scope: List[str] = None, **kwargs
+        scope: List[str] = None,
+        **kwargs,
     ):
         super().__init__(
             creds_path=creds_path,
             creds_dict=creds_dict,
             creds=creds,
-            scope=scope, **kwargs
+            scope=scope,
+            **kwargs,
         )
         self.project_id = project_id
         self.location = location
@@ -83,10 +85,12 @@ class Apps(Common):
         """Get CX Agent Studio App by its human readable display name.
 
         Args:
-            display_name: human-readable display name of CX Agent Studio App as string.
+            display_name: human-readable display name of CX Agent Studio App as
+            a string.
 
         Returns:
-            CX Agent Studio App resource object. If no app is found, returns None.
+            CX Agent Studio App resource object. If no app is found,
+            returns None.
         """
         apps_list = self.list_apps()
 
@@ -132,7 +136,8 @@ class Apps(Common):
         request = types.CreateAppRequest(
             parent=self.parent, app=app, app_id=app_id
         )
-        return self.client.create_app(request=request)
+        operation = self.client.create_app(request=request)
+        return operation.result()
 
     def update_app(self, app_id: str, **kwargs) -> types.App:
         """Updates specific fields of an existing App."""
@@ -150,7 +155,7 @@ class Apps(Common):
 
     def delete_app(self, app_id: str, force: bool = False) -> None:
         """Deletes a specific app."""
-        request = types.DeleteAppRequest(name=app_id, force=force)
+        request = types.DeleteAppRequest(name=app_id)
         self.client.delete_app(request=request)
 
     def export_app(
@@ -159,7 +164,7 @@ class Apps(Common):
         gcs_uri: str = None,
         export_format: str = "JSON",
     ) -> Any:
-        # TODO: Fix return type hint to Operation or specific LRO type
+        # Wait for long-running operation to complete.
         """Exports the specified app.
 
         Args:
@@ -167,16 +172,12 @@ class Apps(Common):
             gcs_uri: Optional. The Google Cloud Storage URI to export to.
             export_format: The format to export the app in ('JSON' or 'YAML').
         """
-        # Map string formats to enum
-        # Note: types.ExportAppRequest.ExportFormat might be an enum, strictly speaking.
-        # But SDK usually accepts string/int if compatible.
-        # Inspecting types usually reveals enum values.
-        # Assuming defaults for now, or passing as kwargs if strict typing issues arise.
+        # Verify and set export_format as accepted string/enum type.
 
         request = types.ExportAppRequest(
             name=app_id,
             gcs_uri=gcs_uri if gcs_uri else None,
-            export_format=export_format,  # defaults to JSON if not passed, but we pass it.
+            export_format=export_format,
         )
         return self.client.export_app(request=request)
 
@@ -184,16 +185,29 @@ class Apps(Common):
         self,
         app_content: bytes,
         display_name: str,
+        app_id: str = None,
     ) -> Any:
         """Imports an app into the specified project and location.
 
         Args:
             app_content: The raw bytes of the zip archive of the app.
             display_name: The display name for the new app.
+            app_id: Optional. Target App ID to explicitly overwrite.
         """
-        request = types.ImportAppRequest(
-            parent=self.parent,
-            app_content=app_content,
-            display_name=display_name,
-        )
+        request_kwargs = {
+            "parent": self.parent,
+            "app_content": app_content,
+        }
+        if app_id:
+            # Require conflict resolution (1 = REPLACE) when overwriting an exi
+            request_kwargs["app_id"] = app_id
+            request_kwargs["import_options"] = (
+                types.ImportAppRequest.ImportOptions(
+                    conflict_resolution_strategy=1
+                )
+            )
+        else:
+            request_kwargs["display_name"] = display_name
+
+        request = types.ImportAppRequest(**request_kwargs)
         return self.client.import_app(request=request)

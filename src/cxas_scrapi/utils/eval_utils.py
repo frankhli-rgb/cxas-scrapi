@@ -842,7 +842,7 @@ class EvalUtils(Evaluations):
         if_exists: str = "append",
     ):
         """Exports a pandas DataFrame to a Google BigQuery table."""
-        target_project = project_id or self._get_project_id(self.app_id)
+        target_project = project_id or self.get_project_id(self.app_id)
         df.to_gbq(
             destination_table=dataset_table,
             project_id=target_project,

@@ -46,7 +46,7 @@ class Evaluations(Common):
         self.app_id = app_id
 
         # Parse project and location from app_id using Common helpers
-        self.project_id = self._get_project_id(app_id)
+        self.project_id = self.get_project_id(app_id)
         self.location = self._get_location(app_id)
 
         # Initialize SDK Client
