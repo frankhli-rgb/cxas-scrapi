@@ -890,7 +890,35 @@ class EvalUtils(Evaluations):
                 "YAML '%s' is an Evaluation resource. Returning as is.",
                 yaml_file_path,
             )
+            data["golden"]["evaluationExpectations"] = self._process_conversation_expectations(
+                data["golden"].get("evaluationExpectations", [])
+            )
             return data
+
+        # Case 1b: Direct Export format (has 'turns', 'expectations', 'mocks')
+        if "turns" in data and ("expectations" in data or "mocks" in data):
+            logger.info(
+                "YAML '%s' is a direct export format. Wrapping in Evaluation structure.",
+                yaml_file_path,
+            )
+            # Process turns using the same logic as datasets for consistency
+            json_turns = []
+            for t in data["turns"]:
+                # Wrap each turn item in a list-like dict for _process_dataset_turn
+                result = self._process_dataset_turn(
+                    t, session_params={}, params_injected=True
+                )
+                json_turns.append({"steps": result["steps"]})
+
+            return {
+                "displayName": data.get("name", "Imported_Eval"),
+                "golden": {
+                    "turns": json_turns,
+                    "evaluationExpectations": self._process_conversation_expectations(
+                        data.get("expectations", [])
+                    ),
+                },
+            }
 
         # Case 2: Dataset with 'conversations' list
         logger.info(
@@ -933,33 +961,9 @@ class EvalUtils(Evaluations):
             params_injected = result["params_injected"]
 
         # Handle conversation level expectations.
-        eval_expectations = []
-        for exp in conversation.get("expectations", []):
-            if isinstance(exp, str):
-                # If it's just a string, it's an LLM prompt. Create a resource.
-                res_name = (
-                    self.eval_client.find_or_create_evaluation_expectation(
-                        llm_prompt=exp
-                    )
-                )
-                eval_expectations.append({"expectation": res_name})
-            elif isinstance(exp, dict):
-                # If it's a dict, it might have a displayName or just prompt
-                prompt = exp.get("prompt") or exp.get("llm_prompt")
-                display_name = exp.get("displayName") or exp.get("display_name")
-
-                if prompt:
-                    res_name = (
-                        self.eval_client.find_or_create_evaluation_expectation(
-                            llm_prompt=prompt, display_name=display_name
-                        )
-                    )
-                    eval_expectations.append({"expectation": res_name})
-                else:
-                    # Fallback for other dict formats if any
-                    eval_expectations.append(exp)
-            else:
-                eval_expectations.append(exp)
+        eval_expectations = self._process_conversation_expectations(
+            conversation.get("expectations", [])
+        )
 
         return {
             "displayName": display_name,
@@ -969,6 +973,36 @@ class EvalUtils(Evaluations):
                 "evaluationExpectations": eval_expectations,
             },
         }
+
+    def _process_conversation_expectations(self, expectations: List[Any]) -> List[str]:
+        """Processes a list of expectations, resolving strings to resource names."""
+        processed_expectations = []
+        for exp in expectations:
+            if isinstance(exp, str):
+                # If it's just a string, it's an LLM prompt. Create a resource.
+                res_name = self.eval_client.find_or_create_evaluation_expectation(
+                    llm_prompt=exp
+                )
+                processed_expectations.append(res_name)
+            elif isinstance(exp, dict):
+                # If it's a dict, it might have a displayName or just prompt
+                prompt = exp.get("prompt") or exp.get("llm_prompt")
+                display_name = exp.get("displayName") or exp.get("display_name")
+
+                if prompt:
+                    res_name = self.eval_client.find_or_create_evaluation_expectation(
+                        llm_prompt=prompt, display_name=display_name
+                    )
+                    processed_expectations.append(res_name)
+                elif display_name:
+                    # If only displayName is present, it might be an existing resource name
+                    processed_expectations.append(display_name)
+                else:
+                    # Fallback for other dict formats if any
+                    processed_expectations.append(str(exp))
+            else:
+                processed_expectations.append(str(exp))
+        return processed_expectations
 
     def create_and_run_evaluation_from_yaml(
         self,
