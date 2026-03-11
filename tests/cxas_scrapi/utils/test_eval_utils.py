@@ -198,7 +198,7 @@ def test_process_dataset_turn_with_tool_mapping():
         "tool_calls": [
             {
                 "action": "my_tool",
-                "input_action_parameters": {"arg1": "val1"},
+                "args": {"arg1": "val1"},
                 "output": "res1",
             }
         ],
