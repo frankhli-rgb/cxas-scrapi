@@ -23,6 +23,8 @@ import os
 import logging
 import uuid
 
+from cxas_scrapi.core.common import Common
+
 import pandas as pd
 import yaml
 from google.protobuf.json_format import MessageToDict
@@ -884,124 +886,106 @@ class EvalUtils(Evaluations):
         if not data:
             return None
 
-        # Case 1: Exported Evaluation resources (has 'displayName' and 'golden')
-        if "displayName" in data and "golden" in data:
-            logger.info(
-                "YAML '%s' is an Evaluation resource. Returning as is.",
-                yaml_file_path,
-            )
-            data["golden"]["evaluationExpectations"] = self._process_conversation_expectations(
-                data["golden"].get("evaluationExpectations", [])
-            )
-            return data
+        base_dir = os.path.dirname(yaml_file_path)
 
-        # Case 1b: Direct Export format (has 'turns', 'expectations', 'mocks')
-        if "turns" in data and ("expectations" in data or "mocks" in data):
-            logger.info(
-                "YAML '%s' is a direct export format. Wrapping in Evaluation structure.",
-                yaml_file_path,
-            )
-            # Process turns using the same logic as datasets for consistency
+        # Handle Dataset format (list of conversations) - pick the first one
+        if "conversations" in data and isinstance(data["conversations"], list):
+            logger.info("Picking first conversation from dataset: %s", yaml_file_path)
+            common_params = data.get("common_session_parameters", {})
+            conversation = data["conversations"][0]
+            
+            # Merge session parameters
+            session_params = common_params.copy()
+            session_params.update(conversation.get("session_parameters", {}))
+            
+            # Extract basic info
+            display_name = conversation.get("conversation", "Imported_Eval")
+            tags = conversation.get("tags") or []
+            if isinstance(tags, str):
+                tags = [t.strip() for t in tags.split(",")]
+            
+            # Process turns
             json_turns = []
-            for t in data["turns"]:
-                # Wrap each turn item in a list-like dict for _process_dataset_turn
-                result = self._process_dataset_turn(
-                    t, session_params={}, params_injected=True
-                )
+            params_injected = False
+            for turn in conversation.get("turns", []):
+                result = self._process_dataset_turn(turn, session_params, params_injected)
                 json_turns.append({"steps": result["steps"]})
+                params_injected = result["params_injected"]
+            
+            expectations = conversation.get("expectations", [])
+        
+        # Handle Evaluation Resource or Direct Export format
+        else:
+            display_name = data.get("displayName") or data.get("name") or "Imported_Eval"
+            tags = data.get("tags") or []
+            if isinstance(tags, str):
+                tags = [t.strip() for t in tags.split(",")]
+            
+            golden = data.get("golden", data)
+            json_turns = []
+            
+            # If turns are already in JSON proto format (Case 1)
+            if "turns" in golden and golden["turns"] and "steps" in golden["turns"][0]:
+                json_turns = golden["turns"]
+            # Otherwise process raw YAML turns (Case 1b)
+            elif "turns" in golden:
+                for t in golden["turns"]:
+                    result = self._process_dataset_turn(t, session_params={}, params_injected=True)
+                    json_turns.append({"steps": result["steps"]})
+            
+            expectations = golden.get("evaluationExpectations") or data.get("expectations") or []
 
-            return {
-                "displayName": data.get("name", "Imported_Eval"),
-                "golden": {
-                    "turns": json_turns,
-                    "evaluationExpectations": self._process_conversation_expectations(
-                        data.get("expectations", [])
-                    ),
-                },
-            }
-
-        # Case 2: Dataset with 'conversations' list
-        logger.info(
-            "YAML '%s' is a conversation dataset. Processing first conversation.",
-            yaml_file_path,
-        )
-        common_params = data.get("common_session_parameters", {})
-        conversations_list = data.get("conversations", [])
-
-        if not conversations_list:
-            logger.error(
-                "YAML '%s' contains no 'conversations'.", yaml_file_path
-            )
-            return None
-
-        # Process only the first conversation from the list
-        conversation = conversations_list[0]
-        conversation_tags = conversation.get("tags") or []
-        if isinstance(conversation_tags, str):
-            conversation_tags = conversation_tags.split(",")
-
-        if not isinstance(conversation_tags, list):
-            raise ValueError(
-                f"Tags must be list or string. Got {type(conversation_tags)}"
-            )
-
-        conversation_tags = [str(t).strip() for t in conversation_tags]
-        display_name = conversation.get("conversation", "Unknown Conversation")
-
-        session_params = common_params.copy()
-        session_params.update(conversation.get("session_parameters", {}))
-        params_injected = False
-        json_turns = []
-
-        for turn in conversation.get("turns", []):
-            result = self._process_dataset_turn(
-                turn, session_params, params_injected
-            )
-            json_turns.append({"steps": result["steps"]})
-            params_injected = result["params_injected"]
-
-        # Handle conversation level expectations.
-        eval_expectations = self._process_conversation_expectations(
-            conversation.get("expectations", [])
-        )
+        # Final processing of expectations (handles side-loading)
+        eval_expectations = self._process_conversation_expectations(expectations, base_dir=base_dir)
 
         return {
             "displayName": display_name,
-            "tags": conversation_tags,
+            "tags": tags,
             "golden": {
                 "turns": json_turns,
                 "evaluationExpectations": eval_expectations,
             },
         }
 
-    def _process_conversation_expectations(self, expectations: List[Any]) -> List[str]:
-        """Processes a list of expectations, resolving strings to resource names."""
+    def _process_conversation_expectations(
+        self, expectations: List[Any], base_dir: Optional[str] = None
+    ) -> List[str]:
+        """Processes a list of conversation expectations, resolving prompt to resource names.
+
+        If a string expectation matches a local 'evaluationExpectations/*.json'
+        file, it resolves the prompt from that file first.
+        """
         processed_expectations = []
         for exp in expectations:
             if isinstance(exp, str):
-                # If it's just a string, it's an LLM prompt. Create a resource.
+                # Proactive side-loading: If it's a raw prompt and we have a base_dir,
+                # ensure it's saved to the local filesystem in FDE format.
+                if base_dir and not exp.startswith("projects/"):
+                    try:
+                        exp_id = Common.sanitize_expectation_id(exp)
+                        eval_exp_dir = os.path.join(base_dir, "evaluationExpectations")
+                        os.makedirs(eval_exp_dir, exist_ok=True)
+                        
+                        exp_filename = os.path.join(eval_exp_dir, f"{exp_id}.json")
+                        if not os.path.exists(exp_filename):
+                            exp_content = {
+                                "displayName": exp_id,
+                                "llmCriteria": {"prompt": exp},
+                            }
+                            with open(exp_filename, "w", encoding="utf-8") as f:
+                                json.dump(exp_content, f, indent=2)
+                            logger.info("Auto-sideloaded expectation to %s", exp_filename)
+                    except Exception as e:
+                        logger.warning("Failed to auto-sideload expectation: %s", e)
+
+                # Find or create resource from prompt
                 res_name = self.eval_client.find_or_create_evaluation_expectation(
                     llm_prompt=exp
                 )
                 processed_expectations.append(res_name)
-            elif isinstance(exp, dict):
-                # If it's a dict, it might have a displayName or just prompt
-                prompt = exp.get("prompt") or exp.get("llm_prompt")
-                display_name = exp.get("displayName") or exp.get("display_name")
-
-                if prompt:
-                    res_name = self.eval_client.find_or_create_evaluation_expectation(
-                        llm_prompt=prompt, display_name=display_name
-                    )
-                    processed_expectations.append(res_name)
-                elif display_name:
-                    # If only displayName is present, it might be an existing resource name
-                    processed_expectations.append(display_name)
-                else:
-                    # Fallback for other dict formats if any
-                    processed_expectations.append(str(exp))
             else:
-                processed_expectations.append(str(exp))
+                # Handle non-string expectations by skipping or logging
+                logger.warning("Skipping non-string expectation: %s", exp)
         return processed_expectations
 
     def create_and_run_evaluation_from_yaml(

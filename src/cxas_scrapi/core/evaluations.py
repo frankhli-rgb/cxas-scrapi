@@ -18,7 +18,9 @@ from typing import Dict, Any, Optional, List, Union
 import uuid
 import json
 import hashlib
+import os
 import requests
+from enum import Enum
 from google.protobuf import field_mask_pb2
 from google.protobuf import json_format
 from google.cloud.ces_v1beta import (
@@ -30,6 +32,11 @@ import yaml
 from cxas_scrapi.core.common import Common
 from cxas_scrapi.core.tools import Tools
 from cxas_scrapi.core.agents import Agents
+
+
+class ExportFormat(Enum):
+    YAML = "yaml"
+    JSON = "json"
 
 
 class Evaluations(Common):
@@ -74,13 +81,18 @@ class Evaluations(Common):
         if not isinstance(turns, list):
             turns = [turns]
 
-        out_yaml = {
-            "name": eval_dict.get("display_name", "Converted_Eval"),
+        conversation_entry = {
+            "conversation": eval_dict.get("display_name", "Converted_Eval"),
             "turns": [],
             "expectations": [],
             "mocks": [],
         }
+        
+        tags = eval_dict.get("tags", [])
+        if tags:
+            conversation_entry["tags"] = tags
 
+        session_params = {}
         id_to_tool = {}
 
         for turn in turns:
@@ -88,19 +100,24 @@ class Evaluations(Common):
             if not isinstance(steps, list):
                 steps = [steps]
 
+            current_turn = {}
             for step in steps:
                 if "user_input" in step:
                     ui = step["user_input"]
+                    
+                    if "variables" in ui:
+                        session_params.update(ui["variables"])
+                        
                     if "text" in ui:
-                        out_yaml["turns"].append({"user": ui["text"]})
+                        # Whenever we see userInput[text], it's the start of a new turn
+                        if current_turn:
+                            conversation_entry["turns"].append(current_turn)
+                            current_turn = {}
+                        current_turn["user"] = ui["text"]
                     elif "event" in ui:
                         event = ui["event"]
-                        if isinstance(event, dict) and "event" in event:
-                            out_yaml["turns"].append(
-                                {"user_event": event["event"]}
-                            )
-                        else:
-                            out_yaml["turns"].append({"user_event": str(event)})
+                        event_str = event.get("event", str(event)) if isinstance(event, dict) else str(event)
+                        current_turn["user_event"] = event_str
 
                 if "expectation" in step:
                     exp = step["expectation"]
@@ -112,44 +129,71 @@ class Evaluations(Common):
                         text = " ".join(
                             [c.get("text", "") for c in chunks if "text" in c]
                         )
-                        out_yaml["turns"].append({"agent": text})
+                        # If we already have an agent response, start a new turn entry
+                        if "agent" in current_turn:
+                            conversation_entry["turns"].append(current_turn)
+                            current_turn = {}
+                        current_turn["agent"] = text
 
                     if "agent_transfer" in exp:
                         at = exp["agent_transfer"]
-                        out_yaml["expectations"].append(
-                            f"AGENT_TRANSFER: {at.get('display_name', '')}"
-                        )
+                        target_agent = at.get("target_agent", "")
+                        if "tool_calls" not in current_turn:
+                            current_turn["tool_calls"] = []
+                        current_turn["tool_calls"].append({
+                            "action": "transfer_to_agent",
+                            "agent": target_agent
+                        })
 
                     if "tool_call" in exp:
                         tc = exp["tool_call"]
                         args = tc.get("args", {})
                         unwrapped_args = Common.unwrap_struct(args)
-                        display_name = tc.get(
-                            "display_name", tc.get("tool", "")
-                        )
-                        out_yaml["turns"].append(
-                            {
-                                "tool_call": {
-                                    "tool": display_name,
-                                    "args": unwrapped_args,
-                                }
-                            }
-                        )
+                        display_name = tc.get("display_name", tc.get("tool", ""))
+                        
+                        if "tool_calls" not in current_turn:
+                            current_turn["tool_calls"] = []
+                        current_turn["tool_calls"].append({
+                            "action": display_name,
+                            "args": unwrapped_args,
+                        })
                         id_to_tool[tc.get("id", "")] = display_name
 
                     if "tool_response" in exp:
                         tr = exp["tool_response"]
                         res = tr.get("response", {})
                         unwrapped_res = Common.unwrap_struct(res)
-                        tool_name = id_to_tool.get(
-                            tr.get("id", ""), tr.get("tool", "")
-                        )
-
-                        out_yaml["mocks"].append(
+                        tool_name = id_to_tool.get(tr.get("id", ""), tr.get("tool", ""))
+                        conversation_entry["mocks"].append(
                             {"tool": tool_name, "response": unwrapped_res}
                         )
+            
+            # End of source turn: append whatever we have in current_turn
+            if current_turn:
+                conversation_entry["turns"].append(current_turn)
 
-        out_yaml["expectations"] = list(dict.fromkeys(out_yaml["expectations"]))
+        # Include golden evaluation expectations
+        exp_refs = golden.get("evaluation_expectations", [])
+        if not isinstance(exp_refs, list):
+            exp_refs = [exp_refs]
+        conversation_entry["expectations"].extend(exp_refs)
+        conversation_entry["expectations"] = list(dict.fromkeys(conversation_entry["expectations"]))
+
+        if session_params:
+            unwrapped_params = Common.unwrap_struct(session_params)
+            conversation_entry["session_parameters"] = unwrapped_params
+
+        # Handle common session parameters
+        common_session_params = eval_dict.get("session_parameters", {})
+        if not common_session_params:
+            common_session_params = golden.get("session_parameters", {})
+             
+        out_yaml = {}
+        if common_session_params:
+            out_yaml["common_session_parameters"] = Common.unwrap_struct(common_session_params)
+             
+        out_yaml["conversations"] = [conversation_entry]
+        
         return out_yaml
 
     @staticmethod
@@ -408,29 +452,102 @@ class Evaluations(Common):
         return self.client.get_evaluation(request=request)
 
     def export_evaluation(
-        self, evaluation_id: str, output_format: str = "yaml"
+        self,
+        evaluation_id: str,
+        output_format: ExportFormat = ExportFormat.YAML,
+        output_path: Optional[str] = None,
     ) -> str:
         """
         Fetches a specific evaluation and exports it to the specified format.
 
         Args:
             evaluation_id: Full resource name of the evaluation.
-            output_format: Output format ('yaml' or 'json'). Defaults to 'yaml'.
+            output_format: Output format. Defaults to ExportFormat.YAML.
+            output_path: Optional local path to write the exported evaluation.
+                If provided, evaluation expectations are sideloaded as JSON files.
 
         Returns:
             A string containing the formatted output.
         """
+        if isinstance(output_format, str):
+            try:
+                output_format = ExportFormat(output_format.lower())
+            except ValueError:
+                print(f"Warning: Invalid output_format '{output_format}'. Using YAML.")
+                output_format = ExportFormat.YAML
+
         eval_obj = self.get_evaluation(evaluation_id=evaluation_id)
         # Convert the protobuf object to a python dictionary
         eval_dict = type(eval_obj).to_dict(eval_obj)
 
         out_dict = self.eval_dict_to_yaml(eval_dict)
 
-        if output_format.lower() == "json":
-            return json.dumps(out_dict, indent=2)
+        # Resolve expectation resource names to LLM prompts and optionally sideload
+        for conv in out_dict.get("conversations", []):
+            if "expectations" not in conv:
+                continue
 
-        # Dump to YAML string
-        return yaml.dump(out_dict, sort_keys=False, allow_unicode=True)
+            resolved_prompts = []
+            for exp_ref in conv["expectations"]:
+                # Only resolve if it looks like a resource name
+                if "/evaluationExpectations/" in exp_ref:
+                    try:
+                        exp_obj = self.get_evaluation_expectation(exp_ref)
+                        
+                        prompt_text = None
+                        if hasattr(exp_obj, "llm_criteria") and exp_obj.llm_criteria:
+                            prompt_text = getattr(exp_obj.llm_criteria, "prompt", None)
+
+                        if prompt_text:
+                            resolved_prompts.append(prompt_text)
+
+                            # If output_path is provided, sideload as JSON
+                            if output_path:
+                                base_dir = os.path.dirname(output_path)
+                                eval_exp_dir = os.path.join(
+                                    base_dir, "evaluationExpectations"
+                                )
+                                exp_id = Common.sanitize_expectation_id(prompt_text)
+
+                                os.makedirs(eval_exp_dir, exist_ok=True)
+                                exp_filename = os.path.join(
+                                    eval_exp_dir, f"{exp_id}.json"
+                                )
+
+                                exp_content = {
+                                    "displayName": exp_id,
+                                    "llmCriteria": {"prompt": prompt_text},
+                                }
+                                with open(exp_filename, "w", encoding="utf-8") as f:
+                                    json.dump(exp_content, f, indent=2)
+
+                        else:
+                            # Fallback to original ref if nothing extracted
+                            resolved_prompts.append(exp_ref)
+
+                    except Exception as e:
+                        # Fallback to resource name if resolution fails
+                        print(f"Failed to fetch evaluation expectation '{exp_ref}': {e}")
+                        resolved_prompts.append(exp_ref)
+                else:
+                    # Not a resource name, keep as is
+                    resolved_prompts.append(exp_ref)
+
+            conv["expectations"] = resolved_prompts
+
+        if output_format == ExportFormat.JSON:
+            content = json.dumps(out_dict, indent=2)
+        else:
+            # Fallback to YAML for all other formats
+            content = yaml.dump(
+                out_dict, sort_keys=False, allow_unicode=True
+            )
+
+        if output_path:
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+        return content
 
     def create_evaluation(
         self,
@@ -797,14 +914,19 @@ class Evaluations(Common):
 
         return thresholds
 
-    def bulk_export_evals(self, eval_type: str, output_dir: str) -> None:
+    def bulk_export_evals(
+        self,
+        eval_type: str,
+        output_dir: str,
+        output_format: ExportFormat = ExportFormat.YAML,
+    ) -> None:
         """Exports all evaluations of a specific type to a local directory.
         
         Args:
             eval_type: Type of evaluation ('goldens' or 'scenarios').
             output_dir: Local directory path to export files into.
+            output_format: The format to export in (YAML or JSON).
         """
-        import os
 
         print("Fetching evaluations map...")
         evals_map = self.get_evaluations_map(app_id=self.app_id, reverse=True)
@@ -822,25 +944,35 @@ class Evaluations(Common):
         evals_dir = os.path.join(output_dir, "evals")
         os.makedirs(evals_dir, exist_ok=True)
 
-        print(f"Found {len(target_evals)} {eval_type}. Starting export to {evals_dir}...")
+        print(
+            f"Found {len(target_evals)} {eval_type}. "
+            f"Starting export to {evals_dir}..."
+        )
 
         success_count = 0
         for display_name, resource_id in target_evals.items():
             try:
                 # Clean display name to make a safe filename
-                safe_name = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in display_name)
-                file_path = os.path.join(evals_dir, f"{safe_name}.yaml")
+                safe_name = "".join(
+                    c if c.isalnum() or c in ("_", "-") else "_" 
+                    for c in display_name
+                )
+                ext = "json" if output_format == ExportFormat.JSON else "yaml"
+                file_path = os.path.join(evals_dir, f"{safe_name}.{ext}")
 
-                # Export the eval
-                yaml_content = self.export_evaluation(resource_id, output_format="yaml")
+                # Export the eval with sideloading of evaluation expectations.
+                self.export_evaluation(
+                    resource_id, 
+                    output_format=output_format, 
+                    output_path=file_path
+                )
 
-                # Write to file
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(yaml_content)
-
-                print(f"✅ Exported: {safe_name}.yaml")
+                print(f"✅ Exported: {safe_name}.{ext}")
                 success_count += 1
             except Exception as e:
                 print(f"❌ Failed to export '{display_name}': {e}")
 
-        print(f"\nDone! Successfully exported {success_count}/{len(target_evals)} {eval_type}.")
+        print(
+            f"\nDone! Successfully exported "
+            f"{success_count}/{len(target_evals)} {eval_type}."
+        )

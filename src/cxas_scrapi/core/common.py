@@ -16,6 +16,7 @@
 
 import logging
 import re
+import hashlib
 import yaml
 from typing import Dict, List, Optional, Any
 from google.auth import default
@@ -99,6 +100,11 @@ class Common:
     @staticmethod
     def empty_to_list(v: Any) -> Any:
         return v if v is not None else []
+
+    @staticmethod
+    def sanitize_expectation_id(text: str) -> str:
+        """Creates a safe ID from the text (MD5 hash)."""
+        return hashlib.md5(text.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _get_client_options(resource_id: str) -> Dict[str, str]:
@@ -267,8 +273,11 @@ class Common:
 
     @staticmethod
     def unwrap_struct(struct):
+        if not isinstance(struct, dict):
+            return struct
+        
         if "fields" not in struct:
-            return {}
+            return struct
 
         fields = struct["fields"]
         if not isinstance(fields, list):
