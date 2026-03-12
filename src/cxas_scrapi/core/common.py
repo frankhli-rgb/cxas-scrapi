@@ -132,7 +132,7 @@ class Common:
         return {"api_endpoint": api_endpoint}
 
     @staticmethod
-    def _get_project_id(resource_id: str) -> Optional[str]:
+    def get_project_id(resource_id: str) -> Optional[str]:
         """Extract project ID from a resource string."""
         if not resource_id:
             return None

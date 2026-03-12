@@ -43,10 +43,10 @@ def test_client_options():
 
 def test_project_id_extraction():
     assert (
-        Common._get_project_id("projects/test-proj/locations/us/apps/abc")
+        Common.get_project_id("projects/test-proj/locations/us/apps/abc")
         == "test-proj"
     )
-    assert Common._get_project_id("invalid-format") == None
+    assert Common.get_project_id("invalid-format") == None
 
 
 def test_location_extraction():

@@ -1,0 +1,330 @@
+"""CLI subcommands for managing CXAS Apps."""
+
+import argparse
+import logging
+import os
+import shutil
+import sys
+import tempfile
+import zipfile
+import io
+
+from typing import Optional, Any
+
+from cxas_scrapi.core.apps import Apps
+from cxas_scrapi.core.common import Common
+
+logger = logging.getLogger(__name__)
+
+
+def _resolve_app_args(
+    app_identifier: str, args: argparse.Namespace
+) -> tuple[Apps, str, str]:
+    """Resolves project, location, Apps client, app_id, and display_name."""
+    project_id = (
+        Common.get_project_id(app_identifier)
+        if Common.get_project_id(app_identifier)
+        else getattr(args, "project_id", None)
+    )
+    location = (
+        Common._get_location(app_identifier)
+        if Common._get_location(app_identifier)
+        else getattr(args, "location", None)
+    )
+
+    if not project_id or not location:
+        print(
+            "Error: Could not determine project_id or location. Provide "
+            "--project_id and --location if using a display name."
+        )
+        sys.exit(1)
+
+    apps_client = Apps(project_id=project_id, location=location)
+    app_id = app_identifier
+    display_name = app_identifier
+
+    if "projects/" not in app_identifier:
+        app = apps_client.get_app_by_display_name(app_identifier)
+        if app:
+            app_id = app.name
+            display_name = app.display_name
+        else:
+            print(f"App '{app_identifier}' not found.")
+            sys.exit(1)
+
+    return apps_client, app_id, display_name
+
+
+def _handle_import_result(result: Any, success_verb: str) -> Optional[str]:
+    """Helper to wait for import LRO and print success message."""
+    if hasattr(result, "result"):
+        print("Waiting for import to complete...")
+        app = result.result()
+    else:
+        app = result
+
+    app_name = getattr(app, "name", None)
+    if app_name:
+        print(f"Successfully {success_verb}: {app_name}")
+    else:
+        print(f"Successfully {success_verb}.")
+    return app_name
+
+
+def app_pull(args: argparse.Namespace) -> None:
+    """Handles the 'pull' command."""
+    print(f"Pulling app: {args.app}")
+
+    apps_client, app_id, _ = _resolve_app_args(args.app, args)
+
+    try:
+        # Export the app
+        print("Exporting app from CXAS...")
+        lro = apps_client.export_app(app_id=app_id)
+        response = lro.result()
+
+        # Determine the target directory
+        target_dir = args.target_dir if args.target_dir else "."
+        if not os.path.exists(target_dir):
+            os.makedirs(target_dir)
+
+        # Extract content to target directory.
+        with zipfile.ZipFile(io.BytesIO(response.app_content)) as z:
+            z.extractall(target_dir)
+
+        print("Successfully pulled app.")
+
+    except Exception as e:
+        print(f"Failed to pull app: {e}")
+        sys.exit(1)
+
+
+def app_push(args: argparse.Namespace) -> Optional[str]:
+    """Handles the 'push' command."""
+    # We will reuse the deploy_agent logic from main.py, slightly adjusted.
+    agent_dir = args.agent_dir if args.agent_dir else "."
+    print(f"Pushing app from {agent_dir}...")
+
+    temp_dir = tempfile.mkdtemp()
+    inner_dir = os.path.join(temp_dir, "agent")
+    os.makedirs(inner_dir)
+
+    valid_roots = [
+        "app.yaml",
+        "app.json",
+        "global_instruction.txt",
+        "environment.json",
+        "agents",
+        "tools",
+        "examples",
+        "guardrails",
+        "toolsets",
+        "evaluations",
+        "evaluationDatasets",
+        "evaluationExpectations",
+        ".github/workflows",
+    ]
+
+    for item in valid_roots:
+        src_path = os.path.join(agent_dir, item)
+        if os.path.exists(src_path):
+            dst_path = os.path.join(inner_dir, item)
+            os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+            if os.path.isdir(src_path):
+                shutil.copytree(src_path, dst_path)
+            else:
+                shutil.copy2(src_path, dst_path)
+
+    # Zip the filtered agent directory
+    temp_zip = tempfile.mktemp(suffix=".zip")
+    shutil.make_archive(temp_zip.replace(".zip", ""), "zip", temp_dir)
+
+    try:
+        with open(temp_zip, "rb") as f:
+            app_content = f.read()
+
+        target_app = getattr(args, "to", None)
+        app_id_arg = getattr(args, "app_id", None)
+        identifier = target_app or app_id_arg
+
+        if identifier:
+            apps_client, app_id, display_name = _resolve_app_args(
+                identifier, args
+            )
+            print("Pushing to existing app... Overwriting if supported.")
+        else:
+            apps_client = Apps(
+                project_id=args.project_id, location=args.location
+            )
+            app_id = None
+            print("No target specified, using existing name if needed.")
+            display_name = getattr(args, "display_name", None) or "Pushed Agent"
+
+        # If no target is specified, the SDK creates a new app with the
+        # provided display_name.
+        print("Uploading to CES...")
+
+        # In v1beta, setting the app resource name and conflict strategy allows
+        # overwriting an app explicitly. Not all SDK versions support app_id
+        # natively in import.
+        import_kwargs = {
+            "app_content": app_content,
+            "display_name": display_name,
+        }
+
+        # Add app_id to import kwargs if it's there
+        target_app_id = getattr(args, "app_id", None) or app_id
+        if target_app_id:
+            # Extract UUID if full resource name provided.
+            if "apps/" in target_app_id:
+                target_app_id = target_app_id.split("apps/")[-1]
+            import_kwargs["app_id"] = target_app_id
+
+        result = apps_client.import_app(**import_kwargs)
+        return _handle_import_result(
+            result, "pushed to" if target_app else "pushed"
+        )
+
+    except Exception as e:
+        print(f"Failed to push app: {e}")
+        sys.exit(1)
+    finally:
+        if os.path.exists(temp_zip):
+            os.remove(temp_zip)
+
+
+def app_create(args: argparse.Namespace) -> None:
+    """Handles the 'create' command."""
+    print(f"Creating app: {args.name}")
+    apps_client = Apps(project_id=args.project_id, location=args.location)
+    try:
+        app = apps_client.create_app(
+            app_id=args.app_id,
+            display_name=args.name,
+            description=args.description,
+        )
+        print(f"App created successfully: {app.name}")
+    except Exception as e:
+        print(f"Failed to create app: {e}")
+        sys.exit(1)
+
+
+def app_delete(args: argparse.Namespace) -> None:
+    """Handles the 'delete' command."""
+
+    if args.app_id:
+        print(f"Deleting App: {args.app_id}")
+        project_id = Common.get_project_id(args.app_id)
+        location = Common._get_location(args.app_id)
+        app_id = args.app_id
+    elif args.display_name and args.project_id and args.location:
+        print(f"Deleting App by Display Name: {args.display_name}")
+        project_id = args.project_id
+        location = args.location
+        app_id = None
+    else:
+        print(
+            "Error: Must provide either --app_id OR "
+            "(--display_name, --project_id, --location)"
+        )
+        sys.exit(1)
+
+    if not project_id or not location:
+        print("Error: Could not determine project_id or location.")
+        sys.exit(1)
+
+    apps_client = Apps(project_id=project_id, location=location)
+
+    try:
+        if not app_id:
+            # Lookup by display name
+            app = apps_client.get_app_by_display_name(args.display_name)
+            if app:
+                app_id = app.name
+                print(f"Found app ID: {app_id}")
+            else:
+                print(
+                    f"App with display name '{args.display_name}' "
+                    "not found. Nothing to delete."
+                )
+                return
+
+        apps_client.delete_app(app_id=app_id, force=args.force)
+        print(f"Successfully deleted {app_id}")
+    except Exception as e:
+        print(f"Failed to delete app: {e}")
+        sys.exit(1)
+
+
+def app_branch(args: argparse.Namespace) -> None:
+    """Handles the 'branch' command."""
+    print(f"Branching from {args.source} to {args.new_name}")
+    # Composite operation: pull existing, create new, push content.
+
+    apps_client, app_id, _ = _resolve_app_args(args.source, args)
+
+    try:
+        print("Pulling source app...")
+        lro = apps_client.export_app(app_id=app_id)
+        response = lro.result()
+
+        # Import exported content directly into new app.
+        result = apps_client.import_app(
+            app_content=response.app_content,
+            display_name=args.new_name,
+        )
+        _handle_import_result(result, "created branch")
+
+    except Exception as e:
+        print(f"Failed to branch app: {e}")
+        sys.exit(1)
+
+
+def apps_list(args: argparse.Namespace) -> None:
+    """Handles the 'apps list' command."""
+    print(f"Listing apps for project {args.project_id} in {args.location}...")
+    apps_client = Apps(project_id=args.project_id, location=args.location)
+    try:
+        apps = apps_client.list_apps()
+        if not apps:
+            print("No apps found.")
+            return
+
+        # Attempt to format output using pandas if available.
+        try:
+            import pandas as pd
+
+            data = [
+                {"Display Name": app.display_name, "Name": app.name}
+                for app in apps
+            ]
+            df = pd.DataFrame(data)
+            print("\nApps:")
+            print(df.to_string(index=False))
+        except ImportError:
+            for app in apps:
+                print(f"- {app.display_name} ({app.name})")
+
+    except Exception as e:
+        print(f"Failed to list apps: {e}")
+        sys.exit(1)
+
+
+def apps_get(args: argparse.Namespace) -> None:
+    """Handles the 'apps get' command."""
+    print(f"Getting app: {args.app}")
+
+    apps_client, app_id, _ = _resolve_app_args(args.app, args)
+
+    try:
+        app = apps_client.get_app(app_id=app_id)
+        print("\nApp Details:")
+        print(f"Name: {app.name}")
+        print(f"Display Name: {app.display_name}")
+        print(f"Description: {getattr(app, 'description', '')}")
+        print(f"Create Time: {getattr(app, 'create_time', '')}")
+        print(f"Update Time: {getattr(app, 'update_time', '')}")
+        # Note: could dump full JSON if needed.
+    except Exception as e:
+        print(f"Failed to get app details: {e}")
+        sys.exit(1)

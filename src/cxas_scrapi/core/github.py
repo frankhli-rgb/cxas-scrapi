@@ -14,6 +14,7 @@ on:
   pull_request:
     paths:
       - '{path_filter}/*.yaml'
+      - '{path_filter}/*.yml'
       - '{path_filter}/*.json'
   workflow_call:
 
@@ -89,6 +90,7 @@ on:
       - {target_branch}
     paths:
       - '{path_filter}/*.yaml'
+      - '{path_filter}/*.yml'
       - '{path_filter}/*.json'
 
 env:
@@ -97,6 +99,10 @@ env:
   APP_ID: "{app_id}"
   DISPLAY_NAME: "{agent_name}"
 {auth_env}
+
+permissions:
+  contents: 'read'
+  id-token: 'write'
 
 jobs:
   test-{agent_name_lower}:
@@ -134,11 +140,11 @@ jobs:
 
       - name: Deploy to CX Agent Studio
         run: |
-          cxas-eval deploy --agent_dir {github_context_path} \\
-                           --project_id ${{{{ env.PROJECT_ID }}}} \\
-                           --location ${{{{ env.LOCATION }}}} \\
-                           --app_id ${{{{ env.APP_ID }}}} \\
-                           --display_name "${{{{ env.DISPLAY_NAME }}}}"
+          cxas-eval push --agent_dir {github_context_path} \\
+                         --project_id ${{{{ env.PROJECT_ID }}}} \\
+                         --location ${{{{ env.LOCATION }}}} \\
+                         --app_id ${{{{ env.APP_ID }}}} \\
+                         --display_name "${{{{ env.DISPLAY_NAME }}}}"
 """
 
 GITHUB_ACTION_TEMPLATE_CLEANUP = """name: "Cleanup {agent_name}"
@@ -148,6 +154,7 @@ on:
     types: [closed]
     paths:
       - '{path_filter}/*.yaml'
+      - '{path_filter}/*.yml'
       - '{path_filter}/*.json'
 
 env:
@@ -255,7 +262,7 @@ def init_github_action(args: argparse.Namespace) -> None:
         agent_name = "agent"
 
     # Extract project_id and location from app_id if it exists
-    extracted_project = Common._get_project_id(app_id) if app_id else None
+    extracted_project = Common.get_project_id(app_id) if app_id else None
     extracted_location = Common._get_location(app_id) if app_id else None
 
     project_id = getattr(args, "project_id", None) or extracted_project or "YOUR_PROJECT_ID"

@@ -23,7 +23,7 @@ def test_list_apps_mock(mock_client_cls):
     project_id = "mock-project"
     location = "us"
 
-    apps_client = Apps(project_id=project_id, location=location)
+    apps_client = Apps(project_id=project_id, location=location, creds=MagicMock())
     apps = apps_client.list_apps()
 
     assert len(apps) == 1
@@ -50,7 +50,7 @@ def test_get_apps_map(mock_client_cls):
     project_id = "mock-project"
     location = "us"
 
-    apps_client = Apps(project_id=project_id, location=location)
+    apps_client = Apps(project_id=project_id, location=location, creds=MagicMock())
     apps_map = apps_client.get_apps_map()
 
     assert len(apps_map) == 2

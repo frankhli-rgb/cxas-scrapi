@@ -15,13 +15,13 @@
 """CLI script for running CXAS SCRAPI evaluations."""
 
 import argparse
-from typing import Any, Dict, List, Optional
+
 import logging
 import os
-import shutil
 import subprocess
 import sys
-import tempfile
+from typing import Dict, List
+
 import time
 import uuid
 
@@ -34,6 +34,15 @@ from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
 from cxas_scrapi.utils.eval_utils import EvalUtils
 from cxas_scrapi.evals.callback_evals import CallbackEvals
 from cxas_scrapi.evals.tool_evals import ToolEvals
+from cxas_scrapi.cli.app import (
+    app_pull,
+    app_push,
+    app_create,
+    app_branch,
+    apps_list,
+    apps_get,
+    app_delete,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +51,7 @@ def export_eval(args: argparse.Namespace) -> None:
     """Handles the 'export' command."""
 
     print(f"Exporting evaluation: {args.evaluation_id}")
-    # We pass app_id just to initialize the client properly, even though the evaluation ID itself might be the full resource name.
+    # Use app_id to init client. Eval ID might be full resource name.
     eval_client = Evaluations(app_id=args.app_id)
 
     try:
@@ -105,9 +114,11 @@ def wait_for_evaluation_completion(
 
 
 def filter_metrics_and_assess(
-    df_dict_new_run: Dict[str, pd.DataFrame], filter_auto_metrics: bool
+    df_dict_new_run: Dict[str, pd.DataFrame],
+    filter_auto_metrics: bool,
 ) -> bool:
-    """Assesses the evaluation run and returns True if passed, False otherwise."""
+    """Assesses the evaluation run and returns True if passed,
+    False otherwise."""
     passed = True
 
     df_new_run = df_dict_new_run.get("summary", pd.DataFrame())
@@ -125,7 +136,8 @@ def filter_metrics_and_assess(
 
     if filter_auto_metrics:
         print(
-            "\n[Targeted Assessment] Filtering out automated LLM metrics (semantic similarity, hallucination)."
+            "\n[Targeted Assessment] Filtering out automated LLM metrics "
+            "(semantic similarity, hallucination)."
         )
         print("Focusing strictly on custom expectations and tool invocation.")
 
@@ -145,23 +157,27 @@ def filter_metrics_and_assess(
             ]
             if not failed_expectations.empty:
                 print(
-                    f"FAILED: {len(failed_expectations)} custom expectations not met."
+                    f"FAILED: {len(failed_expectations)} custom expectations "
+                    "not met."
                 )
                 for _, row in failed_expectations.iterrows():
                     print(
-                        f"  - Expectation: {row['expectation']} (Met: {row['met_count']}, Not Met: {row['not_met_count']})"
+                        f"  - Expectation: {row['expectation']} "
+                        f"(Met: {row['met_count']}, "
+                        f"Not Met: {row['not_met_count']})"
                     )
                 passed = False
             else:
                 print(
-                    f"PASSED: All {len(expectation_rows)} custom expectations met."
+                    f"PASSED: All {len(expectation_rows)} custom expectations "
+                    "met."
                 )
         else:
             print("WARNING: No custom expectations found in this evaluation.")
-            # Fallback: check basic tool invocation if we want
+            # Fallback: check basic tool execution result limit
 
     else:
-        # Strict overall pass/fail based on the server
+        # Strict overall pass/fail based on the server constraints
         if overall_status != "PASSED":
             passed = False
 
@@ -171,7 +187,10 @@ def filter_metrics_and_assess(
 def run_eval(args: argparse.Namespace) -> None:
     """Handles the 'run' command."""
 
-    print(f"Triggering evaluation: {args.evaluation_id} for App: {args.app_id}")
+    print(
+        f"Triggering evaluation: {args.evaluation_id} "
+        f"for App: {args.app_id}"
+    )
     eval_client = Evaluations(app_id=args.app_id)
     eval_utils = EvalUtils(app_id=args.app_id)
 
@@ -190,7 +209,7 @@ def run_eval(args: argparse.Namespace) -> None:
         )
         print("Evaluation triggered successfully based on CLI call.")
 
-        # Step 3: Wait and Assess
+        # Step 3: Wait and backoff on pending evaluations.
         if args.wait:
             df_new_run = wait_for_evaluation_completion(
                 eval_utils, old_result_ids, args.app_id
@@ -215,7 +234,8 @@ def test_tools(args: argparse.Namespace) -> None:
     """Handles the 'test-tools' command."""
 
     print(
-        f"Running tool tests for App: {args.app_id} using file: {args.test_file}"
+        f"Running tool tests for App: {args.app_id} "
+        f"using file: {args.test_file}"
     )
     tool_evals = ToolEvals(app_id=args.app_id)
 
@@ -269,86 +289,12 @@ def test_callbacks(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def deploy_agent(args: argparse.Namespace) -> None:
-    """Handles the 'deploy' command."""
-
-    print(f"Deploying agent from {args.agent_dir}...")
-
-    agent_dir = args.agent_dir if args.agent_dir else "."
-
-    temp_dir = tempfile.mkdtemp()
-
-    # We must wrap the agent files in a top-level directory inside the zip, otherwise the CES API rejects it
-    inner_dir = os.path.join(temp_dir, "agent")
-    os.makedirs(inner_dir)
-
-    # Valid roots for CX Agent Builder to avoid 400 errors
-    valid_roots = [
-        "app.yaml",
-        "app.json",
-        "global_instruction.txt",
-        "environment.json",
-        "agents",
-        "tools",
-        "examples",
-        "guardrails",
-        "toolsets",
-        "evaluations",
-        "evaluationDatasets",
-        "evaluationExpectations",
-        "workflows",
-    ]
-
-    for item in valid_roots:
-        src_path = os.path.join(agent_dir, item)
-        if os.path.exists(src_path):
-            dst_path = os.path.join(inner_dir, item)
-            if os.path.isdir(src_path):
-                shutil.copytree(src_path, dst_path)
-            else:
-                shutil.copy2(src_path, dst_path)
-
-    # Zip the filtered agent directory
-    temp_zip = tempfile.mktemp(suffix=".zip")
-    shutil.make_archive(temp_zip.replace(".zip", ""), "zip", temp_dir)
-
-    try:
-        with open(temp_zip, "rb") as f:
-            app_content = f.read()
-
-        apps_client = Apps(project_id=args.project_id, location=args.location)
-
-        display_name = (
-            args.display_name if args.display_name else "Deployed Agent"
-        )
-
-        print(f"Uploading generic zip to CES...")
-        result = apps_client.import_app(
-            app_content=app_content,
-            display_name=display_name,
-        )
-
-        if hasattr(result, "result"):
-            print("Waiting for import to complete...")
-            imported_app = result.result()
-            print(f"Agent successfully deployed: {imported_app.name}")
-            return imported_app.name
-        else:
-            print(f"Agent successfully deployed")
-            return getattr(result, "name", None)
-
-    except Exception as e:
-        print(f"Failed to deploy agent: {e}")
-        sys.exit(1)
-    finally:
-        if os.path.exists(temp_zip):
-            os.remove(temp_zip)
-
-
 def ci_test(args: argparse.Namespace) -> None:
     """Handles the 'ci-test' command."""
 
-    print("Starting CI Test Lifecycle...")
+    print(
+        "Starting CI Test Lifecycle..."
+    )
 
     if hasattr(args, "display_name") and args.display_name:
         temp_display_name = args.display_name
@@ -365,7 +311,7 @@ def ci_test(args: argparse.Namespace) -> None:
         print(f"Found existing temp agent: {existing_app.name}. Updating...")
         args.app_id = existing_app.name
 
-    temp_app_name = deploy_agent(args)
+    temp_app_name = app_push(args)
 
     if not temp_app_name:
         print("Failed to get deployed temp app name. CI Test aborting.")
@@ -391,7 +337,7 @@ def ci_test(args: argparse.Namespace) -> None:
                 print("Tool tests failed.")
                 sys.exit(1)
 
-        # We also need to run evaluations using the SDK or CLI
+        # We must evaluate using the API or SDK
         print(f"\\n--- Running Evaluations on {temp_app_name} ---")
 
         evals_client = Evaluations(app_id=temp_app_name)
@@ -423,56 +369,12 @@ def ci_test(args: argparse.Namespace) -> None:
                     sys.exit(1)
 
         print(
-            "\\nCI Test Lifecycle Completed Successfully! Temp agent persists for review."
+            "\\nCI Test Lifecycle Completed Successfully! "
+            "Temp agent persists for review."
         )
 
     except Exception as e:
         print(f"Failed to execute CI Tests: {e}")
-        sys.exit(1)
-
-
-def delete_app(args: argparse.Namespace) -> None:
-    """Handles the 'delete' command."""
-
-    if args.app_id:
-        print(f"Deleting App: {args.app_id}")
-        project_id = Common._get_project_id(args.app_id)
-        location = Common._get_location(args.app_id)
-        app_id = args.app_id
-    elif args.display_name and args.project_id and args.location:
-        print(f"Deleting App by Display Name: {args.display_name}")
-        project_id = args.project_id
-        location = args.location
-        app_id = None
-    else:
-        print(
-            "Error: Must provide either --app_id OR (--display_name, --project_id, --location)"
-        )
-        sys.exit(1)
-
-    if not project_id or not location:
-        print("Error: Could not determine project_id or location.")
-        sys.exit(1)
-
-    apps_client = Apps(project_id=project_id, location=location)
-
-    try:
-        if not app_id:
-            # Lookup by display name
-            app = apps_client.get_app_by_display_name(args.display_name)
-            if app:
-                app_id = app.name
-                print(f"Found app ID: {app_id}")
-            else:
-                print(
-                    f"App with display name '{args.display_name}' not found. Nothing to delete."
-                )
-                return
-
-        apps_client.delete_app(app_id=app_id, force=args.force)
-        print(f"Successfully deleted {app_id}")
-    except Exception as e:
-        print(f"Failed to delete app: {e}")
         sys.exit(1)
 
 
@@ -486,13 +388,13 @@ def local_test(args: argparse.Namespace) -> None:
     tag = f"{agent_name}-local-test"
 
     print(f"Building Docker image for {agent_name}...")
-    # We need to build from the agent_dir
+    # Compilation requires executing from the root agent directory
     build_cmd = ["docker", "build", "-t", tag, agent_dir]
     if subprocess.call(build_cmd) != 0:
         print("Docker build failed.")
         sys.exit(1)
 
-    print(f"Running tests in Docker container...")
+    print("Running tests in Docker container...")
 
     # Detect ADC
     home = os.path.expanduser("~")
@@ -534,7 +436,8 @@ def local_test(args: argparse.Namespace) -> None:
         )
     else:
         print(
-            "Warning: Application Default Credentials not found. Authentication may fail."
+            "Warning: Application Default Credentials not found. "
+            "Authentication may fail."
         )
 
     display_name = f"[Local] {agent_name}"
@@ -568,9 +471,28 @@ def get_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--oauth_token",
-        help="Optional: OAuth token string for CES API authentication. Alternatively, set CXAS_OAUTH_TOKEN env var.",
+        help=(
+            "Optional: OAuth token string for CES API authentication. "
+            "Alternatively, set CXAS_OAUTH_TOKEN env var."
+        ),
         required=False,
     )
+
+    def _add_project_location_args(
+        subparser: argparse.ArgumentParser, required: bool = True
+    ) -> None:
+        """Helper to add standard GCP args to subparsers."""
+        help_suffix = "" if required else " (Optional if using Display Name)"
+        subparser.add_argument(
+            "--project_id",
+            required=required,
+            help=f"The GCP Project ID.{help_suffix}",
+        )
+        subparser.add_argument(
+            "--location",
+            required=required,
+            help=f"The GCP Location (e.g., global, us-central1).{help_suffix}",
+        )
 
     subparsers = parser.add_subparsers(
         title="Commands", dest="command", required=True
@@ -583,25 +505,40 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_init_gh.add_argument(
         "--agent_dir",
-        help="Optional: The path to the agent directory (e.g., 'pilot') to extract app_id and agent_name from app.yaml.",
+        help=(
+            "Optional: The path to the agent directory (e.g., 'pilot') "
+            "to extract app_id and agent_name from app.yaml."
+        ),
     )
     parser_init_gh.add_argument(
         "--app_id",
-        help="Optional: The CXAS App ID (projects/.../locations/.../apps/...). If missing, extracts from agent_dir/app.yaml.",
+        help=(
+            "Optional: The CXAS App ID (projects/.../apps/...). "
+            "If missing, extracts from agent_dir/app.yaml."
+        ),
     )
     parser_init_gh.add_argument(
         "--agent_name",
-        help="Optional: The name of the agent directory to scope the workflow to (e.g., 'pilot').",
+        help=(
+            "Optional: The name of the agent directory to scope the workflow "
+            "to (e.g., 'pilot')."
+        ),
     )
     parser_init_gh.add_argument(
         "--auth_method",
         choices=["wif", "sa_key", "api_key", "oauth_token"],
         default="wif",
-        help="Optional: The auth method to configure in the generated workflow. Defaults to 'wif' (Workload Identity).",
+        help=(
+            "Optional: The auth method to configure in the generated "
+            "workflow. Defaults to 'wif' (Workload Identity)."
+        ),
     )
     parser_init_gh.add_argument(
         "--evaluation_id",
-        help="Optional: The evaluation resource name to run full regression tests.",
+        help=(
+            "Optional: The evaluation resource name to run full "
+            "regression tests."
+        )
     )
     parser_init_gh.add_argument(
         "--workload_identity_provider",
@@ -613,21 +550,21 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_init_gh.add_argument(
         "--output",
-        help="Optional: Override path where the workflow file will be saved. Defaults to .github/workflows/test_{agent_name}.yml",
+        help=(
+            "Optional: Override path where the workflow file will be saved. "
+            "Defaults to .github/workflows/test_{agent_name}.yml"
+        ),
     )
-    parser_init_gh.add_argument(
-        "--project_id",
-        help="Optional: The GCP Project ID (e.g., wire-box).",
-    )
-    parser_init_gh.add_argument(
-        "--location",
-        default="us",
-        help="Optional: The GCP Location (e.g., us). Defaults to us.",
-    )
+
+    _add_project_location_args(parser_init_gh, required=False)
+
     parser_init_gh.add_argument(
         "--branch",
         default="main",
-        help="Optional: Target branch for deploy trigger (e.g. main). Defaults to 'main'.",
+        help=(
+            "Optional: Target branch for deploy trigger (e.g. main). "
+            "Defaults to 'main'."
+        ),
     )
     parser_init_gh.add_argument(
         "--no-cleanup",
@@ -637,12 +574,14 @@ def get_parser() -> argparse.ArgumentParser:
     parser_init_gh.add_argument(
         "--install-hook",
         action="store_true",
-        help="Optional: Install a git pre-push hook to run local-test automatically.",
+        help=(
+            "Optional: Install a git pre-push hook to run local-test "
+            "automatically."
+        ),
     )
 
     parser_init_gh.set_defaults(func=init_github_action)
 
-    # Parser for 'test-tools'
     parser_test_tools = subparsers.add_parser(
         "test-tools",
         help="Run local tool unit tests against the deployed agent.",
@@ -715,7 +654,10 @@ def get_parser() -> argparse.ArgumentParser:
     parser_export.add_argument(
         "--evaluation_id",
         required=True,
-        help="The evaluation resource name (projects/.../locations/.../apps/.../evaluations/...).",
+        help=(
+            "The evaluation resource name "
+            "(projects/.../locations/.../apps/.../evaluations/...)."
+        )
     )
     parser_export.add_argument(
         "--format",
@@ -725,7 +667,10 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_export.add_argument(
         "--output",
-        help="Path to save the exported evaluation. If not provided, prints to stdout.",
+        help=(
+            "Path to save the exported evaluation. "
+            "If not provided, prints to stdout."
+        )
     )
 
     parser_export.set_defaults(func=export_eval)
@@ -742,17 +687,26 @@ def get_parser() -> argparse.ArgumentParser:
     parser_run.add_argument(
         "--evaluation_id",
         required=True,
-        help="The evaluation resource name (projects/.../locations/.../apps/.../evaluations/...).",
+        help=(
+            "The evaluation resource name "
+            "(projects/.../locations/.../apps/.../evaluations/...)."
+        )
     )
     parser_run.add_argument(
         "--wait",
         action="store_true",
-        help="Wait for evaluation to complete and return exit code 0 on pass or 1 on fail.",
+        help=(
+            "Wait for evaluation to complete and return exit code 0 "
+            "on pass or 1 on fail."
+        )
     )
     parser_run.add_argument(
         "--filter-auto-metrics",
         action="store_true",
-        help="Filter out automated metrics (semantic similarity, hallucination) and only evaluate custom expectations.",
+        help=(
+            "Filter out automated metrics (semantic similarity, "
+            "hallucination) and only evaluate custom expectations."
+        ),
     )
 
     parser_run.set_defaults(func=run_eval)
@@ -764,27 +718,27 @@ def get_parser() -> argparse.ArgumentParser:
     parser_deploy.add_argument(
         "--agent_dir",
         default=".",
-        help="Path to the agent directory to deploy. Defaults to current directory.",
+        help=(
+            "Path to the agent directory to deploy. "
+            "Defaults to current directory."
+        ),
     )
-    parser_deploy.add_argument(
-        "--project_id",
-        required=True,
-        help="The GCP Project ID.",
-    )
-    parser_deploy.add_argument(
-        "--location",
-        required=True,
-        help="The GCP Location (e.g., global, us-central1).",
-    )
+    _add_project_location_args(parser_deploy)
     parser_deploy.add_argument(
         "--app_id",
-        help="Optional: Existing app Resource Name to overwrite (e.g. projects/.../apps/...).",
+        help=(
+            "Optional: Existing app Resource Name to overwrite "
+            "(e.g. projects/.../apps/...)."
+        ),
     )
     parser_deploy.add_argument(
         "--display_name",
-        help="Optional: Display name for the newly created app (ignored if --app_id is provided).",
+        help=(
+            "Optional: Display name for the newly created app "
+            "(ignored if --app_id is provided)."
+        ),
     )
-    parser_deploy.set_defaults(func=deploy_agent)
+    parser_deploy.set_defaults(func=app_push)
 
     # Parser for 'ci-test'
     parser_ci_test = subparsers.add_parser(
@@ -793,22 +747,19 @@ def get_parser() -> argparse.ArgumentParser:
     parser_ci_test.add_argument(
         "--agent_dir",
         default=".",
-        help="Path to the agent directory to test. Defaults to current directory.",
+        help=(
+            "Path to the agent directory to test. "
+            "Defaults to current directory."
+        ),
     )
     parser_ci_test.add_argument(
         "--display_name",
-        help="Optional: Deterministic display name for the temp agent (e.g. [CI] PR-123). Overwrites existing.",
+        help=(
+            "Optional: Deterministic display name for the temp agent "
+            "(e.g. [CI] PR-123). Overwrites existing."
+        ),
     )
-    parser_ci_test.add_argument(
-        "--project_id",
-        required=True,
-        help="The GCP Project ID.",
-    )
-    parser_ci_test.add_argument(
-        "--location",
-        required=True,
-        help="The GCP Location (e.g., global, us-central1).",
-    )
+    _add_project_location_args(parser_ci_test)
     parser_ci_test.set_defaults(func=ci_test)
 
     # Parser for 'delete'
@@ -817,26 +768,25 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_delete.add_argument(
         "--app_id",
-        help="The CXAS App ID (projects/.../locations/.../apps/...). Required if --display_name not provided.",
+        help=(
+            "The CXAS App ID (projects/.../locations/.../apps/...). "
+            "Required if --display_name not provided."
+        ),
     )
     parser_delete.add_argument(
         "--display_name",
-        help="The Display Name of the app to delete. Required if --app_id not provided.",
+        help=(
+            "The Display Name of the app to delete. "
+            "Required if --app_id not provided."
+        ),
     )
-    parser_delete.add_argument(
-        "--project_id",
-        help="The GCP Project ID. Required if using --display_name.",
-    )
-    parser_delete.add_argument(
-        "--location",
-        help="The GCP Location. Required if using --display_name.",
-    )
+    _add_project_location_args(parser_delete, required=False)
     parser_delete.add_argument(
         "--force",
         action="store_true",
         help="Force delete even if there are child resources.",
     )
-    parser_delete.set_defaults(func=delete_app)
+    parser_delete.set_defaults(func=app_delete)
 
     # Parser for 'local-test'
     parser_local_test = subparsers.add_parser(
@@ -847,17 +797,83 @@ def get_parser() -> argparse.ArgumentParser:
         default=".",
         help="Path to the agent directory. Defaults to current directory.",
     )
-    parser_local_test.add_argument(
-        "--project_id",
-        required=True,
-        help="The GCP Project ID.",
-    )
-    parser_local_test.add_argument(
-        "--location",
-        required=True,
-        help="The GCP Location.",
-    )
+    _add_project_location_args(parser_local_test)
     parser_local_test.set_defaults(func=local_test)
+
+    # Parser for 'pull'
+    parser_pull = subparsers.add_parser(
+        "pull", help="Export an app to a local directory."
+    )
+    parser_pull.add_argument("app", help="App Resource Name or Display Name.")
+    parser_pull.add_argument(
+        "--target_dir", default=".", help="Directory to extract to."
+    )
+    _add_project_location_args(parser_pull, required=False)
+    parser_pull.set_defaults(func=app_pull)
+
+    # Parser for 'push'
+    parser_push = subparsers.add_parser(
+        "push", help="Import local files back to CXAS."
+    )
+    parser_push.add_argument(
+        "--agent_dir", default=".", help="Local agent directory."
+    )
+    parser_push.add_argument(
+        "--to", help="Target App Resource Name or Display Name."
+    )
+    parser_push.add_argument(
+        "--app_id",
+        help="Target App ID to explicitly push to (v1beta API).",
+    )
+    parser_push.add_argument(
+        "--display_name",
+        help="Display name for a new App if --to is not provided.",
+    )
+    _add_project_location_args(parser_push)
+    parser_push.set_defaults(func=app_push)
+
+    # Parser for 'create'
+    parser_create = subparsers.add_parser("create", help="Create a new app.")
+    parser_create.add_argument("name", help="Display name of the new app.")
+    parser_create.add_argument(
+        "--description", help="Description for the new app."
+    )
+    parser_create.add_argument(
+        "--app_id", help="Optional specific app_id to use."
+    )
+    _add_project_location_args(parser_create)
+    parser_create.set_defaults(func=app_create)
+
+    # Parser for 'branch'
+    parser_branch = subparsers.add_parser(
+        "branch", help="Branch an app (pull -> create -> push)."
+    )
+    parser_branch.add_argument(
+        "source", help="Source App Resource Name or Display Name."
+    )
+    parser_branch.add_argument(
+        "--new_name", required=True, help="Display name of the new branch app."
+    )
+    _add_project_location_args(parser_branch)
+    parser_branch.set_defaults(func=app_branch)
+
+    # Subparsers for 'apps'
+    parser_apps = subparsers.add_parser("apps", help="Manage apps (list, get).")
+    apps_subparsers = parser_apps.add_subparsers(
+        title="Apps Commands", dest="apps_command", required=True
+    )
+
+    parser_apps_list = apps_subparsers.add_parser("list", help="List all apps.")
+    _add_project_location_args(parser_apps_list)
+    parser_apps_list.set_defaults(func=apps_list)
+
+    parser_apps_get = apps_subparsers.add_parser("get", help="Get app details.")
+    parser_apps_get.add_argument(
+        "app",
+        help="App Resource Name or Display Name.",
+    )
+    _add_project_location_args(parser_apps_get, required=False)
+    parser_apps_get.set_defaults(func=apps_get)
 
     return parser
 
