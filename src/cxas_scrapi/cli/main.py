@@ -528,22 +528,7 @@ def get_parser() -> argparse.ArgumentParser:
             "to (e.g., 'pilot')."
         ),
     )
-    parser_init_gh.add_argument(
-        "--auth_method",
-        choices=["wif", "sa_key", "api_key", "oauth_token"],
-        default="wif",
-        help=(
-            "Optional: The auth method to configure in the generated "
-            "workflow. Defaults to 'wif' (Workload Identity)."
-        ),
-    )
-    parser_init_gh.add_argument(
-        "--evaluation_id",
-        help=(
-            "Optional: The evaluation resource name to run full "
-            "regression tests."
-        ),
-    )
+
     parser_init_gh.add_argument(
         "--workload_identity_provider",
         help="Optional: GCP Workload Identity Provider string.",
@@ -582,6 +567,20 @@ def get_parser() -> argparse.ArgumentParser:
             "Optional: Install a git pre-push hook to run local-test "
             "automatically."
         ),
+    )
+    parser_init_gh.add_argument(
+        "--auto-create-wif",
+        action="store_true",
+        help="Optional: Automatically create Workload Identity Pool, Provider, and Service Account on Google Cloud.",
+    )
+    parser_init_gh.add_argument(
+        "--wif-pool-name",
+        default="github-actions-pool-scrapi",
+        help="Optional: The name of the Workload Identity Pool to create/use.",
+    )
+    parser_init_gh.add_argument(
+        "--github-repo",
+        help="Optional: Override inferred GitHub repository (e.g., owner/repo).",
     )
 
     parser_init_gh.set_defaults(func=init_github_action)
