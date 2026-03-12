@@ -30,7 +30,7 @@ import pandas as pd
 from cxas_scrapi.core.github import init_github_action
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.common import Common
-from cxas_scrapi.core.evaluations import Evaluations
+from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
 from cxas_scrapi.utils.eval_utils import EvalUtils
 from cxas_scrapi.evals.callback_evals import CallbackEvals
 from cxas_scrapi.evals.tool_evals import ToolEvals
@@ -46,12 +46,11 @@ def export_eval(args: argparse.Namespace) -> None:
     eval_client = Evaluations(app_id=args.app_id)
 
     try:
+        format_enum = ExportFormat(args.format.lower()) if args.format else ExportFormat.YAML
         exported_eval = eval_client.export_evaluation(
-            args.evaluation_id, output_format=args.format
+            args.evaluation_id, output_format=format_enum, output_path=args.output
         )
         if args.output:
-            with open(args.output, "w") as f:
-                f.write(exported_eval)
             print(f"Evaluation exported to {args.output}")
         else:
             print(exported_eval)

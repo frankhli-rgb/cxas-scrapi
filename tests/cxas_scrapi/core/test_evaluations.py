@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 sys.modules["google.cloud.ces_v1beta"] = MagicMock()
 import pytest
 from unittest.mock import patch, MagicMock
-from cxas_scrapi.core.evaluations import Evaluations
+from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
 
 
 @patch("cxas_scrapi.core.evaluations.EvaluationServiceClient")
@@ -84,14 +84,19 @@ def test_evaluations_get(mock_client_cls):
 
 
 def test_eval_dict_to_yaml():
-    """Test static method eval_dict_to_yaml."""
+    """Test static method eval_dict_to_yaml for the new dataset format."""
     eval_dict = {
         "display_name": "Test Eval",
         "golden": {
             "turns": [
                 {
                     "steps": [
-                        {"user_input": {"text": "hi"}},
+                        {
+                            "user_input": {
+                                "text": "hi",
+                                "variables": {"locale": "en-US"}
+                            }
+                        },
                         {
                             "expectation": {
                                 "agent_response": {
@@ -99,17 +104,65 @@ def test_eval_dict_to_yaml():
                                 }
                             }
                         },
+                        {
+                            "expectation": {
+                                "agent_transfer": {
+                                    "target_agent": "projects/123/agents/456"
+                                }
+                            }
+                        },
+                        {
+                            "user_input": {
+                                "text": "next turn",
+                                "variables": {"user": "test"}
+                            }
+                        },
+                        {
+                            "expectation": {
+                                "tool_call": {
+                                    "tool": "my_tool",
+                                    "args": {"param": "val"}
+                                }
+                            }
+                        }
                     ]
                 }
-            ]
+            ],
+            "evaluation_expectations": ["projects/123/expectations/abc"]
         },
     }
 
     res = Evaluations.eval_dict_to_yaml(eval_dict)
-    assert res["name"] == "Test Eval"
-    assert len(res["turns"]) == 2
-    assert res["turns"][0] == {"user": "hi"}
-    assert res["turns"][1] == {"agent": "hello"}
+    
+    # Check dataset format structure
+    assert "conversations" in res
+    assert len(res["conversations"]) == 1
+    
+    conv = res["conversations"][0]
+    assert conv["conversation"] == "Test Eval"
+    
+    # Check session parameters extracted from userInput
+    assert conv.get("session_parameters") == {"locale": "en-US", "user": "test"}
+    
+    # Check expectations logic
+    assert conv["expectations"] == ["projects/123/expectations/abc"]
+    
+    # Check turn splitting 
+    # Turn 1: user "hi", agent "hello", tool_call transfer_to_agent 
+    # Turn 2: user "next turn", tool_call my_tool
+    turns = conv["turns"]
+    assert len(turns) == 2
+    
+    assert turns[0]["user"] == "hi"
+    assert turns[0]["agent"] == "hello"
+    assert len(turns[0]["tool_calls"]) == 1
+    assert turns[0]["tool_calls"][0]["action"] == "transfer_to_agent"
+    assert turns[0]["tool_calls"][0]["agent"] == "projects/123/agents/456"
+    
+    assert turns[1]["user"] == "next turn"
+    assert len(turns[1]["tool_calls"]) == 1
+    assert turns[1]["tool_calls"][0]["action"] == "my_tool"
+    assert turns[1]["tool_calls"][0]["args"] == {"param": "val"}
 
 
 @patch("cxas_scrapi.core.evaluations.Evaluations.get_evaluation")
@@ -134,13 +187,13 @@ def test_export_evaluation(mock_get_eval):
             yaml_str = evals_client.export_evaluation(
                 "projects/p/locations/l/apps/a/evaluations/e1"
             )
-            assert "name: Exported Eval" in yaml_str
+            assert "conversation: Exported Eval" in yaml_str
 
             json_str = evals_client.export_evaluation(
                 "projects/p/locations/l/apps/a/evaluations/e1",
-                output_format="json",
+                output_format=ExportFormat.JSON,
             )
-            assert '"name": "Exported Eval"' in json_str
+            assert '"conversation": "Exported Eval"' in json_str
 
 
 @patch("cxas_scrapi.core.evaluations.EvaluationServiceClient")
@@ -589,17 +642,20 @@ def test_bulk_export_evals(mock_get_map, mock_export, mock_makedirs):
     mock_export.return_value = "yaml_content"
 
     # Test 1: Exporting goldens
-    m_open = mock_open()
-    with patch("builtins.open", m_open):
-        evals_client.bulk_export_evals("goldens", "/valid/dir")
+    evals_client.bulk_export_evals("goldens", "/valid/dir")
     
     # 2 exports should happen
     assert mock_export.call_count == 2
-    mock_export.assert_any_call("projects/p/locations/l/apps/a/evaluations/g1", output_format="yaml")
-    mock_export.assert_any_call("projects/p/locations/l/apps/a/evaluations/g2", output_format="yaml")
-    
-    # 2 files should be opened
-    assert m_open.call_count == 2
+    mock_export.assert_any_call(
+        "projects/p/locations/l/apps/a/evaluations/g1", 
+        output_format=ExportFormat.YAML,
+        output_path="/valid/dir/evals/Golden_1.yaml"
+    )
+    mock_export.assert_any_call(
+        "projects/p/locations/l/apps/a/evaluations/g2", 
+        output_format=ExportFormat.YAML,
+        output_path="/valid/dir/evals/Golden-2_.yaml"
+    )
     
     # Check that dir was made
     mock_makedirs.assert_called_with("/valid/dir/evals", exist_ok=True)
@@ -609,13 +665,14 @@ def test_bulk_export_evals(mock_get_map, mock_export, mock_makedirs):
     mock_makedirs.reset_mock()
 
     # Test 2: Exporting scenarios
-    m_open = mock_open()
-    with patch("builtins.open", m_open):
-        evals_client.bulk_export_evals("scenarios", "/valid/dir")
+    evals_client.bulk_export_evals("scenarios", "/valid/dir")
     
     assert mock_export.call_count == 1
-    mock_export.assert_called_once_with("projects/p/locations/l/apps/a/evaluations/s1", output_format="yaml")
-    assert m_open.call_count == 1
+    mock_export.assert_called_once_with(
+        "projects/p/locations/l/apps/a/evaluations/s1", 
+        output_format=ExportFormat.YAML,
+        output_path="/valid/dir/evals/Scenario_1.yaml"
+    )
 
     # Test 3: Bad type
     with pytest.raises(ValueError, match="eval_type must be either 'goldens' or 'scenarios'"):
