@@ -162,6 +162,7 @@ class Apps(Common):
         self,
         app_id: str,
         gcs_uri: str = None,
+        local_path: str = None,
         export_format: str = "JSON",
     ) -> Any:
         # Wait for long-running operation to complete.
@@ -170,44 +171,119 @@ class Apps(Common):
         Args:
             app_id: The resource name of the app to export.
             gcs_uri: Optional. The Google Cloud Storage URI to export to.
+            local_path: Optional. Local file path to write the exported zip archive.
             export_format: The format to export the app in ('JSON' or 'YAML').
         """
-        # Verify and set export_format as accepted string/enum type.
+        # Validate that exactly one source is provided if both are given
+        if gcs_uri and local_path:
+            raise ValueError("Only one of 'gcs_uri' or 'local_path' can be provided.")
 
         request = types.ExportAppRequest(
             name=app_id,
             gcs_uri=gcs_uri if gcs_uri else None,
             export_format=export_format,
         )
-        return self.client.export_app(request=request)
+        
+        operation = self.client.export_app(request=request)
+        
+        if local_path:
+            # We must wait for the result if writing to a local path
+            response = operation.result()
+            with open(local_path, "wb") as f:
+                f.write(response.app_content)
+            return response
+            
+        return operation
+
+    def import_as_new_app(
+        self,
+        display_name: str,
+        app_content: bytes = None,
+        gcs_uri: str = None,
+        local_path: str = None,
+    ) -> Any:
+        """Imports an app as a brand new app.
+
+        Args:
+            display_name: The display name for the new app.
+            app_content: Optional. The raw bytes of the zip archive of the app.
+            gcs_uri: Optional. The Google Cloud Storage URI to export to.
+            local_path: Optional. The local path to the zip archive of the app.
+        """
+        # Validate that exactly one source is provided
+        sources_provided = sum([app_content is not None, gcs_uri is not None, local_path is not None])
+        if sources_provided != 1:
+            raise ValueError("Exactly one of 'app_content', 'gcs_uri', or 'local_path' must be provided.")
+
+        request_kwargs = {
+            "parent": self.parent,
+            "display_name": display_name,
+        }
+
+        if local_path:
+            with open(local_path, "rb") as f:
+                request_kwargs["app_content"] = f.read()
+        elif app_content:
+            request_kwargs["app_content"] = app_content
+        elif gcs_uri:
+            request_kwargs["gcs_uri"] = gcs_uri
+
+        request = types.ImportAppRequest(**request_kwargs)
+        return self.client.import_app(request=request)
 
     def import_app(
         self,
-        app_content: bytes,
-        display_name: str,
-        app_id: str = None,
+        app_id: str,
+        app_content: bytes = None,
+        gcs_uri: str = None,
+        local_path: str = None,
+        conflict_strategy: str = None,
     ) -> Any:
-        """Imports an app into the specified project and location.
+        """Imports an app, overwriting an existing one.
 
         Args:
-            app_content: The raw bytes of the zip archive of the app.
-            display_name: The display name for the new app.
-            app_id: Optional. Target App ID to explicitly overwrite.
+            app_id: Target App ID to explicitly overwrite.
+            app_content: Optional. The raw bytes of the zip archive of the app.
+            gcs_uri: Optional. The Google Cloud Storage URI to export to.
+            local_path: Optional. The local path to the zip archive of the app.
+            conflict_strategy: Optional. The conflict resolution strategy to use ('REPLACE' or 'OVERWRITE').
         """
+        # Validate that exactly one source is provided
+        sources_provided = sum([app_content is not None, gcs_uri is not None, local_path is not None])
+        if sources_provided != 1:
+            raise ValueError("Exactly one of 'app_content', 'gcs_uri', or 'local_path' must be provided.")
+
+        # The ImportAppRequest strictly requires just the UUID for the app_id field.
+        # Extract the UUID if a full path or custom URI is provided.
+        clean_app_id = app_id.split("/")[-1]
+
         request_kwargs = {
             "parent": self.parent,
-            "app_content": app_content,
+            "app_id": clean_app_id,
         }
-        if app_id:
-            # Require conflict resolution (1 = REPLACE) when overwriting an exi
-            request_kwargs["app_id"] = app_id
-            request_kwargs["import_options"] = (
-                types.ImportAppRequest.ImportOptions(
-                    conflict_resolution_strategy=1
-                )
+
+        if local_path:
+            with open(local_path, "rb") as f:
+                request_kwargs["app_content"] = f.read()
+        elif app_content:
+            request_kwargs["app_content"] = app_content
+        elif gcs_uri:
+            request_kwargs["gcs_uri"] = gcs_uri
+
+        if conflict_strategy:
+            strategy_upper = conflict_strategy.upper()
+            if strategy_upper not in ["REPLACE", "OVERWRITE"]:
+                raise ValueError("conflict_strategy must be either 'REPLACE' or 'OVERWRITE'")
+                
+            strategy_enum = getattr(types.ImportAppRequest.ImportOptions.ConflictResolutionStrategy, strategy_upper)
+            request_kwargs["import_options"] = types.ImportAppRequest.ImportOptions(
+                conflict_resolution_strategy=strategy_enum
             )
         else:
-            request_kwargs["display_name"] = display_name
+            # Maintain backward compatibility where app_id implied REPLACE
+            request_kwargs["import_options"] = types.ImportAppRequest.ImportOptions(
+                conflict_resolution_strategy=types.ImportAppRequest.ImportOptions.ConflictResolutionStrategy.REPLACE
+            )
 
         request = types.ImportAppRequest(**request_kwargs)
         return self.client.import_app(request=request)
