@@ -14,8 +14,10 @@
 
 """Utility functions for processing and generating CXAS Tool Tests."""
 
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional, NamedTuple
 import os
+import time
+from datetime import datetime
 import yaml
 import json
 import logging
@@ -36,11 +38,35 @@ from pydantic import (
 )
 
 from cxas_scrapi.core.common import Common
+from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.tools import Tools
 from cxas_scrapi.core.variables import Variables
 from cxas_scrapi.core.conversation_history import ConversationHistory
 
 logger = logging.getLogger(__name__)
+
+SUMMARY_SCHEMA_COLUMNS = [
+    "test_run_timestamp",
+    "total_tests",
+    "pass_count",
+    "pass_rate",
+    "agent_name",
+    "tester",
+    "p50_latency_ms",
+    "p90_latency_ms",
+    "p99_latency_ms"
+]
+
+class SummaryStats(NamedTuple):
+    test_run_timestamp: str
+    total_tests: int
+    pass_count: int
+    pass_rate: float
+    agent_name: str
+    tester: str
+    p50_latency_ms: float
+    p90_latency_ms: float
+    p99_latency_ms: float
 
 
 class Operator(str, enum.Enum):
@@ -77,6 +103,11 @@ class ToolEvals:
             creds: Optional Google Cloud credentials.
         """
         self.app_id = app_id
+        
+        parts = self.app_id.split("/")
+        self.project_id = parts[1] if len(parts) > 1 else ""
+        self.location = parts[3] if len(parts) > 3 else "us"
+        
         self.creds = creds
         self.tools_client = Tools(app_id=self.app_id, creds=self.creds)
         self.var_client = Variables(app_id=self.app_id, creds=self.creds)
@@ -566,6 +597,16 @@ class ToolEvals:
             actual_data = schema.get("default") or var_dict.get("value") or {}
             app_vars_cache[var.name] = actual_data
 
+        # Fetch app metadata and user info once per run
+        app_client = Apps(
+            project_id=self.project_id,
+            location=self.location,
+            creds=self.creds
+        )
+        app = app_client.get_app(self.app_id)
+        app_display_name = app.display_name if app else "Unknown App"
+        tester_email = getattr(self.creds, "service_account_email", "Unknown")
+
         results = []
         for test_case in test_cases:
             print(f"Running test: {test_case.name} ({test_case.tool})")
@@ -573,12 +614,15 @@ class ToolEvals:
             tool_id = self.tool_map.get(test_case.tool)
             if not tool_id:
                 error = f"Tool '{test_case.tool}' not found in app."
-                print(f"FAILURE: {error}")
+                print(f"FAILED: {error}")
                 results.append(
                     {
                         "test": test_case.name,
                         "tool": test_case.tool,
-                        "status": "FAILURE",
+                        "status": "FAILED",
+                        "latency (ms)": 0.0,
+                        "app_display_name": app_display_name,
+                        "tester": tester_email,
                         "errors": [error],
                     }
                 )
@@ -586,12 +630,15 @@ class ToolEvals:
 
             if "toolsets/" in tool_id and test_case.context:
                 error = f"Context can only be specified for python tools."
-                print(f"FAILURE: {error}")
+                print(f"FAILED: {error}")
                 results.append(
                     {
                         "test": test_case.name,
                         "tool": test_case.tool,
-                        "status": "FAILURE",
+                        "status": "FAILED",
+                        "latency (ms)": 0.0,
+                        "app_display_name": app_display_name,
+                        "tester": tester_email,
                         "errors": [error],
                     }
                 )
@@ -612,6 +659,8 @@ class ToolEvals:
                     # User provided their own custom mock data
                     final_variables[var_name] = custom_val
 
+            latency_ms = 0.0
+            tool_response = None
             try:
                 if debug:
                     print(f"[DEBUG] Executing tool: {test_case.tool}")
@@ -619,6 +668,7 @@ class ToolEvals:
                     print(f"[DEBUG] Args: {test_case.args}")
                     print(f"[DEBUG] Variables: {final_variables}")
 
+                start_time = time.perf_counter()
                 tool_response = self.tools_client.execute_tool(
                     app_id=self.app_id,
                     tool_display_name=test_case.tool,
@@ -626,6 +676,8 @@ class ToolEvals:
                     variables=final_variables,
                     context=test_case.context,
                 )
+                end_time = time.perf_counter()
+                latency_ms = (end_time - start_time) * 1000
 
                 if debug:
                     print(f"[DEBUG] Tool Response: {tool_response}")
@@ -644,19 +696,27 @@ class ToolEvals:
                         "test": test_case.name,
                         "tool": test_case.tool,
                         "status": status,
+                        "latency (ms)": latency_ms,
+                        "app_display_name": app_display_name,
+                        "tester": tester_email,
                         "errors": errors,
                         "response": tool_response,
                     }
                 )
 
-            except (AttributeError, KeyError, RuntimeError, ValueError) as e:
-                print(f"FAILED: Exception {e}")
+            except Exception as e:
+                # Catch *all* exceptions so the entire test loop doesn't fail
+                print(f"ERROR: Exception occurred during test execution: {e}")
                 results.append(
                     {
                         "test": test_case.name,
                         "tool": test_case.tool,
-                        "status": "FAILED",
+                        "status": "ERROR",
+                        "latency (ms)": latency_ms,
+                        "app_display_name": app_display_name,
+                        "tester": tester_email,
                         "errors": [str(e)],
+                        "response": tool_response,
                     }
                 )
 
@@ -771,10 +831,75 @@ class ToolEvals:
                     "test_name": res.get("test"),
                     "tool": res.get("tool"),
                     "status": res.get("status"),
+                    "latency (ms)": res.get("latency (ms)", 0.0),
+                    "app_display_name": res.get("app_display_name", "Unknown App"),
+                    "tester": res.get("tester", "Unknown"),
                     "errors": error_str,
                 }
             )
         return pd.DataFrame(rows)
+
+    @staticmethod
+    def _calculate_stats(df: pd.DataFrame) -> SummaryStats:
+        """Calculates summary statistics from a tool evals dataframe."""
+        total = len(df)
+        if total == 0:
+            return SummaryStats(
+                test_run_timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                total_tests=0,
+                pass_count=0,
+                pass_rate=0.0,
+                agent_name="Unknown App",
+                tester="Unknown",
+                p50_latency_ms=0.0,
+                p90_latency_ms=0.0,
+                p99_latency_ms=0.0,
+            )
+
+        pass_count = (df["status"] == "PASSED").sum()
+        pass_rate = pass_count / total if total > 0 else 0.0
+
+        latencies = df["latency (ms)"].to_numpy()
+
+        try:
+            p50 = pd.Series(latencies).quantile(0.50)
+            p90 = pd.Series(latencies).quantile(0.90)
+            p99 = pd.Series(latencies).quantile(0.99)
+        except Exception:
+            p50 = p90 = p99 = 0.0
+
+        # Try to pull the first known app_display_name/tester from the DataFrame 
+        agent_name = "Unknown App"
+        if "app_display_name" in df.columns and not df.empty:
+            agent_name = df["app_display_name"].iloc[0]
+
+        tester = "Unknown"
+        if "tester" in df.columns and not df.empty:
+            tester = df["tester"].iloc[0]
+
+        return SummaryStats(
+            test_run_timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            total_tests=total,
+            pass_count=pass_count,
+            pass_rate=pass_rate,
+            agent_name=agent_name,
+            tester=tester,
+            p50_latency_ms=float(p50),
+            p90_latency_ms=float(p90),
+            p99_latency_ms=float(p99),
+        )
+
+    @staticmethod
+    def generate_report(results_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Generates a summary report DataFrame capturing key metrics from tool evaluation results.
+        """
+        stats = ToolEvals._calculate_stats(results_df)
+
+        report_data = {
+            col: getattr(stats, col) for col in SUMMARY_SCHEMA_COLUMNS
+        }
+        return pd.DataFrame([report_data])
 
 
 class ToolTestCase(BaseModel):

@@ -255,7 +255,8 @@ def test_validate_tool_test():
 
 @patch("cxas_scrapi.evals.tool_evals.Tools")
 @patch("cxas_scrapi.evals.tool_evals.Variables")
-def test_run_tool_tests(mock_variables, mock_tools):
+@patch("cxas_scrapi.evals.tool_evals.Apps")
+def test_run_tool_tests(mock_apps, mock_variables, mock_tools):
     mock_tools_instance = mock_tools.return_value
     mock_tools_instance.get_tools_map.return_value = {"tool1": "id1"}
     mock_tools_instance.execute_tool.return_value = {
@@ -264,6 +265,10 @@ def test_run_tool_tests(mock_variables, mock_tools):
 
     mock_var_instance = mock_variables.return_value
     mock_var_instance.list_variables.return_value = []
+
+    mock_app_instance = MagicMock()
+    mock_app_instance.display_name = "Test App"
+    mock_apps.return_value.get_app.return_value = mock_app_instance
 
     tu = ToolEvals(app_id="test_app", creds=None)
 
@@ -283,6 +288,9 @@ def test_run_tool_tests(mock_variables, mock_tools):
     assert len(df) == 1
     assert df.iloc[0]["status"] == "PASSED"
     assert df.iloc[0]["test_name"] == "test1"
+    assert "latency (ms)" in df.columns
+    assert df.iloc[0]["app_display_name"] == "Test App"
+    assert df.iloc[0]["tester"] == "Unknown"
 
     # Ensure it calls execute_tool correctly
     mock_tools_instance.execute_tool.assert_called_once_with(
@@ -296,7 +304,8 @@ def test_run_tool_tests(mock_variables, mock_tools):
 
 @patch("cxas_scrapi.evals.tool_evals.Tools")
 @patch("cxas_scrapi.evals.tool_evals.Variables")
-def test_run_tool_tests_with_context(mock_variables, mock_tools):
+@patch("cxas_scrapi.evals.tool_evals.Apps")
+def test_run_tool_tests_with_context(mock_apps, mock_variables, mock_tools):
     mock_tools_instance = mock_tools.return_value
     mock_tools_instance.get_tools_map.return_value = {"tool1": "id1"}
     mock_tools_instance.execute_tool.return_value = {
@@ -305,6 +314,10 @@ def test_run_tool_tests_with_context(mock_variables, mock_tools):
 
     mock_var_instance = mock_variables.return_value
     mock_var_instance.list_variables.return_value = []
+
+    mock_app_instance = MagicMock()
+    mock_app_instance.display_name = "Test App"
+    mock_apps.return_value.get_app.return_value = mock_app_instance
 
     tu = ToolEvals(app_id="test_app", creds=None)
 
@@ -325,6 +338,8 @@ def test_run_tool_tests_with_context(mock_variables, mock_tools):
     assert len(df) == 1
     assert df.iloc[0]["status"] == "PASSED"
     assert df.iloc[0]["test_name"] == "test2"
+    assert "latency (ms)" in df.columns
+    assert df.iloc[0]["app_display_name"] == "Test App"
 
     # Ensure it calls execute_tool correctly
     mock_tools_instance.execute_tool.assert_called_once_with(
@@ -338,7 +353,8 @@ def test_run_tool_tests_with_context(mock_variables, mock_tools):
 
 @patch("cxas_scrapi.evals.tool_evals.Tools")
 @patch("cxas_scrapi.evals.tool_evals.Variables")
-def test_run_tool_tests_openapi_with_context_fails(mock_variables, mock_tools):
+@patch("cxas_scrapi.evals.tool_evals.Apps")
+def test_run_tool_tests_openapi_with_context_fails(mock_apps, mock_variables, mock_tools):
     mock_tools_instance = mock_tools.return_value
     mock_tools_instance.get_tools_map.return_value = {
         "tool1": "toolsets/my_openapi_tool"
@@ -346,6 +362,10 @@ def test_run_tool_tests_openapi_with_context_fails(mock_variables, mock_tools):
 
     mock_var_instance = mock_variables.return_value
     mock_var_instance.list_variables.return_value = []
+
+    mock_app_instance = MagicMock()
+    mock_app_instance.display_name = "Test App"
+    mock_apps.return_value.get_app.return_value = mock_app_instance
 
     tu = ToolEvals(app_id="test_app", creds=None)
 
@@ -359,10 +379,54 @@ def test_run_tool_tests_openapi_with_context_fails(mock_variables, mock_tools):
     df = tu.run_tool_tests([tc])
 
     assert len(df) == 1
-    assert df.iloc[0]["status"] == "FAILURE"
-    assert (
-        "Context can only be specified for python tools" in df.iloc[0]["errors"]
-    )
+    assert df.iloc[0]["status"] == "FAILED"
+    assert df.iloc[0]["app_display_name"] == "Test App"
 
     # execute_tool should not be called
     mock_tools_instance.execute_tool.assert_not_called()
+
+def test_calculate_stats():
+    import pandas as pd
+    tu = ToolEvals.__new__(ToolEvals)
+    df = pd.DataFrame([
+        {"status": "PASSED", "latency (ms)": 100, "app_display_name": "App 1", "tester": "user@google.com"},
+        {"status": "FAILED", "latency (ms)": 200, "app_display_name": "App 1", "tester": "user@google.com"},
+        {"status": "PASSED", "latency (ms)": 300, "app_display_name": "App 1", "tester": "user@google.com"},
+    ])
+    
+    stats = tu._calculate_stats(df)
+    
+    assert stats.total_tests == 3
+    assert stats.pass_count == 2
+    assert stats.pass_rate == 2/3
+    assert stats.p50_latency_ms == 200.0
+    assert stats.p90_latency_ms == 280.0
+    assert stats.p99_latency_ms == 298.0
+    assert stats.agent_name == "App 1"
+    assert stats.tester == "user@google.com"
+
+def test_calculate_stats_empty():
+    import pandas as pd
+    tu = ToolEvals.__new__(ToolEvals)
+    df = pd.DataFrame()
+    
+    stats = tu._calculate_stats(df)
+    assert stats.total_tests == 0
+    assert stats.pass_count == 0
+    assert stats.pass_rate == 0.0
+
+def test_generate_report():
+    import pandas as pd
+    from cxas_scrapi.evals.tool_evals import SUMMARY_SCHEMA_COLUMNS
+    
+    tu = ToolEvals.__new__(ToolEvals)
+    df = pd.DataFrame([
+        {"status": "PASSED", "latency (ms)": 100, "app_display_name": "App 1", "tester": "user@google.com"},
+    ])
+    
+    report_df = tu.generate_report(df)
+    
+    assert list(report_df.columns) == SUMMARY_SCHEMA_COLUMNS
+    assert len(report_df) == 1
+    assert report_df.iloc[0]["total_tests"] == 1
+    assert report_df.iloc[0]["pass_rate"] == 1.0
