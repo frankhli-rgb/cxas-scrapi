@@ -94,7 +94,7 @@ def test_eval_dict_to_yaml():
                         {
                             "user_input": {
                                 "text": "hi",
-                                "variables": {"locale": "en-US"}
+                                "variables": {"locale": "en-US"},
                             }
                         },
                         {
@@ -114,51 +114,51 @@ def test_eval_dict_to_yaml():
                         {
                             "user_input": {
                                 "text": "next turn",
-                                "variables": {"user": "test"}
+                                "variables": {"user": "test"},
                             }
                         },
                         {
                             "expectation": {
                                 "tool_call": {
                                     "tool": "my_tool",
-                                    "args": {"param": "val"}
+                                    "args": {"param": "val"},
                                 }
                             }
-                        }
+                        },
                     ]
                 }
             ],
-            "evaluation_expectations": ["projects/123/expectations/abc"]
+            "evaluation_expectations": ["projects/123/expectations/abc"],
         },
     }
 
     res = Evaluations.eval_dict_to_yaml(eval_dict)
-    
+
     # Check dataset format structure
     assert "conversations" in res
     assert len(res["conversations"]) == 1
-    
+
     conv = res["conversations"][0]
     assert conv["conversation"] == "Test Eval"
-    
+
     # Check session parameters extracted from userInput
     assert conv.get("session_parameters") == {"locale": "en-US", "user": "test"}
-    
+
     # Check expectations logic
     assert conv["expectations"] == ["projects/123/expectations/abc"]
-    
-    # Check turn splitting 
-    # Turn 1: user "hi", agent "hello", tool_call transfer_to_agent 
+
+    # Check turn splitting
+    # Turn 1: user "hi", agent "hello", tool_call transfer_to_agent
     # Turn 2: user "next turn", tool_call my_tool
     turns = conv["turns"]
     assert len(turns) == 2
-    
+
     assert turns[0]["user"] == "hi"
     assert turns[0]["agent"] == "hello"
     assert len(turns[0]["tool_calls"]) == 1
     assert turns[0]["tool_calls"][0]["action"] == "transfer_to_agent"
     assert turns[0]["tool_calls"][0]["agent"] == "projects/123/agents/456"
-    
+
     assert turns[1]["user"] == "next turn"
     assert len(turns[1]["tool_calls"]) == 1
     assert turns[1]["tool_calls"][0]["action"] == "my_tool"
@@ -575,6 +575,8 @@ def test_search_evaluations(mock_client_cls, mock_tools_cls, mock_agents_cls):
         ValueError, match="Must provide at least one search term"
     ):
         evals_client.search_evaluations(app_id="projects/p/locations/l/apps/a")
+
+
 @patch("cxas_scrapi.core.evaluations.json_format")
 @patch("cxas_scrapi.core.evaluations.types")
 @patch("cxas_scrapi.core.evaluations.EvaluationServiceClient")
@@ -631,11 +633,11 @@ def test_bulk_export_evals(mock_get_map, mock_export, mock_makedirs):
     mock_get_map.return_value = {
         "goldens": {
             "Golden 1": "projects/p/locations/l/apps/a/evaluations/g1",
-            "Golden-2!": "projects/p/locations/l/apps/a/evaluations/g2"
+            "Golden-2!": "projects/p/locations/l/apps/a/evaluations/g2",
         },
         "scenarios": {
             "Scenario 1": "projects/p/locations/l/apps/a/evaluations/s1"
-        }
+        },
     }
 
     # Mock export_evaluation
@@ -643,45 +645,47 @@ def test_bulk_export_evals(mock_get_map, mock_export, mock_makedirs):
 
     # Test 1: Exporting goldens
     evals_client.bulk_export_evals("goldens", "/valid/dir")
-    
+
     # 2 exports should happen
     assert mock_export.call_count == 2
     mock_export.assert_any_call(
-        "projects/p/locations/l/apps/a/evaluations/g1", 
+        "projects/p/locations/l/apps/a/evaluations/g1",
         output_format=ExportFormat.YAML,
-        output_path="/valid/dir/evals/Golden_1.yaml"
+        output_path="/valid/dir/evals/Golden_1.yaml",
     )
     mock_export.assert_any_call(
-        "projects/p/locations/l/apps/a/evaluations/g2", 
+        "projects/p/locations/l/apps/a/evaluations/g2",
         output_format=ExportFormat.YAML,
-        output_path="/valid/dir/evals/Golden-2_.yaml"
+        output_path="/valid/dir/evals/Golden-2_.yaml",
     )
-    
+
     # Check that dir was made
     mock_makedirs.assert_called_with("/valid/dir/evals", exist_ok=True)
-    
+
     # Reset mocks
     mock_export.reset_mock()
     mock_makedirs.reset_mock()
 
     # Test 2: Exporting scenarios
     evals_client.bulk_export_evals("scenarios", "/valid/dir")
-    
+
     assert mock_export.call_count == 1
     mock_export.assert_called_once_with(
-        "projects/p/locations/l/apps/a/evaluations/s1", 
+        "projects/p/locations/l/apps/a/evaluations/s1",
         output_format=ExportFormat.YAML,
-        output_path="/valid/dir/evals/Scenario_1.yaml"
+        output_path="/valid/dir/evals/Scenario_1.yaml",
     )
 
     # Test 3: Bad type
-    with pytest.raises(ValueError, match="eval_type must be either 'goldens' or 'scenarios'"):
+    with pytest.raises(
+        ValueError, match="eval_type must be either 'goldens' or 'scenarios'"
+    ):
         evals_client.bulk_export_evals("typo", "/valid/dir")
 
     # Test 4: File write exception inside the loop (invalid file path logic, caught by try/except)
     mock_export.reset_mock()
     mock_export.side_effect = Exception("Export failed")
-    
+
     # This shouldn't crash, it should catch Exception and print failure
     m_open = mock_open()
     with patch("builtins.open", m_open):

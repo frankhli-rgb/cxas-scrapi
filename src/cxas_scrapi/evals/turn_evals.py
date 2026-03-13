@@ -3,6 +3,7 @@
 Provides the primitive testing tools for providing specific user utterances
 and validating immediate Agent responses, intent classifications, and Tool calls.
 """
+
 from typing import Any, Dict, List, Optional
 import os
 import yaml
@@ -17,8 +18,10 @@ from cxas_scrapi.core.variables import Variables
 
 logger = logging.getLogger(__name__)
 
+
 class TurnOperator(str, enum.Enum):
     """Operators for testing single-turn expectations."""
+
     CONTAINS = "contains"
     EQUALS = "equals"
     TOOL_CALLED = "tool_called"
@@ -27,21 +30,26 @@ class TurnOperator(str, enum.Enum):
     NO_TOOLS_CALLED = "no_tools_called"
     AGENT_TRANSFER = "agent_transfer"
 
+
 class TurnExpectation(BaseModel):
     """Data model for a single-turn expectation."""
+
     type: TurnOperator
     value: Optional[Any] = None
 
+
 class TurnTestCase(BaseModel):
     """Data model for a single-turn test case."""
+
     name: str
     user: str
     variables: Dict[str, Any] = Field(default_factory=dict)
     expectations: List[TurnExpectation] = Field(default_factory=list)
 
+
 class TurnEvals:
     """Class to manage and execute single-turn assertions on CXAS Agents."""
-    
+
     def __init__(self, app_id: str, creds=None):
         """Initializes the TurnEvals class.
 
@@ -54,12 +62,16 @@ class TurnEvals:
         self.sessions_client = Sessions(app_id=self.app_id, creds=self.creds)
         self.var_client = Variables(app_id=self.app_id, creds=self.creds)
 
-    def load_turn_test_cases_from_file(self, test_file_path: str) -> List[TurnTestCase]:
+    def load_turn_test_cases_from_file(
+        self, test_file_path: str
+    ) -> List[TurnTestCase]:
         """Loads turn tests from a YAML file."""
         with open(test_file_path, "r", encoding="utf-8") as f:
             return self.load_turn_test_cases_from_yaml(f.read())
 
-    def load_turn_tests_from_dir(self, directory_path: str = "turn_tests") -> List[TurnTestCase]:
+    def load_turn_tests_from_dir(
+        self, directory_path: str = "turn_tests"
+    ) -> List[TurnTestCase]:
         """Recursively loads all YAML turn tests from a directory."""
         all_tests = []
         if not os.path.exists(directory_path):
@@ -78,12 +90,14 @@ class TurnEvals:
 
         return all_tests
 
-    def load_turn_test_cases_from_yaml(self, yaml_data: str) -> List[TurnTestCase]:
+    def load_turn_test_cases_from_yaml(
+        self, yaml_data: str
+    ) -> List[TurnTestCase]:
         """Loads turn tests from a YAML string."""
         raw_data = yaml.safe_load(yaml_data)
         if not raw_data or "tests" not in raw_data:
             return []
-        
+
         adapter = TypeAdapter(List[TurnTestCase])
         return adapter.validate_python(raw_data["tests"])
 
@@ -105,19 +119,26 @@ class TurnEvals:
                 return False
         return True
 
-    def validate_turn_test(self, test_case: TurnTestCase, turn_response: Any) -> List[str]:
+    def validate_turn_test(
+        self, test_case: TurnTestCase, turn_response: Any
+    ) -> List[str]:
         """Validates the turn response against defined expectations."""
         errors = []
-        
+
         # Extract meaningful data from turn_response protobuf/dict
         from google.protobuf.json_format import MessageToDict
+
         try:
             resp_dict = MessageToDict(turn_response._pb)
         except AttributeError:
-            resp_dict = MessageToDict(turn_response) if hasattr(turn_response, "DESCRIPTOR") else (turn_response if isinstance(turn_response, dict) else {})
-            
+            resp_dict = (
+                MessageToDict(turn_response)
+                if hasattr(turn_response, "DESCRIPTOR")
+                else (turn_response if isinstance(turn_response, dict) else {})
+            )
+
         outputs = resp_dict.get("outputs", [])
-        
+
         # Aggregate text, tools, and transfers
         full_text = ""
         called_tools = []
@@ -149,14 +170,20 @@ class TurnEvals:
                         at = chunk["agentTransfer"]
                         target_agent = at.get("displayName", "")
                         if not target_agent:
-                            agent_str = at.get("agent", at.get("targetAgent", ""))
-                            target_agent = agent_str.split("/")[-1] if "/" in agent_str else agent_str
-                        
+                            agent_str = at.get(
+                                "agent", at.get("targetAgent", "")
+                            )
+                            target_agent = (
+                                agent_str.split("/")[-1]
+                                if "/" in agent_str
+                                else agent_str
+                            )
+
             # Fallback to high-level outputs if no diagnostic trace is available
             if not messages:
                 if "text" in out:
                     full_text += str(out["text"]) + " "
-                
+
                 # Check top-level toolCalls and agentTransfers
                 tcs_msg = out.get("toolCalls", {})
                 for tc in tcs_msg.get("toolCalls", []):
@@ -167,31 +194,47 @@ class TurnEvals:
         for exp in test_case.expectations:
             op = exp.type
             expected = exp.value
-            
+
             if op == TurnOperator.EQUALS:
                 if full_text.strip() != str(expected).strip():
-                    errors.append(f"EQUALS failed: Expected '{expected}', Got '{full_text.strip()}'")
+                    errors.append(
+                        f"EQUALS failed: Expected '{expected}', Got '{full_text.strip()}'"
+                    )
             elif op == TurnOperator.CONTAINS:
                 if str(expected) not in full_text:
-                    errors.append(f"CONTAINS failed: '{expected}' not found in '{full_text.strip()}'")
+                    errors.append(
+                        f"CONTAINS failed: '{expected}' not found in '{full_text.strip()}'"
+                    )
             elif op == TurnOperator.TOOL_CALLED:
-                found = any(expected == t or t.endswith(expected) for t in called_tools)
+                found = any(
+                    expected == t or t.endswith(expected) for t in called_tools
+                )
                 if not found:
-                    errors.append(f"TOOL_CALLED failed: Expected tool '{expected}' was not called. Tools called: {called_tools}")
+                    errors.append(
+                        f"TOOL_CALLED failed: Expected tool '{expected}' was not called. Tools called: {called_tools}"
+                    )
             elif op == TurnOperator.NO_TOOLS_CALLED:
                 if called_tools:
-                    errors.append(f"NO_TOOLS_CALLED failed: Tools were called: {called_tools}")
+                    errors.append(
+                        f"NO_TOOLS_CALLED failed: Tools were called: {called_tools}"
+                    )
             elif op == TurnOperator.AGENT_TRANSFER:
-                if target_agent != expected and not target_agent.endswith(expected):
-                    errors.append(f"AGENT_TRANSFER failed: Expected transfer to '{expected}', actually transferred to '{target_agent}'")
+                if target_agent != expected and not target_agent.endswith(
+                    expected
+                ):
+                    errors.append(
+                        f"AGENT_TRANSFER failed: Expected transfer to '{expected}', actually transferred to '{target_agent}'"
+                    )
             elif op == TurnOperator.TOOL_INPUT:
                 if not isinstance(expected, dict):
-                    errors.append(f"TOOL_INPUT failed: expectation value must be a dictionary.")
+                    errors.append(
+                        f"TOOL_INPUT failed: expectation value must be a dictionary."
+                    )
                     continue
                 # 1) Try matching against the top-level tool_inputs container
                 if self._check_dict_subset(expected, tool_inputs):
                     continue
-                    
+
                 # 2) Fallback to checking nested argument dicts for any tool
                 match_found = False
                 for t_name, t_args in tool_inputs.items():
@@ -199,15 +242,19 @@ class TurnEvals:
                         match_found = True
                         break
                 if not match_found:
-                    errors.append(f"TOOL_INPUT failed: No tool call contained matching arguments {expected}. Actual tool inputs: {tool_inputs}")
+                    errors.append(
+                        f"TOOL_INPUT failed: No tool call contained matching arguments {expected}. Actual tool inputs: {tool_inputs}"
+                    )
             elif op == TurnOperator.TOOL_OUTPUT:
                 if not isinstance(expected, dict):
-                    errors.append(f"TOOL_OUTPUT failed: expectation value must be a dictionary.")
+                    errors.append(
+                        f"TOOL_OUTPUT failed: expectation value must be a dictionary."
+                    )
                     continue
                 # 1) Try matching against the top-level tool_outputs container
                 if self._check_dict_subset(expected, tool_outputs):
                     continue
-                    
+
                 # 2) Fallback to checking nested response dicts for any tool
                 match_found = False
                 for t_name, t_resp in tool_outputs.items():
@@ -215,21 +262,29 @@ class TurnEvals:
                         match_found = True
                         break
                 if not match_found:
-                    errors.append(f"TOOL_OUTPUT failed: No tool response contained matching outputs {expected}. Actual tool outputs: {tool_outputs}")
-                    
+                    errors.append(
+                        f"TOOL_OUTPUT failed: No tool response contained matching outputs {expected}. Actual tool outputs: {tool_outputs}"
+                    )
+
         return errors
 
-    def run_turn_tests(self, test_cases: List[TurnTestCase], debug: bool = False, session_id_prefix: str = "turn_eval_") -> pd.DataFrame:
+    def run_turn_tests(
+        self,
+        test_cases: List[TurnTestCase],
+        debug: bool = False,
+        session_id_prefix: str = "turn_eval_",
+    ) -> pd.DataFrame:
         """Runs a list of single-turn tests. Every test runs in a brand new session."""
         import uuid
+
         results = []
-        
+
         for case in test_cases:
             print(f"Running Turn Test: {case.name}")
-            
+
             # 1. Create a brand new session ID for true stateless execution
             test_session_id = f"{session_id_prefix}{uuid.uuid4().hex[:8]}"
-            
+
             try:
                 # 2. Run the single turn
                 if debug:
@@ -240,37 +295,41 @@ class TurnEvals:
                 turn_response = self.sessions_client.run(
                     session_id=test_session_id,
                     text=case.user,
-                    variables=case.variables
+                    variables=case.variables,
                 )
-                
+
                 # 3. Validate expectations
                 errors = self.validate_turn_test(case, turn_response)
-                
+
                 status = "SUCCESS"
                 if errors:
                     status = "FAILURE"
-                    
+
                 print(f"{status}: {case.name}")
                 if errors:
                     for err in errors:
                         print(f"  - {err}")
-                    
-                results.append({
-                    "test_name": case.name,
-                    "user": case.user,
-                    "status": status,
-                    "errors": "; ".join(errors) if errors else "",
-                })
-                
+
+                results.append(
+                    {
+                        "test_name": case.name,
+                        "user": case.user,
+                        "status": status,
+                        "errors": "; ".join(errors) if errors else "",
+                    }
+                )
+
             except Exception as e:
                 print(f"FAILURE: Exception {e}")
-                results.append({
-                    "test_name": case.name,
-                    "user": case.user,
-                    "status": "FAILURE",
-                    "errors": str(e)
-                })
-                
+                results.append(
+                    {
+                        "test_name": case.name,
+                        "user": case.user,
+                        "status": "FAILURE",
+                        "errors": str(e),
+                    }
+                )
+
             print("-" * 30)
-            
+
         return pd.DataFrame(results)

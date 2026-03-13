@@ -38,7 +38,8 @@ class Tools(Apps):
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
-        scope: List[str] = None, **kwargs
+        scope: List[str] = None,
+        **kwargs,
     ):
         """Initializes the Tools client."""
         project_id = app_id.split("/")[1]
@@ -50,7 +51,8 @@ class Tools(Apps):
             creds_path=creds_path,
             creds_dict=creds_dict,
             creds=creds,
-            scope=scope, **kwargs
+            scope=scope,
+            **kwargs,
         )
         self.app_id = app_id
         self.resource_type = "tools"

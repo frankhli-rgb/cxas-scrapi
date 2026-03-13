@@ -4,6 +4,7 @@ from cxas_scrapi.core.audio_transformer import AudioTransformer
 import io
 import wave
 
+
 class TestAudioTransformer:
     def setup_method(self):
         self.transformer = AudioTransformer()
@@ -13,7 +14,7 @@ class TestAudioTransformer:
         # Mock dependencies
         mock_client = MagicMock()
         mock_tts.TextToSpeechClient.return_value = mock_client
-        
+
         # Create a valid WAV file in memory to return as mock response
         with io.BytesIO() as wav_io:
             with wave.open(wav_io, "wb") as wav_file:
@@ -30,9 +31,7 @@ class TestAudioTransformer:
 
         # Execute
         result = self.transformer.text_to_speech_bytes(
-            text="hello",
-            credentials=MagicMock(),
-            project_id="test-project"
+            text="hello", credentials=MagicMock(), project_id="test-project"
         )
 
         # Verify
@@ -45,15 +44,13 @@ class TestAudioTransformer:
         # Mock dependencies
         mock_client = MagicMock()
         mock_tts.TextToSpeechClient.return_value = mock_client
-        
+
         # Configure mock to raise exception
         mock_client.synthesize_speech.side_effect = Exception("API Error")
 
         # Execute
         result = self.transformer.text_to_speech_bytes(
-            text="hello",
-            credentials=MagicMock(),
-            project_id="test-project"
+            text="hello", credentials=MagicMock(), project_id="test-project"
         )
 
         # Verify
@@ -65,7 +62,7 @@ class TestAudioTransformer:
         # Mock dependencies
         mock_client = MagicMock()
         mock_tts.TextToSpeechClient.return_value = mock_client
-        
+
         # Return invalid bytes usually wouldn't pass wave.open
         mock_response = MagicMock()
         mock_response.audio_content = b"invalid_wav_data"
@@ -73,9 +70,7 @@ class TestAudioTransformer:
 
         # Execute
         result = self.transformer.text_to_speech_bytes(
-            text="hello",
-            credentials=MagicMock(),
-            project_id="test-project"
+            text="hello", credentials=MagicMock(), project_id="test-project"
         )
 
         # Verify failure handled gracefully

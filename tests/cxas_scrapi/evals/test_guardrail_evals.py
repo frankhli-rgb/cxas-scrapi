@@ -6,18 +6,21 @@ from unittest.mock import MagicMock, patch
 
 from cxas_scrapi.evals.guardrail_evals import GuardrailEvals
 
+
 @pytest.fixture
 def dummy_app_id():
     return "projects/test-project/locations/us-central1/apps/test-app"
+
 
 @pytest.fixture
 def mock_df():
     data = {
         "user_input": ["test query 1", "test query 2"],
         "expected_guardrail_name": ["Profanity", None],
-        "expected_guardrail_type": ["ON_DEMAND", None]
+        "expected_guardrail_type": ["ON_DEMAND", None],
     }
     return pd.DataFrame(data)
+
 
 @patch("cxas_scrapi.evals.guardrail_evals.Sessions")
 @patch("cxas_scrapi.evals.guardrail_evals.Apps")
@@ -27,7 +30,7 @@ def test_guardrail_execution_flow(
     mock_apps_class,
     mock_sessions_class,
     dummy_app_id,
-    mock_df
+    mock_df,
 ):
     """
     Tests the end-to-end execution flow of GuardrailEvals similar to the
@@ -38,7 +41,9 @@ def test_guardrail_execution_flow(
     mock_apps = mock_apps_class.return_value
     mock_agents = mock_agents_class.return_value
 
-    mock_sessions.create_session_id.return_value = "projects/p/locations/l/sessions/123"
+    mock_sessions.create_session_id.return_value = (
+        "projects/p/locations/l/sessions/123"
+    )
 
     # Mocking Apps.get_app response
     mock_app_obj = MagicMock()
@@ -50,16 +55,11 @@ def test_guardrail_execution_flow(
     response_triggered = MagicMock()
     output_triggered = MagicMock()
     output_triggered.message.text = "I cannot fulfill this request."
-    
+
     # Needs to duck-type into the recursive `_search_span_dict` logic
     mock_root_span_dict = {
         "childSpans": [
-            {
-                "attributes": {
-                    "name": "Profanity",
-                    "type": "ON_DEMAND"
-                }
-            }
+            {"attributes": {"name": "Profanity", "type": "ON_DEMAND"}}
         ]
     }
     # Mock behavior for `dict(root_span)` to return our mock dictionary
@@ -86,19 +86,19 @@ def test_guardrail_execution_flow(
     assert "pass" in results_df.columns
     assert len(results_df) == 2
 
-    # Verify first test passed its evaluation logic 
+    # Verify first test passed its evaluation logic
     # (Expects Profanity, actually got Profanity)
     assert results_df.iloc[0]["pass"] == True
     assert results_df.iloc[0]["actual_guardrail_name"] == "Profanity"
-    
-    # Verify second test passed its evaluation logic 
+
+    # Verify second test passed its evaluation logic
     # (Expects None, actually got None)
     assert results_df.iloc[1]["pass"] == True
     assert results_df.iloc[1]["actual_guardrail_name"] is None
 
     # Test the reporting functionality
     summary_df = guard_utils.generate_report(results_df)
-    
+
     assert "pass_rate" in summary_df.columns
     assert len(summary_df) == 1
     # 2 out of 2 passed matches intention

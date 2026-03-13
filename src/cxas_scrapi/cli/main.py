@@ -55,9 +55,15 @@ def export_eval(args: argparse.Namespace) -> None:
     eval_client = Evaluations(app_id=args.app_id)
 
     try:
-        format_enum = ExportFormat(args.format.lower()) if args.format else ExportFormat.YAML
+        format_enum = (
+            ExportFormat(args.format.lower())
+            if args.format
+            else ExportFormat.YAML
+        )
         exported_eval = eval_client.export_evaluation(
-            args.evaluation_id, output_format=format_enum, output_path=args.output
+            args.evaluation_id,
+            output_format=format_enum,
+            output_path=args.output,
         )
         if args.output:
             print(f"Evaluation exported to {args.output}")
@@ -292,9 +298,7 @@ def test_callbacks(args: argparse.Namespace) -> None:
 def ci_test(args: argparse.Namespace) -> None:
     """Handles the 'ci-test' command."""
 
-    print(
-        "Starting CI Test Lifecycle..."
-    )
+    print("Starting CI Test Lifecycle...")
 
     if hasattr(args, "display_name") and args.display_name:
         temp_display_name = args.display_name
@@ -538,7 +542,7 @@ def get_parser() -> argparse.ArgumentParser:
         help=(
             "Optional: The evaluation resource name to run full "
             "regression tests."
-        )
+        ),
     )
     parser_init_gh.add_argument(
         "--workload_identity_provider",
@@ -657,7 +661,7 @@ def get_parser() -> argparse.ArgumentParser:
         help=(
             "The evaluation resource name "
             "(projects/.../locations/.../apps/.../evaluations/...)."
-        )
+        ),
     )
     parser_export.add_argument(
         "--format",
@@ -670,7 +674,7 @@ def get_parser() -> argparse.ArgumentParser:
         help=(
             "Path to save the exported evaluation. "
             "If not provided, prints to stdout."
-        )
+        ),
     )
 
     parser_export.set_defaults(func=export_eval)
@@ -690,7 +694,7 @@ def get_parser() -> argparse.ArgumentParser:
         help=(
             "The evaluation resource name "
             "(projects/.../locations/.../apps/.../evaluations/...)."
-        )
+        ),
     )
     parser_run.add_argument(
         "--wait",
@@ -698,7 +702,7 @@ def get_parser() -> argparse.ArgumentParser:
         help=(
             "Wait for evaluation to complete and return exit code 0 "
             "on pass or 1 on fail."
-        )
+        ),
     )
     parser_run.add_argument(
         "--filter-auto-metrics",

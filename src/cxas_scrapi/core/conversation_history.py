@@ -34,13 +34,15 @@ class ConversationHistory(Common):
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
-        scope: List[str] = None, **kwargs
+        scope: List[str] = None,
+        **kwargs,
     ):
         super().__init__(
             creds_path=creds_path,
             creds_dict=creds_dict,
             creds=creds,
-            scope=scope, **kwargs
+            scope=scope,
+            **kwargs,
         )
 
         self.app_id = app_id

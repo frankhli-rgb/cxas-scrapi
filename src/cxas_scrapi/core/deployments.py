@@ -31,7 +31,8 @@ class Deployments(Apps):
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
-        scope: List[str] = None, **kwargs
+        scope: List[str] = None,
+        **kwargs
     ):
         """Initializes the Deployments client."""
         project_id = app_id.split("/")[1]
@@ -43,7 +44,8 @@ class Deployments(Apps):
             creds_path=creds_path,
             creds_dict=creds_dict,
             creds=creds,
-            scope=scope, **kwargs
+            scope=scope,
+            **kwargs
         )
         self.resource_type = "deployments"
         self.app_id = app_id

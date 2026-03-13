@@ -186,6 +186,7 @@ def test_load_golden_eval_from_exported_yaml():
             == "Simple tool expectation 1"
         )
 
+
 def test_process_dataset_turn_with_tool_mapping():
     """Test _process_dataset_turn correctly resolves tool names."""
     utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
@@ -262,13 +263,8 @@ def test_load_golden_eval_from_direct_export_yaml():
     """Test Case 1b: load_golden_eval_from_yaml with direct export format."""
     dummy_yaml = {
         "name": "Direct_Export_Eval",
-        "turns": [
-            {
-                "user": "hello",
-                "agent": "hi there"
-            }
-        ],
-        "expectations": ["Must say hi"]
+        "turns": [{"user": "hello", "agent": "hi there"}],
+        "expectations": ["Must say hi"],
     }
 
     with (
@@ -277,7 +273,9 @@ def test_load_golden_eval_from_direct_export_yaml():
         patch("cxas_scrapi.utils.eval_utils.Evaluations") as mock_eval_cls,
     ):
         mock_eval_instance = mock_eval_cls.return_value
-        mock_eval_instance.find_or_create_evaluation_expectation.return_value = "exp/1"
+        mock_eval_instance.find_or_create_evaluation_expectation.return_value = (
+            "exp/1"
+        )
 
         utils = EvalUtils(app_id="p/l/a/a")
         result = utils.load_golden_eval_from_yaml("dummy.yaml")
@@ -294,22 +292,31 @@ def test_process_conversation_expectations():
     """Test _process_conversation_expectations with various formats."""
     utils = EvalUtils(app_id="p/l/a/a")
 
-    with patch.object(utils.eval_client, "find_or_create_evaluation_expectation") as mock_find:
+    with patch.object(
+        utils.eval_client, "find_or_create_evaluation_expectation"
+    ) as mock_find:
         mock_find.side_effect = ["exp/string", "exp/dict"]
 
         exps = [
             "Just a string prompt",
             {"prompt": "Dict prompt", "displayName": "My Name"},
             {"other": "format"},
-            123
+            123,
         ]
 
         result = utils._process_conversation_expectations(exps)
 
-        assert result == ["exp/string", "exp/dict", "{'other': 'format'}", "123"]
-        
+        assert result == [
+            "exp/string",
+            "exp/dict",
+            "{'other': 'format'}",
+            "123",
+        ]
+
         # Check first call
         mock_find.assert_any_call(llm_prompt="Just a string prompt")
-        
+
         # Check second call
-        mock_find.assert_any_call(llm_prompt="Dict prompt", display_name="My Name")
+        mock_find.assert_any_call(
+            llm_prompt="Dict prompt", display_name="My Name"
+        )

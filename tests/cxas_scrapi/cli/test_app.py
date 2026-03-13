@@ -18,9 +18,9 @@ def mock_apps_client():
 
 
 @pytest.fixture
-def mock_commonget_project_id():
+def mock_common_get_project_id():
     with mock.patch(
-        "cxas_scrapi.cli.app.Common.get_project_id",
+        "cxas_scrapi.cli.app.Common._get_project_id",
         return_value="dummy-project",
     ) as m:
         yield m
@@ -36,7 +36,7 @@ def mock_common_get_location():
 
 
 def test_app_create(
-    mock_apps_client, mock_commonget_project_id, mock_common_get_location
+    mock_apps_client, mock_common_get_project_id, mock_common_get_location
 ):
     args = argparse.Namespace(
         name="Test App",
@@ -82,7 +82,7 @@ def test_apps_list(mock_apps_client, capsys):
 
 def test_apps_get(
     mock_apps_client,
-    mock_commonget_project_id,
+    mock_common_get_project_id,
     mock_common_get_location,
     capsys,
 ):
@@ -111,7 +111,7 @@ def test_apps_get(
 
 def test_app_pull(
     mock_apps_client,
-    mock_commonget_project_id,
+    mock_common_get_project_id,
     mock_common_get_location,
     tmp_path,
 ):
@@ -178,7 +178,7 @@ def test_app_push(mock_apps_client, tmp_path):
 
 
 def test_app_branch(
-    mock_apps_client, mock_commonget_project_id, mock_common_get_location
+    mock_apps_client, mock_common_get_project_id, mock_common_get_location
 ):
     args = argparse.Namespace(
         source="projects/test-project/locations/us/apps/source-id",
@@ -213,7 +213,7 @@ def test_app_branch(
 
 
 def test_app_delete_by_app_id(
-    mock_apps_client, mock_commonget_project_id, mock_common_get_location
+    mock_apps_client, mock_common_get_project_id, mock_common_get_location
 ):
     args = argparse.Namespace(
         app_id="projects/test-project/locations/us/apps/123",

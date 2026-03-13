@@ -130,9 +130,15 @@ class LatencyParser:
                         "model": attrs.get("model", ""),
                         "input_tokens": attrs.get("input token count", 0),
                         "output_tokens": attrs.get("output token count", 0),
-                        "time_to_first_token_ms": attrs.get("time to first chunk (ms)", 0),
-                        "time_to_first_audio_ms": attrs.get("time to first audio (ms)", 0),
-                        "audio_duration_ms": attrs.get("audio duration (ms)", 0),
+                        "time_to_first_token_ms": attrs.get(
+                            "time to first chunk (ms)", 0
+                        ),
+                        "time_to_first_audio_ms": attrs.get(
+                            "time to first audio (ms)", 0
+                        ),
+                        "audio_duration_ms": attrs.get(
+                            "audio duration (ms)", 0
+                        ),
                         context_key: context_id,
                         "turn_index": t_idx,
                         "duration_ms": duration,

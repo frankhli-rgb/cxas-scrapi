@@ -53,7 +53,7 @@ class Evaluations(Common):
         self.app_id = app_id
 
         # Parse project and location from app_id using Common helpers
-        self.project_id = self.get_project_id(app_id)
+        self.project_id = self._get_project_id(app_id)
         self.location = self._get_location(app_id)
 
         # Initialize SDK Client
@@ -87,7 +87,7 @@ class Evaluations(Common):
             "expectations": [],
             "mocks": [],
         }
-        
+
         tags = eval_dict.get("tags", [])
         if tags:
             conversation_entry["tags"] = tags
@@ -104,10 +104,10 @@ class Evaluations(Common):
             for step in steps:
                 if "user_input" in step:
                     ui = step["user_input"]
-                    
+
                     if "variables" in ui:
                         session_params.update(ui["variables"])
-                        
+
                     if "text" in ui:
                         # Whenever we see userInput[text], it's the start of a new turn
                         if current_turn:
@@ -116,7 +116,11 @@ class Evaluations(Common):
                         current_turn["user"] = ui["text"]
                     elif "event" in ui:
                         event = ui["event"]
-                        event_str = event.get("event", str(event)) if isinstance(event, dict) else str(event)
+                        event_str = (
+                            event.get("event", str(event))
+                            if isinstance(event, dict)
+                            else str(event)
+                        )
                         current_turn["user_event"] = event_str
 
                 if "expectation" in step:
@@ -140,34 +144,42 @@ class Evaluations(Common):
                         target_agent = at.get("target_agent", "")
                         if "tool_calls" not in current_turn:
                             current_turn["tool_calls"] = []
-                        current_turn["tool_calls"].append({
-                            "action": "transfer_to_agent",
-                            "agent": target_agent
-                        })
+                        current_turn["tool_calls"].append(
+                            {
+                                "action": "transfer_to_agent",
+                                "agent": target_agent,
+                            }
+                        )
 
                     if "tool_call" in exp:
                         tc = exp["tool_call"]
                         args = tc.get("args", {})
                         unwrapped_args = Common.unwrap_struct(args)
-                        display_name = tc.get("display_name", tc.get("tool", ""))
-                        
+                        display_name = tc.get(
+                            "display_name", tc.get("tool", "")
+                        )
+
                         if "tool_calls" not in current_turn:
                             current_turn["tool_calls"] = []
-                        current_turn["tool_calls"].append({
-                            "action": display_name,
-                            "args": unwrapped_args,
-                        })
+                        current_turn["tool_calls"].append(
+                            {
+                                "action": display_name,
+                                "args": unwrapped_args,
+                            }
+                        )
                         id_to_tool[tc.get("id", "")] = display_name
 
                     if "tool_response" in exp:
                         tr = exp["tool_response"]
                         res = tr.get("response", {})
                         unwrapped_res = Common.unwrap_struct(res)
-                        tool_name = id_to_tool.get(tr.get("id", ""), tr.get("tool", ""))
+                        tool_name = id_to_tool.get(
+                            tr.get("id", ""), tr.get("tool", "")
+                        )
                         conversation_entry["mocks"].append(
                             {"tool": tool_name, "response": unwrapped_res}
                         )
-            
+
             # End of source turn: append whatever we have in current_turn
             if current_turn:
                 conversation_entry["turns"].append(current_turn)
@@ -177,7 +189,9 @@ class Evaluations(Common):
         if not isinstance(exp_refs, list):
             exp_refs = [exp_refs]
         conversation_entry["expectations"].extend(exp_refs)
-        conversation_entry["expectations"] = list(dict.fromkeys(conversation_entry["expectations"]))
+        conversation_entry["expectations"] = list(
+            dict.fromkeys(conversation_entry["expectations"])
+        )
 
         if session_params:
             unwrapped_params = Common.unwrap_struct(session_params)
@@ -187,13 +201,15 @@ class Evaluations(Common):
         common_session_params = eval_dict.get("session_parameters", {})
         if not common_session_params:
             common_session_params = golden.get("session_parameters", {})
-             
+
         out_yaml = {}
         if common_session_params:
-            out_yaml["common_session_parameters"] = Common.unwrap_struct(common_session_params)
-             
+            out_yaml["common_session_parameters"] = Common.unwrap_struct(
+                common_session_params
+            )
+
         out_yaml["conversations"] = [conversation_entry]
-        
+
         return out_yaml
 
     @staticmethod
@@ -473,7 +489,9 @@ class Evaluations(Common):
             try:
                 output_format = ExportFormat(output_format.lower())
             except ValueError:
-                print(f"Warning: Invalid output_format '{output_format}'. Using YAML.")
+                print(
+                    f"Warning: Invalid output_format '{output_format}'. Using YAML."
+                )
                 output_format = ExportFormat.YAML
 
         eval_obj = self.get_evaluation(evaluation_id=evaluation_id)
@@ -493,10 +511,15 @@ class Evaluations(Common):
                 if "/evaluationExpectations/" in exp_ref:
                     try:
                         exp_obj = self.get_evaluation_expectation(exp_ref)
-                        
+
                         prompt_text = None
-                        if hasattr(exp_obj, "llm_criteria") and exp_obj.llm_criteria:
-                            prompt_text = getattr(exp_obj.llm_criteria, "prompt", None)
+                        if (
+                            hasattr(exp_obj, "llm_criteria")
+                            and exp_obj.llm_criteria
+                        ):
+                            prompt_text = getattr(
+                                exp_obj.llm_criteria, "prompt", None
+                            )
 
                         if prompt_text:
                             resolved_prompts.append(prompt_text)
@@ -507,7 +530,9 @@ class Evaluations(Common):
                                 eval_exp_dir = os.path.join(
                                     base_dir, "evaluationExpectations"
                                 )
-                                exp_id = Common.sanitize_expectation_id(prompt_text)
+                                exp_id = Common.sanitize_expectation_id(
+                                    prompt_text
+                                )
 
                                 os.makedirs(eval_exp_dir, exist_ok=True)
                                 exp_filename = os.path.join(
@@ -518,7 +543,9 @@ class Evaluations(Common):
                                     "displayName": exp_id,
                                     "llmCriteria": {"prompt": prompt_text},
                                 }
-                                with open(exp_filename, "w", encoding="utf-8") as f:
+                                with open(
+                                    exp_filename, "w", encoding="utf-8"
+                                ) as f:
                                     json.dump(exp_content, f, indent=2)
 
                         else:
@@ -527,7 +554,9 @@ class Evaluations(Common):
 
                     except Exception as e:
                         # Fallback to resource name if resolution fails
-                        print(f"Failed to fetch evaluation expectation '{exp_ref}': {e}")
+                        print(
+                            f"Failed to fetch evaluation expectation '{exp_ref}': {e}"
+                        )
                         resolved_prompts.append(exp_ref)
                 else:
                     # Not a resource name, keep as is
@@ -539,9 +568,7 @@ class Evaluations(Common):
             content = json.dumps(out_dict, indent=2)
         else:
             # Fallback to YAML for all other formats
-            content = yaml.dump(
-                out_dict, sort_keys=False, allow_unicode=True
-            )
+            content = yaml.dump(out_dict, sort_keys=False, allow_unicode=True)
 
         if output_path:
             with open(output_path, "w", encoding="utf-8") as f:
@@ -921,7 +948,7 @@ class Evaluations(Common):
         output_format: ExportFormat = ExportFormat.YAML,
     ) -> None:
         """Exports all evaluations of a specific type to a local directory.
-        
+
         Args:
             eval_type: Type of evaluation ('goldens' or 'scenarios').
             output_dir: Local directory path to export files into.
@@ -932,7 +959,9 @@ class Evaluations(Common):
         evals_map = self.get_evaluations_map(app_id=self.app_id, reverse=True)
 
         if eval_type not in ["goldens", "scenarios"]:
-            raise ValueError("eval_type must be either 'goldens' or 'scenarios'.")
+            raise ValueError(
+                "eval_type must be either 'goldens' or 'scenarios'."
+            )
 
         target_evals = evals_map.get(eval_type, {})
 
@@ -954,7 +983,7 @@ class Evaluations(Common):
             try:
                 # Clean display name to make a safe filename
                 safe_name = "".join(
-                    c if c.isalnum() or c in ("_", "-") else "_" 
+                    c if c.isalnum() or c in ("_", "-") else "_"
                     for c in display_name
                 )
                 ext = "json" if output_format == ExportFormat.JSON else "yaml"
@@ -962,9 +991,9 @@ class Evaluations(Common):
 
                 # Export the eval with sideloading of evaluation expectations.
                 self.export_evaluation(
-                    resource_id, 
-                    output_format=output_format, 
-                    output_path=file_path
+                    resource_id,
+                    output_format=output_format,
+                    output_path=file_path,
                 )
 
                 print(f"✅ Exported: {safe_name}.{ext}")

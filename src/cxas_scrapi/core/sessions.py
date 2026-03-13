@@ -20,9 +20,11 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+
 class Modality(str, Enum):
     TEXT = "text"
     AUDIO = "audio"
+
 
 BIDI_SESSION_URI = "wss://ces.googleapis.com/ws/google.cloud.ces.v1.SessionService/BidiRunSession/locations/"
 AUDIO_CHUNK_SIZE = 3200
@@ -31,50 +33,64 @@ SILENCE_PADDING_CHUNKS = 3
 SAMPLE_RATE = 16000
 SAMPLE_WIDTH = 2
 
+
 class AgentTurnManager:
-  """Manages the agent's turn by simulating audio playback time."""
-  def __init__(self, sample_rate: int = SAMPLE_RATE, sample_width: int = SAMPLE_WIDTH):
-    self.sample_rate = sample_rate
-    self.sample_width = sample_width
-    self.bytes_per_second = sample_rate * sample_width
+    """Manages the agent's turn by simulating audio playback time."""
 
-    self.len_audio_bytes_received = 0
-    self.turn_completed_flag = False
-    self.first_audio_received_time = None
-    self.lock = threading.Lock()
+    def __init__(
+        self, sample_rate: int = SAMPLE_RATE, sample_width: int = SAMPLE_WIDTH
+    ):
+        self.sample_rate = sample_rate
+        self.sample_width = sample_width
+        self.bytes_per_second = sample_rate * sample_width
 
-  def add_audio(self, audio_bytes: bytes):
-    with self.lock:
-      if self.first_audio_received_time is None:
-        self.first_audio_received_time = time.time()
-      self.len_audio_bytes_received += len(audio_bytes)
+        self.len_audio_bytes_received = 0
+        self.turn_completed_flag = False
+        self.first_audio_received_time = None
+        self.lock = threading.Lock()
 
-  def mark_turn_completed(self):
-    with self.lock:
-      self.turn_completed_flag = True
+    def add_audio(self, audio_bytes: bytes):
+        with self.lock:
+            if self.first_audio_received_time is None:
+                self.first_audio_received_time = time.time()
+            self.len_audio_bytes_received += len(audio_bytes)
 
-  def reset(self):
-    with self.lock:
-      self.len_audio_bytes_received = 0
-      self.turn_completed_flag = False
-      self.first_audio_received_time = None
+    def mark_turn_completed(self):
+        with self.lock:
+            self.turn_completed_flag = True
 
-  def is_agent_done_talking(self) -> bool:
-    with self.lock:
-      if not self.turn_completed_flag:
-        return False
+    def reset(self):
+        with self.lock:
+            self.len_audio_bytes_received = 0
+            self.turn_completed_flag = False
+            self.first_audio_received_time = None
 
-      if self.first_audio_received_time is None:
-        return True # Agent didn't send any audio
+    def is_agent_done_talking(self) -> bool:
+        with self.lock:
+            if not self.turn_completed_flag:
+                return False
 
-      audio_duration_seconds = self.len_audio_bytes_received / self.bytes_per_second
-      current_playback_time = time.time() - self.first_audio_received_time
+            if self.first_audio_received_time is None:
+                return True  # Agent didn't send any audio
 
-      return current_playback_time >= audio_duration_seconds
+            audio_duration_seconds = (
+                self.len_audio_bytes_received / self.bytes_per_second
+            )
+            current_playback_time = time.time() - self.first_audio_received_time
+
+            return current_playback_time >= audio_duration_seconds
+
 
 class BidiSessionHandler:
     """Handles the Bidi WebSocket session with the session service."""
-    def __init__(self, location: str, token: str, config: Dict[str, Any], inputs: List[Dict[str, Any]]):
+
+    def __init__(
+        self,
+        location: str,
+        token: str,
+        config: Dict[str, Any],
+        inputs: List[Dict[str, Any]],
+    ):
         self.uri = BIDI_SESSION_URI + location
         self.token = token
         self.config = config
@@ -83,7 +99,6 @@ class BidiSessionHandler:
         self.ws_app = None
         self.outputs = []
 
-
     def _send_silence(self, num_chunks: int):
         silence_chunk = b"\x00" * AUDIO_CHUNK_SIZE
         for _ in range(num_chunks):
@@ -91,52 +106,69 @@ class BidiSessionHandler:
                 realtime_input=ces_v1beta.SessionInput(audio=silence_chunk)
             )
             query_json = json_format.MessageToJson(
-                query_message._pb, preserving_proto_field_name=False, indent=None
+                query_message._pb,
+                preserving_proto_field_name=False,
+                indent=None,
             )
             self.ws_app.send(query_json)
             time.sleep(CHUNK_DELAY)
 
-    def _send_audio_message(self, audio_payload: Dict[str, Any], turn_index: int):
+    def _send_audio_message(
+        self, audio_payload: Dict[str, Any], turn_index: int
+    ):
         audio_bytes = audio_payload["audio"]
         text_label = audio_payload.get("text")
-        
+
         if text_label and text_label != "Audio Input":
-            self.outputs.append(ces_v1beta.SessionOutput({
-                "diagnostic_info": {
-                    "messages": [
-                        {
-                            "role": "USER",
-                            "chunks": [{"text": text_label}]
+            self.outputs.append(
+                ces_v1beta.SessionOutput(
+                    {
+                        "diagnostic_info": {
+                            "messages": [
+                                {
+                                    "role": "USER",
+                                    "chunks": [{"text": text_label}],
+                                }
+                            ]
                         }
-                    ]
-                }
-            }))
-        
+                    }
+                )
+            )
+
         logging.debug("Sending leading silence before turn %d...", turn_index)
-        self._send_silence(SILENCE_PADDING_CHUNKS)  # 0.3 seconds of leading silence
+        self._send_silence(
+            SILENCE_PADDING_CHUNKS
+        )  # 0.3 seconds of leading silence
 
         logging.debug("Sending audio chunks for turn %d...", turn_index)
-        
+
         for i in range(0, len(audio_bytes), AUDIO_CHUNK_SIZE):
-            chunk = audio_bytes[i:i+AUDIO_CHUNK_SIZE]
+            chunk = audio_bytes[i : i + AUDIO_CHUNK_SIZE]
             query_message = ces_v1beta.BidiSessionClientMessage(
                 realtime_input=ces_v1beta.SessionInput(audio=chunk)
             )
             query_json = json_format.MessageToJson(
-                query_message._pb, preserving_proto_field_name=False, indent=None
+                query_message._pb,
+                preserving_proto_field_name=False,
+                indent=None,
             )
             self.ws_app.send(query_json)
             time.sleep(CHUNK_DELAY)
 
-        logging.debug("Sending trailing silence for turn %d to trigger endpointing...", turn_index)
-        self._send_silence(SILENCE_PADDING_CHUNKS) # 0.3 seconds of trailing silence
+        logging.debug(
+            "Sending trailing silence for turn %d to trigger endpointing...",
+            turn_index,
+        )
+        self._send_silence(
+            SILENCE_PADDING_CHUNKS
+        )  # 0.3 seconds of trailing silence
 
         logging.debug("Waiting for agent to finish turn %d...", turn_index)
         while not self.agent_turn_manager.is_agent_done_talking():
             self._send_silence(1)
 
         self.agent_turn_manager.reset()
-        time.sleep(1) # Small pause between turns
+        time.sleep(1)  # Small pause between turns
 
     def _send_inputs(self):
         try:
@@ -145,15 +177,17 @@ class BidiSessionHandler:
                 config=ces_v1beta.SessionConfig(
                     session=self.config["session"],
                     input_audio_config=self.config.get("input_audio_config"),
-                    output_audio_config=self.config.get("output_audio_config")
+                    output_audio_config=self.config.get("output_audio_config"),
                 )
             )
             config_json = json_format.MessageToJson(
-                config_message._pb, preserving_proto_field_name=False, indent=None
+                config_message._pb,
+                preserving_proto_field_name=False,
+                indent=None,
             )
             logging.debug("Sending config: %s", config_json)
             self.ws_app.send(config_json)
-            
+
             if not self.inputs:
                 logging.debug("No inputs provided.")
                 self.ws_app.close()
@@ -193,10 +227,14 @@ class BidiSessionHandler:
                 self.outputs.append(response.session_output)
 
                 if response.session_output.audio:
-                    self.agent_turn_manager.add_audio(response.session_output.audio)
+                    self.agent_turn_manager.add_audio(
+                        response.session_output.audio
+                    )
 
                 if response.session_output.turn_completed:
-                    logging.debug("Agent turn network payload completed. Waiting for audio playback.")
+                    logging.debug(
+                        "Agent turn network payload completed. Waiting for audio playback."
+                    )
                     self.agent_turn_manager.mark_turn_completed()
 
         except Exception as e:
@@ -223,7 +261,10 @@ class BidiSessionHandler:
             on_close=self._on_close,
         )
 
-        wst = threading.Thread(target=self.ws_app.run_forever, kwargs={"sslopt": {"ca_certs": certifi.where()}})
+        wst = threading.Thread(
+            target=self.ws_app.run_forever,
+            kwargs={"sslopt": {"ca_certs": certifi.where()}},
+        )
         wst.daemon = True
         wst.start()
 
@@ -280,7 +321,7 @@ class Sessions(Common):
             return json.loads(json_format.MessageToJson(pb_struct))
         except Exception:
             pass
-        
+
         if hasattr(pb_struct, "items"):
             res = {}
             for k, v in pb_struct.items():
@@ -290,7 +331,6 @@ class Sessions(Common):
             return [Sessions._expand_pb_struct(item) for item in pb_struct]
         else:
             return pb_struct
-
 
     def parse_result(self, res: Any):
         """
@@ -340,7 +380,9 @@ class Sessions(Common):
                                 logging.debug(f"USER QUERY: {chunk.text}")
                                 display(HTML(f"{query_font} {chunk.text}"))
                             else:
-                                logging.debug(f"AGENT RESPONSE: [{role}] {chunk.text}")
+                                logging.debug(
+                                    f"AGENT RESPONSE: [{role}] {chunk.text}"
+                                )
                                 display(
                                     HTML(
                                         f"{response_font} [{role}] {chunk.text}"
@@ -351,7 +393,9 @@ class Sessions(Common):
                             tc = chunk.tool_call
                             tool_name = tc.tool or tc.display_name
                             expanded_args = Sessions._expand_pb_struct(tc.args)
-                            logging.debug(f"TOOL CALL: [{role}] {tool_name} -- Args: {expanded_args}")
+                            logging.debug(
+                                f"TOOL CALL: [{role}] {tool_name} -- Args: {expanded_args}"
+                            )
                             display(
                                 HTML(
                                     f"{tool_call_font} [{role}] {tool_name} -- Args: {expanded_args}"
@@ -361,8 +405,12 @@ class Sessions(Common):
                         elif chunk_type == "tool_response":
                             tr = chunk.tool_response
                             tool_name = tr.tool or tr.display_name
-                            expanded_response = Sessions._expand_pb_struct(tr.response)
-                            logging.debug(f"TOOL RESULT: [{role}] {tool_name} -- Result: {expanded_response}")
+                            expanded_response = Sessions._expand_pb_struct(
+                                tr.response
+                            )
+                            logging.debug(
+                                f"TOOL RESULT: [{role}] {tool_name} -- Result: {expanded_response}"
+                            )
                             display(
                                 HTML(
                                     f"{tool_res_font} [{role}] {tool_name} -- Result: {expanded_response}"
@@ -371,7 +419,9 @@ class Sessions(Common):
 
                         elif chunk_type == "agent_transfer":
                             at = chunk.agent_transfer
-                            logging.debug(f"AGENT TRANSFER: [{role}] Transferred to {at.display_name}")
+                            logging.debug(
+                                f"AGENT TRANSFER: [{role}] Transferred to {at.display_name}"
+                            )
                             display(
                                 HTML(
                                     f"{transfer_font} [{role}] Transferred to {at.display_name}"
@@ -379,7 +429,9 @@ class Sessions(Common):
                             )
 
                         elif chunk_type == "payload":
-                            logging.debug(f"CUSTOM PAYLOAD: [{role}] {chunk.payload}")
+                            logging.debug(
+                                f"CUSTOM PAYLOAD: [{role}] {chunk.payload}"
+                            )
                             display(
                                 HTML(
                                     f"<font color='brown'><b>CUSTOM PAYLOAD:</b></font> [{role}] {chunk.payload}"
@@ -406,7 +458,9 @@ class Sessions(Common):
                     for tc in tool_calls_msg.tool_calls:
                         tool_name = tc.tool or tc.display_name
                         expanded_args = Sessions._expand_pb_struct(tc.args)
-                        logging.debug(f"TOOL CALL: {tool_name} -- Args: {expanded_args}")
+                        logging.debug(
+                            f"TOOL CALL: {tool_name} -- Args: {expanded_args}"
+                        )
                         display(
                             HTML(
                                 f"{tool_call_font} {tool_name} -- Args: {expanded_args}"
@@ -441,12 +495,13 @@ class Sessions(Common):
             f"Starting new session with Session ID: {self.current_session_id}"
         )
         return self.current_session_id
-    
-    
-    def async_bidi_run_session(self, config: dict, inputs: list[dict[str, Any]]):
+
+    def async_bidi_run_session(
+        self, config: dict, inputs: list[dict[str, Any]]
+    ):
         handler = BidiSessionHandler(self.location, self.token, config, inputs)
         return handler.run()
-    
+
     def make_text_request(self, config: dict, inputs: list[dict[str, Any]]):
         request = types.RunSessionRequest(config=config, inputs=inputs)
         return self.client.run_session(request=request)
@@ -476,7 +531,9 @@ class Sessions(Common):
             try:
                 modality = Modality(modality.lower())
             except ValueError:
-                raise ValueError(f"Invalid modality: {modality}. Must be 'text' or 'audio'.")
+                raise ValueError(
+                    f"Invalid modality: {modality}. Must be 'text' or 'audio'."
+                )
 
         session_id = self.session_id_setup(
             session_id, restart_session=restart_session
@@ -484,16 +541,22 @@ class Sessions(Common):
 
         config = {"session": session_id}
         inputs = []
-        
+
         if modality == Modality.AUDIO:
-            config["input_audio_config"] = input_audio_config or ces_v1beta.InputAudioConfig(
+            config["input_audio_config"] = (
+                input_audio_config
+                or ces_v1beta.InputAudioConfig(
                     audio_encoding=ces_v1beta.AudioEncoding.LINEAR16,
                     sample_rate_hertz=SAMPLE_RATE,
                 )
-            config["output_audio_config"] = output_audio_config or ces_v1beta.OutputAudioConfig(
+            )
+            config["output_audio_config"] = (
+                output_audio_config
+                or ces_v1beta.OutputAudioConfig(
                     audio_encoding=ces_v1beta.AudioEncoding.LINEAR16,
                     sample_rate_hertz=SAMPLE_RATE,
                 )
+            )
 
         # Determine deployment/version
         if deployment_id:
@@ -522,67 +585,77 @@ class Sessions(Common):
 
         # Wrap tool responses correctly
         if tool_responses is not None:
-            inputs.append({"tool_responses": {"tool_responses": tool_responses}})
-        
+            inputs.append(
+                {"tool_responses": {"tool_responses": tool_responses}}
+            )
+
         if modality == Modality.AUDIO:
             if text is not None:
                 if isinstance(text, str):
-                    logger.warning("Single string input for audio modality introduces minor latency before user utterances.")
+                    logger.warning(
+                        "Single string input for audio modality introduces minor latency before user utterances."
+                    )
                     text = [text]
                 audio_transformer = AudioTransformer()
                 input_audio_bytes = []
                 for input in text:
                     input_audio_bytes.append(
-                      audio_transformer.text_to_speech_bytes(
-                        text=input,
-                        credentials=self.creds,
-                        project_id=self.project_id
-                      )
+                        audio_transformer.text_to_speech_bytes(
+                            text=input,
+                            credentials=self.creds,
+                            project_id=self.project_id,
+                        )
                     )
                 batch_inputs = []
                 for input_data in input_audio_bytes:
                     # Construct input payload matching sessions.py expectation
                     audio_payload = {
                         "audio": input_data["audio_bytes"],
-                        "text": input_data["text"]
+                        "text": input_data["text"],
                     }
                     batch_inputs.append({"audio": audio_payload})
-                return self.async_bidi_run_session(config=config, inputs=batch_inputs)
+                return self.async_bidi_run_session(
+                    config=config, inputs=batch_inputs
+                )
             else:
-                 raise ValueError("Text utterance inputs must be provided for audio modality.")
+                raise ValueError(
+                    "Text utterance inputs must be provided for audio modality."
+                )
         elif modality == Modality.TEXT:
             if text is not None and isinstance(text, str):
                 text = [text]
-            
+
             all_outputs = []
             final_response = None
-            
+
             if text:
                 for input in text:
                     inputs.append({"text": input})
                     response = self.make_text_request(config, inputs)
                     inputs.pop()
-                    
+
                     if response:
                         if hasattr(response, "outputs"):
-                             all_outputs.extend(response.outputs)
+                            all_outputs.extend(response.outputs)
                         final_response = response
             elif inputs:
                 # Handle case where only event/blob/variables are provided without text
                 response = self.make_text_request(config, inputs)
                 if response:
                     if hasattr(response, "outputs"):
-                         all_outputs.extend(response.outputs)
+                        all_outputs.extend(response.outputs)
                     final_response = response
             else:
-                 raise ValueError("Text or valid inputs (e.g. event) must be provided.")
+                raise ValueError(
+                    "Text or valid inputs (e.g. event) must be provided."
+                )
 
             if final_response:
                 return types.RunSessionResponse(outputs=all_outputs)
             return final_response
         else:
             if text is None and not inputs:
-                 raise ValueError("Text or inputs must be provided.")
+                raise ValueError("Text or inputs must be provided.")
             raise ValueError("Modality must be either 'text' or 'audio'.")
 
     def send_event(

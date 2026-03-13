@@ -33,7 +33,6 @@ from cxas_scrapi.utils.eval_utils import EvalUtils
 logger = logging.getLogger(__name__)
 
 
-
 SUMMARY_SCHEMA_COLUMNS = [
     "test_run_timestamp",
     "test_type",

@@ -46,6 +46,7 @@ class Common:
             self.scopes += scope
 
         import os
+
         oauth_token = os.environ.get("CXAS_OAUTH_TOKEN")
 
         if creds:
@@ -73,6 +74,7 @@ class Common:
 
         elif oauth_token:
             from google.oauth2.credentials import Credentials
+
             self.creds = Credentials(token=oauth_token)
             self.token = oauth_token
 
@@ -87,7 +89,7 @@ class Common:
         self.client_options = None
         if agent_id:
             self.client_options = self._get_client_options(agent_id)
-            self.project_id = self._get_project_id(agent_id)
+            self.project_id = self.__get_project_id(agent_id)
             self.location = self._get_location(agent_id)
         else:
             self.project_id = None
@@ -132,7 +134,7 @@ class Common:
         return {"api_endpoint": api_endpoint}
 
     @staticmethod
-    def get_project_id(resource_id: str) -> Optional[str]:
+    def _get_project_id(resource_id: str) -> Optional[str]:
         """Extract project ID from a resource string."""
         if not resource_id:
             return None
@@ -275,7 +277,7 @@ class Common:
     def unwrap_struct(struct):
         if not isinstance(struct, dict):
             return struct
-        
+
         if "fields" not in struct:
             return struct
 

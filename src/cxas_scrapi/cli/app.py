@@ -22,8 +22,8 @@ def _resolve_app_args(
 ) -> tuple[Apps, str, str]:
     """Resolves project, location, Apps client, app_id, and display_name."""
     project_id = (
-        Common.get_project_id(app_identifier)
-        if Common.get_project_id(app_identifier)
+        Common._get_project_id(app_identifier)
+        if Common._get_project_id(app_identifier)
         else getattr(args, "project_id", None)
     )
     location = (
@@ -214,7 +214,7 @@ def app_delete(args: argparse.Namespace) -> None:
 
     if args.app_id:
         print(f"Deleting App: {args.app_id}")
-        project_id = Common.get_project_id(args.app_id)
+        project_id = Common._get_project_id(args.app_id)
         location = Common._get_location(args.app_id)
         app_id = args.app_id
     elif args.display_name and args.project_id and args.location:

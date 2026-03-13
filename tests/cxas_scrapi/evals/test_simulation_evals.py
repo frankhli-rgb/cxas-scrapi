@@ -51,31 +51,37 @@ def test_llm_user_conversation():
     got_user_utterance_0 = llm_conv.next_user_utterance("")
     assert got_user_utterance_0 == user_utterance_0
     assert llm_conv.get_num_turns() == 1
-    assert llm_conv.get_transcript() == "\n".join(["Agent: ", f"User: {user_utterance_0}"])
+    assert llm_conv.get_transcript() == "\n".join(
+        ["Agent: ", f"User: {user_utterance_0}"]
+    )
 
     got_user_utterance_1 = llm_conv.next_user_utterance(agent_response_1)
     assert got_user_utterance_1 == user_utterance_1
     assert llm_conv.get_num_turns() == 2
-    assert llm_conv.get_transcript() == "\n".join([
-        "Agent: ",
-        f"User: {user_utterance_0}",
-        f"Agent: {agent_response_1}",
-        f"User: {user_utterance_1}",
-    ])
+    assert llm_conv.get_transcript() == "\n".join(
+        [
+            "Agent: ",
+            f"User: {user_utterance_0}",
+            f"Agent: {agent_response_1}",
+            f"User: {user_utterance_1}",
+        ]
+    )
 
     assert llm_conv.steps_progress[0].status == StepStatus.COMPLETED
 
     got_user_utterance_2 = llm_conv.next_user_utterance(agent_response_2)
     assert got_user_utterance_2 == ""
     assert llm_conv.get_num_turns() == 3
-    assert llm_conv.get_transcript() == "\n".join([
-        "Agent: ",
-        f"User: {user_utterance_0}",
-        f"Agent: {agent_response_1}",
-        f"User: {user_utterance_1}",
-        f"Agent: {agent_response_2}",
-        "User: ",
-    ])
+    assert llm_conv.get_transcript() == "\n".join(
+        [
+            "Agent: ",
+            f"User: {user_utterance_0}",
+            f"Agent: {agent_response_1}",
+            f"User: {user_utterance_1}",
+            f"Agent: {agent_response_2}",
+            "User: ",
+        ]
+    )
 
     mock_genai_client.models.generate_content.assert_called_once()
 
@@ -106,18 +112,22 @@ def test_llm_user_conversation_max_turns():
     got_user_utterance_0 = llm_conv.next_user_utterance("")
     assert got_user_utterance_0 == user_utterance_0
     assert llm_conv.get_num_turns() == 1
-    assert llm_conv.get_transcript() == "\n".join(["Agent: ", f"User: {user_utterance_0}"])
+    assert llm_conv.get_transcript() == "\n".join(
+        ["Agent: ", f"User: {user_utterance_0}"]
+    )
 
     # Last turn since we reached the max turns.
     got_user_utterance_1 = llm_conv.next_user_utterance(agent_response_1)
     assert got_user_utterance_1 == ""
     assert llm_conv.get_num_turns() == 2
-    assert llm_conv.get_transcript() == "\n".join([
-        "Agent: ",
-        f"User: {user_utterance_0}",
-        f"Agent: {agent_response_1}",
-        "User: ",
-    ])
+    assert llm_conv.get_transcript() == "\n".join(
+        [
+            "Agent: ",
+            f"User: {user_utterance_0}",
+            f"Agent: {agent_response_1}",
+            "User: ",
+        ]
+    )
 
     # LLM call never gets made because we reached the max turns.
     mock_genai_client.models.generate_content.assert_not_called()
@@ -126,14 +136,18 @@ def test_llm_user_conversation_max_turns():
 
 from cxas_scrapi.evals.simulation_evals import SimulationEvals
 
-@patch('cxas_scrapi.evals.simulation_evals.Sessions')
-@patch('cxas_scrapi.evals.simulation_evals.LLMUserConversation')
+
+@patch("cxas_scrapi.evals.simulation_evals.Sessions")
+@patch("cxas_scrapi.evals.simulation_evals.LLMUserConversation")
 def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
     mock_sessions = mock_sessions_class.return_value
     mock_eval_conv = mock_llm_conv_class.return_value
 
     # Setup the mock conversation sequence
-    mock_eval_conv.next_user_utterance.side_effect = ["I want to book a flight", ""]
+    mock_eval_conv.next_user_utterance.side_effect = [
+        "I want to book a flight",
+        "",
+    ]
     mock_eval_conv.steps_progress = []
 
     # Setup mock agent responses
@@ -153,21 +167,21 @@ def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
 
     # Initialize the SimulationEvals
     app_id = "projects/test/locations/us/apps/123-abc"
-    with patch('cxas_scrapi.evals.simulation_evals.genai.Client'):
-        with patch('cxas_scrapi.core.apps.AgentServiceClient'):
+    with patch("cxas_scrapi.evals.simulation_evals.genai.Client"):
+        with patch("cxas_scrapi.core.apps.AgentServiceClient"):
             simulator = SimulationEvals(app_id=app_id)
 
     # Run the simulation
     test_case = {"steps": []}
     result_conv = simulator.simulate_conversation(
-        test_case=test_case,
-        initial_utterance="Hi",
-        console_logging=False
+        test_case=test_case, initial_utterance="Hi", console_logging=False
     )
 
     # Assertions
     mock_sessions.run.assert_any_call(session_id="mock_session", text="Hi")
-    mock_sessions.run.assert_any_call(session_id="mock_session", text="I want to book a flight")
+    mock_sessions.run.assert_any_call(
+        session_id="mock_session", text="I want to book a flight"
+    )
     mock_eval_conv.next_user_utterance.assert_any_call("Where to?")
     mock_eval_conv.next_user_utterance.assert_any_call("Flight booked.")
     assert result_conv == mock_eval_conv

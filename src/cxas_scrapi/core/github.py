@@ -6,6 +6,7 @@ import yaml
 
 from cxas_scrapi.core.common import Common
 from cxas_scrapi.core.evaluations import Evaluations
+
 """Templates used by the CXAS SCRAPI CLI."""
 
 GITHUB_ACTION_TEMPLATE_TEST = """name: "CI Test {agent_name}"
@@ -200,7 +201,6 @@ jobs:
 """
 
 
-
 DOCKERFILE_TEMPLATE = """# Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
@@ -262,15 +262,21 @@ def init_github_action(args: argparse.Namespace) -> None:
         agent_name = "agent"
 
     # Extract project_id and location from app_id if it exists
-    extracted_project = Common.get_project_id(app_id) if app_id else None
+    extracted_project = Common._get_project_id(app_id) if app_id else None
     extracted_location = Common._get_location(app_id) if app_id else None
 
-    project_id = getattr(args, "project_id", None) or extracted_project or "YOUR_PROJECT_ID"
+    project_id = (
+        getattr(args, "project_id", None)
+        or extracted_project
+        or "YOUR_PROJECT_ID"
+    )
     location = getattr(args, "location", None) or extracted_location or "global"
 
     if not app_id:
         app_basename = os.path.basename(os.path.abspath(agent_dir))
-        app_id = f"projects/{project_id}/locations/{location}/apps/{app_basename}"
+        app_id = (
+            f"projects/{project_id}/locations/{location}/apps/{app_basename}"
+        )
         print(
             f"Warning: No --app_id provided and could not retrieve 'name' from {app_yaml_path}."
         )
@@ -297,7 +303,9 @@ def init_github_action(args: argparse.Namespace) -> None:
             eval_client = Evaluations(app_id=app_id)
             evals_map = eval_client.get_evaluations_map()
 
-            if evals_map and (evals_map.get("goldens") or evals_map.get("scenarios")):
+            if evals_map and (
+                evals_map.get("goldens") or evals_map.get("scenarios")
+            ):
                 all_evals = list(evals_map.get("goldens", {}).keys()) + list(
                     evals_map.get("scenarios", {}).keys()
                 )
@@ -307,7 +315,9 @@ def init_github_action(args: argparse.Namespace) -> None:
                 )
 
                 if len(all_evals) > 1:
-                    eval_comments = "\n  # Other evaluations found for reference:\n"
+                    eval_comments = (
+                        "\n  # Other evaluations found for reference:\n"
+                    )
                     for name in all_evals[1:]:
                         # Reverse lookup the display names from the maps
                         display_name = evals_map.get("goldens", {}).get(
@@ -322,7 +332,6 @@ def init_github_action(args: argparse.Namespace) -> None:
             eval_id = f"{app_id}/evaluations/YOUR_EVAL_ID"
     elif not eval_id:
         eval_id = f"{app_id}/evaluations/YOUR_EVAL_ID"
-
 
     wip = (
         args.workload_identity_provider
@@ -380,18 +389,22 @@ def init_github_action(args: argparse.Namespace) -> None:
         auth_step = """      # Authentication is handled via the GOOGLE_API_KEY environment variable defined above.
       # No separate auth step is necessary."""
         setup_gcloud_step = ""
-        docker_auth_args = """            -e GOOGLE_API_KEY=${{ env.GOOGLE_API_KEY }} \\"""
+        docker_auth_args = (
+            """            -e GOOGLE_API_KEY=${{ env.GOOGLE_API_KEY }} \\"""
+        )
     elif auth_method == "oauth_token":
         auth_env = "  # Store your OAuth Token string in GitHub Secrets\n  CXAS_OAUTH_TOKEN: ${{ secrets.CXAS_OAUTH_TOKEN }}"
         auth_step = """      # Authentication is handled via the CXAS_OAUTH_TOKEN environment variable defined above.
       # No separate auth step is necessary."""
         setup_gcloud_step = ""
-        docker_auth_args = """            -e CXAS_OAUTH_TOKEN=${{ env.CXAS_OAUTH_TOKEN }} \\"""
-
+        docker_auth_args = (
+            """            -e CXAS_OAUTH_TOKEN=${{ env.CXAS_OAUTH_TOKEN }} \\"""
+        )
 
     import re
+
     safe_agent_name = agent_name.lower().replace(" ", "_")
-    safe_agent_name = re.sub(r'[^a-z0-9_-]', '', safe_agent_name)
+    safe_agent_name = re.sub(r"[^a-z0-9_-]", "", safe_agent_name)
 
     test_template = GITHUB_ACTION_TEMPLATE_TEST.format(
         agent_name=agent_name.capitalize(),
@@ -420,7 +433,6 @@ def init_github_action(args: argparse.Namespace) -> None:
         setup_gcloud_step=setup_gcloud_step,
     )
 
-
     # We want to output the GitHub Actions workflows into the `.github/workflows` directory
     # of the target agent's Git repository, rather than the directory where the user happens
     # to be running the `cxas-eval` command from. We use `git rev-parse` to find this root.
@@ -430,14 +442,16 @@ def init_github_action(args: argparse.Namespace) -> None:
             ["git", "rev-parse", "--show-toplevel"],
             cwd=agent_abs_path,
             text=True,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
         ).strip()
 
         # Security/Sanity Check: Ensure the git_root we found actually encapsulates the agent_dir.
         # If the user runs the CLI from a git repo (cxas-scrapi) but points --agent_dir to an
         # un-tracked sibling folder (/tmp/agent), `git` might accidentally resolve the cxas-scrapi repo!
         if os.path.commonpath([git_root, agent_abs_path]) != git_root:
-            raise ValueError("Discovered Git root does not encapsulate the agent directory.")
+            raise ValueError(
+                "Discovered Git root does not encapsulate the agent directory."
+            )
 
     except Exception:
         # Fallback to the provided agent directory if it's not a git repository
@@ -477,7 +491,9 @@ def init_github_action(args: argparse.Namespace) -> None:
             setup_gcloud_step=setup_gcloud_step,
         )
         cleanup_output_path = (
-            os.path.join(os.path.dirname(args.output), f"cleanup_{safe_agent_name}.yml")
+            os.path.join(
+                os.path.dirname(args.output), f"cleanup_{safe_agent_name}.yml"
+            )
             if args.output
             else os.path.join(workflows_dir, f"cleanup_{safe_agent_name}.yml")
         )
@@ -494,7 +510,9 @@ def init_github_action(args: argparse.Namespace) -> None:
         with open(dockerfile_path, "w") as f:
             f.write(DOCKERFILE_TEMPLATE)
     else:
-        print(f"Dockerfile already exists at {dockerfile_path}. Skipping generation.")
+        print(
+            f"Dockerfile already exists at {dockerfile_path}. Skipping generation."
+        )
 
     # Generate requirements.txt if it doesn't exist
     requirements_path = os.path.join(agent_dir, "requirements.txt")
@@ -504,7 +522,9 @@ def init_github_action(args: argparse.Namespace) -> None:
             f.write("# Add your agent dependencies here\n")
             f.write("# google-cloud-ces  # Uncomment if needed\n")
     else:
-        print(f"requirements.txt already exists at {requirements_path}. Skipping generation.")
+        print(
+            f"requirements.txt already exists at {requirements_path}. Skipping generation."
+        )
 
     print(
         f"Successfully generated GitHub Actions workflows to {os.path.dirname(test_output_path)}"
@@ -530,4 +550,6 @@ cxas-eval local-test --agent_dir "{agent_dir}" --project_id "{project_id}" --loc
             os.chmod(hook_path, st.st_mode | stat.S_IEXEC)
             print("Pre-push hook installed successfully.")
         else:
-            print("Warning: Not a git repository root. Skipping hook installation.")
+            print(
+                "Warning: Not a git repository root. Skipping hook installation."
+            )

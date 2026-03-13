@@ -856,8 +856,6 @@ class EvalUtils(Evaluations):
             f"{target_project}.{dataset_table}"
         )
 
-
-
     def load_golden_eval_from_yaml(
         self,
         yaml_file_path: str,
@@ -890,53 +888,71 @@ class EvalUtils(Evaluations):
 
         # Handle Dataset format (list of conversations) - pick the first one
         if "conversations" in data and isinstance(data["conversations"], list):
-            logger.info("Picking first conversation from dataset: %s", yaml_file_path)
+            logger.info(
+                "Picking first conversation from dataset: %s", yaml_file_path
+            )
             common_params = data.get("common_session_parameters", {})
             conversation = data["conversations"][0]
-            
+
             # Merge session parameters
             session_params = common_params.copy()
             session_params.update(conversation.get("session_parameters", {}))
-            
+
             # Extract basic info
             display_name = conversation.get("conversation", "Imported_Eval")
             tags = conversation.get("tags") or []
             if isinstance(tags, str):
                 tags = [t.strip() for t in tags.split(",")]
-            
+
             # Process turns
             json_turns = []
             params_injected = False
             for turn in conversation.get("turns", []):
-                result = self._process_dataset_turn(turn, session_params, params_injected)
+                result = self._process_dataset_turn(
+                    turn, session_params, params_injected
+                )
                 json_turns.append({"steps": result["steps"]})
                 params_injected = result["params_injected"]
-            
+
             expectations = conversation.get("expectations", [])
-        
+
         # Handle Evaluation Resource or Direct Export format
         else:
-            display_name = data.get("displayName") or data.get("name") or "Imported_Eval"
+            display_name = (
+                data.get("displayName") or data.get("name") or "Imported_Eval"
+            )
             tags = data.get("tags") or []
             if isinstance(tags, str):
                 tags = [t.strip() for t in tags.split(",")]
-            
+
             golden = data.get("golden", data)
             json_turns = []
-            
+
             # If turns are already in JSON proto format (Case 1)
-            if "turns" in golden and golden["turns"] and "steps" in golden["turns"][0]:
+            if (
+                "turns" in golden
+                and golden["turns"]
+                and "steps" in golden["turns"][0]
+            ):
                 json_turns = golden["turns"]
             # Otherwise process raw YAML turns (Case 1b)
             elif "turns" in golden:
                 for t in golden["turns"]:
-                    result = self._process_dataset_turn(t, session_params={}, params_injected=True)
+                    result = self._process_dataset_turn(
+                        t, session_params={}, params_injected=True
+                    )
                     json_turns.append({"steps": result["steps"]})
-            
-            expectations = golden.get("evaluationExpectations") or data.get("expectations") or []
+
+            expectations = (
+                golden.get("evaluationExpectations")
+                or data.get("expectations")
+                or []
+            )
 
         # Final processing of expectations (handles side-loading)
-        eval_expectations = self._process_conversation_expectations(expectations, base_dir=base_dir)
+        eval_expectations = self._process_conversation_expectations(
+            expectations, base_dir=base_dir
+        )
 
         return {
             "displayName": display_name,
@@ -963,10 +979,14 @@ class EvalUtils(Evaluations):
                 if base_dir and not exp.startswith("projects/"):
                     try:
                         exp_id = Common.sanitize_expectation_id(exp)
-                        eval_exp_dir = os.path.join(base_dir, "evaluationExpectations")
+                        eval_exp_dir = os.path.join(
+                            base_dir, "evaluationExpectations"
+                        )
                         os.makedirs(eval_exp_dir, exist_ok=True)
-                        
-                        exp_filename = os.path.join(eval_exp_dir, f"{exp_id}.json")
+
+                        exp_filename = os.path.join(
+                            eval_exp_dir, f"{exp_id}.json"
+                        )
                         if not os.path.exists(exp_filename):
                             exp_content = {
                                 "displayName": exp_id,
@@ -974,13 +994,20 @@ class EvalUtils(Evaluations):
                             }
                             with open(exp_filename, "w", encoding="utf-8") as f:
                                 json.dump(exp_content, f, indent=2)
-                            logger.info("Auto-sideloaded expectation to %s", exp_filename)
+                            logger.info(
+                                "Auto-sideloaded expectation to %s",
+                                exp_filename,
+                            )
                     except Exception as e:
-                        logger.warning("Failed to auto-sideload expectation: %s", e)
+                        logger.warning(
+                            "Failed to auto-sideload expectation: %s", e
+                        )
 
                 # Find or create resource from prompt
-                res_name = self.eval_client.find_or_create_evaluation_expectation(
-                    llm_prompt=exp
+                res_name = (
+                    self.eval_client.find_or_create_evaluation_expectation(
+                        llm_prompt=exp
+                    )
                 )
                 processed_expectations.append(res_name)
             else:
