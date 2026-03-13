@@ -275,9 +275,52 @@ def test_callbacks(args: argparse.Namespace) -> None:
     callback_evals = CallbackEvals()
 
     try:
-        results = callback_evals.run_callback_tests(app_root_dir=args.agent_dir)
+        results = callback_evals.test_all_callbacks_in_app_dir(
+            app_dir=args.agent_dir,
+            agent_name=args.agent_name,
+            callback_type=args.callback_type,
+            callback_name=args.callback_name,
+            log_file=args.log_file,
+            pytest_args=args.pytest_args,
+        )
         if results.empty:
             print(f"No valid callback tests found in {args.agent_dir}")
+            sys.exit(1)
+
+        # Check overall status
+        failed_count = sum(1 for r in results["status"] if r != "PASSED")
+
+        if failed_count > 0:
+            print(f"\nFINAL RESULT: FAIL ({failed_count} callbacks failed)")
+            sys.exit(1)
+        else:
+            print(f"\nFINAL RESULT: PASS (All {len(results)} callbacks passed)")
+            sys.exit(0)
+
+    except Exception as e:
+        print(f"Failed to run callback tests: {e}")
+        sys.exit(1)
+
+
+def test_single_callback(args: argparse.Namespace) -> None:
+    """Handles the 'test-single-callback' command."""
+
+    print(
+        f"Running single callback test for Agent: {args.agent_name}, Type: {args.callback_type}"
+    )
+    callback_evals = CallbackEvals()
+
+    try:
+        results = callback_evals.test_single_callback_for_agent(
+            app_id=args.app_id,
+            agent_name=args.agent_name,
+            callback_type=args.callback_type,
+            test_file_path=args.test_file_path,
+            log_file=args.log_file,
+            pytest_args=args.pytest_args,
+        )
+        if results.empty:
+            print(f"No valid callback tests found at {args.test_file_path}")
             sys.exit(1)
 
         # Check overall status
@@ -646,6 +689,44 @@ def get_parser() -> argparse.ArgumentParser:
 
     parser_test_callbacks.set_defaults(func=test_callbacks)
 
+    # Parser for 'test-single-callback'
+    parser_test_single_callback = subparsers.add_parser(
+        "test-single-callback",
+        help="Run local callback unit tests against the deployed agent.",
+    )
+    parser_test_single_callback.add_argument(
+        "--app_id",
+        required=True,
+        help="The CXAS App ID (projects/.../locations/.../apps/...).",
+    )
+    parser_test_single_callback.add_argument(
+        "--agent_name",
+        required=True,
+        help="Optional: The name of the agent to run callback tests for.",
+    )
+    parser_test_single_callback.add_argument(
+        "--callback_type",
+        required=True,
+        help="Optional: The type of callback to run tests for.",
+    )
+    parser_test_single_callback.add_argument(
+        "--test_file_path",
+        required=True,
+        help="Path to the test python file to run.",
+    )
+    parser_test_single_callback.add_argument(
+        "--log_file",
+        required=False,
+        help="Optional: Path to a file to log pytest output to.",
+    )
+    parser_test_single_callback.add_argument(
+        "--pytest_args",
+        required=False,
+        help="Optional: Additional arguments to pass to pytest.",
+    )
+
+    parser_test_single_callback.set_defaults(func=test_single_callback)
+
     # Parser for 'export'
     parser_export = subparsers.add_parser(
         "export", help="Export an evaluation to YAML or JSON format."
@@ -714,35 +795,6 @@ def get_parser() -> argparse.ArgumentParser:
     )
 
     parser_run.set_defaults(func=run_eval)
-
-    # Parser for 'deploy'
-    parser_deploy = subparsers.add_parser(
-        "deploy", help="Zips agent directory and deploys it to CES."
-    )
-    parser_deploy.add_argument(
-        "--agent_dir",
-        default=".",
-        help=(
-            "Path to the agent directory to deploy. "
-            "Defaults to current directory."
-        ),
-    )
-    _add_project_location_args(parser_deploy)
-    parser_deploy.add_argument(
-        "--app_id",
-        help=(
-            "Optional: Existing app Resource Name to overwrite "
-            "(e.g. projects/.../apps/...)."
-        ),
-    )
-    parser_deploy.add_argument(
-        "--display_name",
-        help=(
-            "Optional: Display name for the newly created app "
-            "(ignored if --app_id is provided)."
-        ),
-    )
-    parser_deploy.set_defaults(func=app_push)
 
     # Parser for 'ci-test'
     parser_ci_test = subparsers.add_parser(

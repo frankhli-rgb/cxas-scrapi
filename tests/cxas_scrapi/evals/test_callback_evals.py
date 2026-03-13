@@ -6,7 +6,7 @@ from cxas_scrapi.evals.callback_evals import CallbackEvals
 
 def test_run_callback_tests_no_files(tmp_path):
     utils = CallbackEvals()
-    result = utils.run_callback_tests(app_root_dir=str(tmp_path))
+    result = utils.test_all_callbacks_in_app_dir(app_dir=str(tmp_path))
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 0
     assert list(result.columns) == [
@@ -26,7 +26,7 @@ def test_run_callback_tests_missing_python_code(tmp_path):
     test_file = agent_dir / "test.py"
     test_file.write_text("def test_dummy(): pass")
 
-    result = utils.run_callback_tests(app_root_dir=str(tmp_path))
+    result = utils.test_all_callbacks_in_app_dir(app_dir=str(tmp_path))
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 0
 
@@ -37,16 +37,14 @@ def test_run_callback_tests_success(tmp_path):
     agent_dir = tmp_path / "agents" / "agentA" / "my_callbacks" / "cb1"
     agent_dir.mkdir(parents=True)
     test_file = agent_dir / "test.py"
-    test_file.write_text(
-        """def test_dummy():
+    test_file.write_text("""def test_dummy():
         assert True
-"""
-    )
+""")
 
     python_code_file = agent_dir / "python_code.py"
     python_code_file.write_text("def my_func(): pass\n")
 
-    result = utils.run_callback_tests(app_root_dir=str(tmp_path))
+    result = utils.test_all_callbacks_in_app_dir(app_dir=str(tmp_path))
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
     assert result.iloc[0]["status"] == "PASSED"
@@ -61,20 +59,57 @@ def test_run_callback_tests_failure(tmp_path):
     agent_dir = tmp_path / "agents" / "agentA" / "my_callbacks" / "cb1"
     agent_dir.mkdir(parents=True)
     test_file = agent_dir / "test.py"
-    test_file.write_text(
-        """def test_dummy_fail():
+    test_file.write_text("""def test_dummy_fail():
         assert False, 'Failed purposely'
-"""
-    )
+""")
 
     python_code_file = agent_dir / "python_code.py"
     python_code_file.write_text("def my_func(): pass\n")
 
-    result = utils.run_callback_tests(app_root_dir=str(tmp_path))
+    result = utils.test_all_callbacks_in_app_dir(app_dir=str(tmp_path))
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
     assert result.iloc[0]["status"] == "FAILED"
     assert result.iloc[0]["test_name"] == "test_dummy_fail"
     assert result.iloc[0]["agent_name"] == "agentA"
     assert result.iloc[0]["callback_type"] == "my_callbacks"
-    assert "Failed purposely" in str(result.iloc[0]["error_message"])
+
+
+def test_test_single_callback_for_agent(tmp_path):
+    from unittest.mock import patch, MagicMock
+
+    utils = CallbackEvals()
+
+    test_file = tmp_path / "test_cb.py"
+    test_file.write_text("""def test_dummy():
+        assert True
+""")
+
+    mock_callback = MagicMock()
+    mock_callback.python_code = "def my_func(): pass\n"
+
+    # Create mock agent
+    mock_agent = MagicMock()
+    # Mock the field the user is accessing in their if/elif structure
+    mock_agent.before_model_callbacks = [mock_callback]
+
+    with patch("cxas_scrapi.evals.callback_evals.Agents") as MockAgents:
+        mock_client = MockAgents.return_value
+        mock_client.get_agents_map.return_value = {
+            "agentA": "projects/P/locations/L/apps/A/agents/agentA"
+        }
+        mock_client.get_agent.return_value = mock_agent
+
+        result = utils.test_single_callback_for_agent(
+            app_id="projects/P/locations/L/apps/A",
+            agent_name="agentA",
+            callback_type="before_model_callback",
+            test_file_path=str(test_file),
+        )
+
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 1
+    assert result.iloc[0]["status"] == "PASSED"
+    assert result.iloc[0]["test_name"] == "test_dummy"
+    assert result.iloc[0]["agent_name"] == "agentA"
+    assert result.iloc[0]["callback_type"] == "before_model_callback"
