@@ -319,15 +319,15 @@ class Evaluations(Common):
                 f"Invalid evaluation_run_id format: {evaluation_run_id}"
             )
 
-        app_name = evaluation_run_id.split("/evaluationRuns/")[0]
-        wildcard_parent = f"{app_name}/evaluations/-"
+        run_status = self.client.get_evaluation_run(name=evaluation_run_id)
 
-        request = types.ListEvaluationResultsRequest(
-            parent=wildcard_parent,
-            filter=f'evaluation_run:"{evaluation_run_id}"',
-        )
-        response = self.client.list_evaluation_results(request=request)
-        return list(response)
+        results = []
+        for result_name in run_status.evaluation_results:
+            results.append(self.client.get_evaluation_result(name=result_name))
+
+        return results
+
+
 
     def build_search_index(
         self, app_id: Optional[str] = None, force: bool = False
@@ -604,6 +604,60 @@ class Evaluations(Common):
             parent=app_id, evaluation=evaluation
         )
         return self.client.create_evaluation(request=request)
+
+    def update_evaluation(
+        self,
+        evaluation: Union[types.Evaluation, Dict[str, Any]],
+        app_id: Optional[str] = None,
+    ) -> types.Evaluation:
+        """Updates an evaluation. If it doesn't exist, it creates it.
+
+        Args:
+            evaluation: The Evaluation object or dict to update.
+            app_id: Parent App ID. Defaults to self.app_id.
+        """
+        app_id = app_id or self.app_id
+        if not app_id:
+            raise ValueError("app_id is required.")
+
+        # Convert dict to types.Evaluation if needed
+        if isinstance(evaluation, dict):
+            # Use json_format to parse dict to message to handle camelCase/snake_case
+            eval_message = types.Evaluation()
+            # Parse into the underlying protobuf message
+            json_format.ParseDict(
+                evaluation, eval_message._pb, ignore_unknown_fields=True
+            )
+            evaluation = eval_message
+
+        # If name is missing, try to find it by display name
+        if not evaluation.name:
+            existing_evals = self.list_evaluations(app_id)
+            for existing in existing_evals:
+                if existing.display_name == evaluation.display_name:
+                    evaluation.name = existing.name
+                    break
+
+        # If still no name, it's a new evaluation, call create instead
+        if not evaluation.name:
+            print(f"Evaluation '{evaluation.display_name}' not found. Creating it instead.")
+            return self.create_evaluation(evaluation=evaluation, app_id=app_id)
+
+        print(f"Updating existing evaluation: {evaluation.name}")
+        request = types.UpdateEvaluationRequest(
+            evaluation=evaluation
+        )
+        return self.client.update_evaluation(request=request)
+
+    def delete_evaluation(self, name: str, force: bool = False) -> None:
+        """Deletes an evaluation.
+
+        Args:
+            name: Full resource name of the evaluation.
+            force: If True, deletes even if referenced by datasets.
+        """
+        request = types.DeleteEvaluationRequest(name=name, force=force)
+        self.client.delete_evaluation(request=request)
 
     def run_evaluation(
         self,

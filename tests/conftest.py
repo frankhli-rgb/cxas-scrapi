@@ -8,10 +8,28 @@ TEST_APP_ID = "projects/df-reference/locations/us/apps/f39d3ab5-a463-4025-8437-3
 
 def pytest_addoption(parser):
     parser.addoption(
+        "--app-id",
+        action="store",
+        default=None,
+        help="The CXAS App ID to run evaluations against",
+    )
+    parser.addoption(
+        "--eval-dir",
+        action="store",
+        default=None,
+        help="Directory containing evaluation YAML files",
+    )
+    parser.addoption(
         "--run-online",
         action="store_true",
         default=False,
         help="run tests that specifically rely on live API calls",
+    )
+    parser.addoption(
+        "--reload",
+        action="store_true",
+        default=False,
+        help="Delete existing evaluation with same display name before running",
     )
 
 
@@ -36,9 +54,11 @@ def app_id():
     return TEST_APP_ID
 
 
-# Create a mock module structure for google.cloud.ces_v1beta
-mock_ces = MagicMock()
-mock_ces.AgentServiceClient = MagicMock
-mock_ces.EvaluationServiceClient = MagicMock
-mock_ces.types = MagicMock()
-sys.modules["google.cloud.ces_v1beta"] = mock_ces
+# Create a mock module structure for google.cloud.ces_v1beta if not running online
+import sys
+if "--run-online" not in sys.argv:
+    mock_ces = MagicMock()
+    mock_ces.AgentServiceClient = MagicMock
+    mock_ces.EvaluationServiceClient = MagicMock
+    mock_ces.types = MagicMock()
+    sys.modules["google.cloud.ces_v1beta"] = mock_ces
