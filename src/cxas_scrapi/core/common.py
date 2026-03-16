@@ -89,7 +89,7 @@ class Common:
         self.client_options = None
         if agent_id:
             self.client_options = self._get_client_options(agent_id)
-            self.project_id = self.__get_project_id(agent_id)
+            self.project_id = self._get_project_id(agent_id)
             self.location = self._get_location(agent_id)
         else:
             self.project_id = None

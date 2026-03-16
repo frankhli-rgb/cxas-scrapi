@@ -77,6 +77,15 @@ class EvalUtils(Evaluations):
             )
             self.tool_map = {}
         self.agents_client = Agents(app_id=self.app_id, creds=self.creds)
+        try:
+            self.agent_map = self.agents_client.get_agents_map(
+                self.app_id, reverse=True
+            )
+        except (AttributeError, KeyError, RuntimeError, ValueError) as e:
+            logger.warning(
+                "Failed to fetch agent map for %s: %s", self.app_id, e
+            )
+            self.agent_map = {}
         self.ch_client = ConversationHistory(
             app_id=self.app_id, creds=self.creds
         )
@@ -161,11 +170,14 @@ class EvalUtils(Evaluations):
                 action = tool_call["action"]
 
                 if action == "transfer_to_agent" and "agent" in tool_call:
+                    agent_resource = self.agent_map.get(
+                        tool_call["agent"], tool_call["agent"]
+                    )
                     steps.append(
                         {
                             "expectation": {
                                 "agentTransfer": {
-                                    "targetAgent": tool_call["agent"]
+                                    "targetAgent": agent_resource
                                 }
                             }
                         }
@@ -174,6 +186,14 @@ class EvalUtils(Evaluations):
 
                 tool_call_id = f"adk-{uuid.uuid4()}"
                 tool_resource = self.tool_map.get(action, action)
+
+                # Fallback for built-in actions or tools not in map
+                if (
+                    action not in self.tool_map
+                    and not tool_resource.startswith("projects/")
+                ):
+                    tool_resource = f"{self.app_id}/tools/{action}"
+
                 tool_call_expectation = {
                     "expectation": {
                         "toolCall": {
@@ -1014,6 +1034,33 @@ class EvalUtils(Evaluations):
                 # Handle non-string expectations by skipping or logging
                 logger.warning("Skipping non-string expectation: %s", exp)
         return processed_expectations
+
+    def wait_for_run_and_get_results(
+        self,
+        run_name: str,
+        timeout_seconds: int = 300,
+    ) -> List[Dict[str, Any]]:
+        """Polls for completion of an evaluation run and returns results.
+
+        Args:
+            run_name: Name of the evaluation run.
+            timeout_seconds: Max time to wait.
+
+        Returns:
+            A list of evaluation results.
+        """
+        logger.info("Waiting for evaluation run %s to complete...", run_name)
+        start_time = time.time()
+        while True:
+            run_status = self.eval_client.get_evaluation_run(run_name)
+            if run_status.state.name in ["COMPLETED", "ERROR"]:
+                break
+            if time.time() - start_time > timeout_seconds:
+                raise TimeoutError(f"Evaluation run {run_name} timed out.")
+            time.sleep(10)
+
+        results = self.eval_client.list_evaluation_results_by_run(run_name)
+        return results
 
     def create_and_run_evaluation_from_yaml(
         self,
