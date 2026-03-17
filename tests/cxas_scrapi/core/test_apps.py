@@ -160,7 +160,7 @@ def test_export_app_standard(mock_client_cls, mock_export_app_req):
     result = apps_client.export_app(app_id="test-app", gcs_uri="gs://bucket/path")
     
     kwargs = mock_export_app_req.call_args[1]
-    assert kwargs.get("name") == "test-app"
+    assert kwargs.get("name") == "projects/mock-project/locations/us/apps/test-app"
     assert kwargs.get("gcs_uri") == "gs://bucket/path"
     assert result == mock_operation
 
@@ -178,7 +178,7 @@ def test_export_app_local_path(mock_client_cls, mock_export_app_req, mock_open):
     result = apps_client.export_app(app_id="test-app", local_path="/fake/path.zip")
     
     kwargs = mock_export_app_req.call_args[1]
-    assert kwargs.get("name") == "test-app"
+    assert kwargs.get("name") == "projects/mock-project/locations/us/apps/test-app"
     assert kwargs.get("gcs_uri") is None
     
     mock_open.assert_called_once_with("/fake/path.zip", "wb")
