@@ -277,21 +277,20 @@ class BidiSessionHandler:
 class Sessions(Common):
     def __init__(
         self,
-        app_id: str,
+        app_name: str,
         deployment_id: str = None,
         version_id: str = None,
         **kwargs,
     ):
         """Initializes the Sessions client."""
-        super().__init__(agent_id=app_id, **kwargs)
+        super().__init__(app_name=app_name, **kwargs)
 
         # Initialize Sessions Client
         self.client = SessionServiceClient(
             credentials=self.creds, client_options=self.client_options
         )
 
-        self.app_id = app_id
-        self.current_session_id = None
+        self.app_name = app_name
         self.deployment_id = deployment_id
         self.version_id = version_id
 
@@ -467,35 +466,6 @@ class Sessions(Common):
                             )
                         )
 
-    def session_id_setup(self, session_id: str, restart_session: bool) -> str:
-        """Manage the setup of new or existing session IDs."""
-        if restart_session:
-            session_id = self.create_session_id()
-        elif session_id:
-            # Honor explicitly provided session IDs
-            session_id = self.create_session_id(unique_id=session_id)
-        elif not self.current_session_id:
-            session_id = self.create_session_id()
-        else:
-            session_id = self.current_session_id
-        return session_id
-
-    def create_session_id(self, unique_id: str = None):
-        """Create a new session_id resource name."""
-        if unique_id:
-            if "/" in unique_id:
-                session_id = unique_id
-            else:
-                session_id = f"{self.app_id}/sessions/{unique_id}"
-        else:
-            session_id = f"{self.app_id}/sessions/{str(uuid.uuid4())}"
-
-        self.current_session_id = session_id
-        logger.info(
-            f"Starting new session with Session ID: {self.current_session_id}"
-        )
-        return self.current_session_id
-
     def async_bidi_run_session(
         self, config: dict, inputs: list[dict[str, Any]]
     ):
@@ -520,7 +490,6 @@ class Sessions(Common):
         audio_config: Optional[Dict[str, Any]] = None,
         input_audio_config: Optional[Dict[str, Any]] = None,
         output_audio_config: Optional[Dict[str, Any]] = None,
-        restart_session: bool = False,
         deployment_id: Optional[str] = None,
         version_id: Optional[str] = None,
         modality: Modality | str = Modality.TEXT,
@@ -535,11 +504,7 @@ class Sessions(Common):
                     f"Invalid modality: {modality}. Must be 'text' or 'audio'."
                 )
 
-        session_id = self.session_id_setup(
-            session_id, restart_session=restart_session
-        )
-
-        config = {"session": session_id}
+        config = {"session": f"{self.app_name}/sessions/{session_id}"}
         inputs = []
 
         if modality == Modality.AUDIO:
@@ -559,10 +524,10 @@ class Sessions(Common):
             )
 
         # Determine deployment/version
-        if deployment_id:
-            config["deployment"] = deployment_id
-        if version_id:
-            config["app_version"] = version_id
+        if deployment_id or self.deployment_id:
+            config["deployment"] = f"{self.app_name}/deployments/{deployment_id or self.deployment_id}"
+        if version_id or self.version_id:
+            config["app_version"] = f"{self.app_name}/app_versions/{version_id or self.version_id}"
 
         if variables is not None:
             inputs.append({"variables": variables})
@@ -661,9 +626,7 @@ class Sessions(Common):
     def send_event(
         self, unique_id: str, event_name: str, event_vars: Dict[str, Any]
     ):
-        session_id = f"{self.app_id}/sessions/{unique_id}"
-
-        config = {"session": session_id}
+        config = {"session": f"{self.app_name}/sessions/{unique_id}"}
         inputs = [{"event": {"event": event_name, "variables": event_vars}}]
 
         request = types.RunSessionRequest(config=config, inputs=inputs)

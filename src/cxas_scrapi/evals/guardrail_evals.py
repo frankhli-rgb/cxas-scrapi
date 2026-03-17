@@ -253,7 +253,6 @@ class GuardrailEvals:
                     session_id=session_id,
                     text=test_case.user_input,
                     variables=test_case.variables,
-                    restart_session=True,
                 )
                 latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 

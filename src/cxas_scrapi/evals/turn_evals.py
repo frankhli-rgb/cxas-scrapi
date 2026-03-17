@@ -50,17 +50,17 @@ class TurnTestCase(BaseModel):
 class TurnEvals:
     """Class to manage and execute single-turn assertions on CXAS Agents."""
 
-    def __init__(self, app_id: str, creds=None):
+    def __init__(self, app_name: str, creds=None):
         """Initializes the TurnEvals class.
 
         Args:
-            app_id: CXAS App ID
+            app_name: CXAS App Name
             creds: Optional Google Cloud credentials
         """
-        self.app_id = app_id
+        self.app_name = app_name
         self.creds = creds
-        self.sessions_client = Sessions(app_id=self.app_id, creds=self.creds)
-        self.var_client = Variables(app_id=self.app_id, creds=self.creds)
+        self.sessions_client = Sessions(app_name=self.app_name, creds=self.creds)
+        self.var_client = Variables(app_name=self.app_name, creds=self.creds)
 
     def load_turn_test_cases_from_file(
         self, test_file_path: str

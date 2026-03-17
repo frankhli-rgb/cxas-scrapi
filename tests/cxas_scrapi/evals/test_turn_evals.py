@@ -27,7 +27,7 @@ def mock_turn_evals():
     with patch("cxas_scrapi.evals.turn_evals.Sessions"), patch(
         "cxas_scrapi.evals.turn_evals.Variables"
     ):
-        evals = TurnEvals(app_id="test_app_id")
+        evals = TurnEvals(app_name="projects/p/locations/l/apps/a")
         return evals
 
 
