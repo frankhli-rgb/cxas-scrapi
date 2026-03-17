@@ -77,8 +77,8 @@ class Apps(Common):
         return apps_dict
 
     def get_app(self, app_id: str) -> types.App:
-        """Gets a specific app by its full resource name."""
-        request = types.GetAppRequest(name=app_id)
+        """Gets a specific app by its short app ID."""
+        request = types.GetAppRequest(name=f"{self.parent}/apps/{app_id}")
         return self.client.get_app(request=request)
 
     def get_app_by_display_name(self, display_name: str) -> Optional[types.App]:
@@ -141,7 +141,7 @@ class Apps(Common):
 
     def update_app(self, app_id: str, **kwargs) -> types.App:
         """Updates specific fields of an existing App."""
-        app = types.App(name=app_id)
+        app = types.App(name=f"{self.parent}/apps/{app_id}")
         mask_paths = []
 
         for key, value in kwargs.items():
@@ -155,7 +155,7 @@ class Apps(Common):
 
     def delete_app(self, app_id: str, force: bool = False) -> None:
         """Deletes a specific app."""
-        request = types.DeleteAppRequest(name=app_id)
+        request = types.DeleteAppRequest(name=f"{self.parent}/apps/{app_id}")
         self.client.delete_app(request=request)
 
     def export_app(
@@ -169,7 +169,7 @@ class Apps(Common):
         """Exports the specified app.
 
         Args:
-            app_id: The resource name of the app to export.
+            app_id: The short app ID of the app to export.
             gcs_uri: Optional. The Google Cloud Storage URI to export to.
             local_path: Optional. Local file path to write the exported zip archive.
             export_format: The format to export the app in ('JSON' or 'YAML').
@@ -179,7 +179,7 @@ class Apps(Common):
             raise ValueError("Only one of 'gcs_uri' or 'local_path' can be provided.")
 
         request = types.ExportAppRequest(
-            name=app_id,
+            name=f"{self.parent}/apps/{app_id}",
             gcs_uri=gcs_uri if gcs_uri else None,
             export_format=export_format,
         )
@@ -253,13 +253,9 @@ class Apps(Common):
         if sources_provided != 1:
             raise ValueError("Exactly one of 'app_content', 'gcs_uri', or 'local_path' must be provided.")
 
-        # The ImportAppRequest strictly requires just the UUID for the app_id field.
-        # Extract the UUID if a full path or custom URI is provided.
-        clean_app_id = app_id.split("/")[-1]
-
         request_kwargs = {
             "parent": self.parent,
-            "app_id": clean_app_id,
+            "app_id": app_id,
         }
 
         if local_path:
