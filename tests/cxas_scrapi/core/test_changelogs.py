@@ -12,7 +12,7 @@ def test_list_changelogs(mock_client_cls):
     mock_cl.name = "projects/p/locations/l/apps/a/changelogs/123"
     mock_client.list_changelogs.return_value = [mock_cl]
 
-    cl_client = Changelogs(app_id="projects/p/locations/l/apps/a")
+    cl_client = Changelogs(app_name="projects/p/locations/l/apps/a")
     res = cl_client.list_changelogs()
 
     assert len(res) == 1
@@ -25,11 +25,11 @@ def test_get_changelog(mock_client_cls):
     """Test Changelogs.get_changelog."""
     mock_client = mock_client_cls.return_value
     mock_cl = MagicMock()
-    mock_cl.name = "c1"
+    mock_cl.name = "projects/p/locations/l/apps/a/changelogs/c1"
     mock_client.get_changelog.return_value = mock_cl
 
-    cl_client = Changelogs(app_id="projects/p/locations/l/apps/a")
+    cl_client = Changelogs(app_name="projects/p/locations/l/apps/a")
     res = cl_client.get_changelog("c1")
 
-    assert res.name == "c1"
+    assert res.name == "projects/p/locations/l/apps/a/changelogs/c1"
     mock_client.get_changelog.assert_called_once()

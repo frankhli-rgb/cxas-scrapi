@@ -17,7 +17,7 @@ def test_conversation_list(mock_client_cls):
     mock_response = [mock_conv]
     mock_client.list_conversations.return_value = mock_response
 
-    conv_client = ConversationHistory(app_id="projects/p/locations/l/apps/a")
+    conv_client = ConversationHistory(app_name="projects/p/locations/l/apps/a")
     res = conv_client.list_conversations()
 
     assert len(res) == 1
@@ -33,11 +33,11 @@ def test_conversation_get(mock_client_cls):
     mock_conv.name = "projects/p/locations/l/apps/a/conversations/c1"
     mock_client.get_conversation.return_value = mock_conv
 
-    conv_client = ConversationHistory(app_id="projects/p/locations/l/apps/a")
+    conv_client = ConversationHistory(app_name="projects/p/locations/l/apps/a")
     res = conv_client.get_conversation("c1")
 
     assert res.name == "projects/p/locations/l/apps/a/conversations/c1"
-    # Should prefix with app_id if not present
+    # Should prefix with app_name if not present
     mock_client.get_conversation.assert_called_once()
 
 
@@ -71,7 +71,7 @@ def test_export_conversation_to_yaml(mock_get_conv):
 
         with patch("cxas_scrapi.core.conversation_history.AgentServiceClient"):
             conv_client = ConversationHistory(
-                app_id="projects/p/locations/l/apps/a"
+                app_name="projects/p/locations/l/apps/a"
             )
             yaml_str = conv_client.export_conversation_to_yaml("c1")
             assert "name: Converted_Conversation" in yaml_str
@@ -90,7 +90,7 @@ def test_delete_conversation(mock_client_cls, mock_req_cls):
     """Test delete_conversation."""
     mock_client = mock_client_cls.return_value
 
-    conv_client = ConversationHistory(app_id="projects/p/locations/l/apps/a")
+    conv_client = ConversationHistory(app_name="projects/p/locations/l/apps/a")
     conv_client.delete_conversation("c1")
 
     mock_client.delete_conversation.assert_called_once()

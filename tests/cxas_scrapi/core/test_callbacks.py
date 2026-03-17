@@ -16,7 +16,7 @@ def test_list_callbacks(mock_client_cls, mock_get_agent):
     mock_agent.after_tool_callbacks = []
     mock_get_agent.return_value = mock_agent
 
-    cb_client = Callbacks(app_id="projects/p/locations/l/apps/a")
+    cb_client = Callbacks(app_name="projects/p/locations/l/apps/a")
     res = cb_client.list_callbacks("agent1")
 
     assert len(res["before_agent_callbacks"]) == 0
@@ -34,7 +34,7 @@ def test_get_callback(mock_client_cls, mock_get_agent):
     mock_agent.before_model_callbacks = [mock_cb]
     mock_get_agent.return_value = mock_agent
 
-    cb_client = Callbacks(app_id="projects/p/locations/l/apps/a")
+    cb_client = Callbacks(app_name="projects/p/locations/l/apps/a")
     res = cb_client.get_callback("agent1", "before_model")
 
     assert res.python_code == "print('hi')"
@@ -65,7 +65,7 @@ def test_create_callback(mock_callback_cls, mock_client_cls, mock_get_agent):
     mock_agent.before_model_callbacks = callbacks_list
     mock_get_agent.return_value = mock_agent
 
-    cb_client = Callbacks(app_id="projects/p/locations/l/apps/a")
+    cb_client = Callbacks(app_name="projects/p/locations/l/apps/a")
 
     def my_cool_func(session):
         pass
@@ -88,7 +88,7 @@ def test_update_callback(mock_client_cls, mock_get_agent):
     mock_agent.before_model_callbacks = [mock_cb]
     mock_get_agent.return_value = mock_agent
 
-    cb_client = Callbacks(app_id="projects/p/locations/l/apps/a")
+    cb_client = Callbacks(app_name="projects/p/locations/l/apps/a")
 
     cb_client.update_callback(
         "agent1",
@@ -118,7 +118,7 @@ def test_delete_callback(mock_client_cls, mock_get_agent):
     mock_agent.before_model_callbacks = callbacks_list
     mock_get_agent.return_value = mock_agent
 
-    cb_client = Callbacks(app_id="projects/p/locations/l/apps/a")
+    cb_client = Callbacks(app_name="projects/p/locations/l/apps/a")
 
     cb_client.delete_callback("agent1", "before_model", index=0)
 

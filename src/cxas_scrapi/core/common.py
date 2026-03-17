@@ -39,7 +39,7 @@ class Common:
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
         scope: List[str] = None,
-        agent_id: str = None,  # Optional: used to determine client_options
+        app_name: str = None,  # Optional: used to determine client_options
     ):
         self.scopes = GLOBAL_SCOPES
         if scope:
@@ -83,14 +83,14 @@ class Common:
             self.creds.refresh(Request())
             self.token = self.creds.token
 
-        self.agent_id = agent_id
+        self.app_name = app_name
 
-        # Calculate standard client options if agent_id/resource provided
+        # Calculate standard client options if app_name/resource provided
         self.client_options = None
-        if agent_id:
-            self.client_options = self._get_client_options(agent_id)
-            self.project_id = self._get_project_id(agent_id)
-            self.location = self._get_location(agent_id)
+        if app_name:
+            self.client_options = self._get_client_options(app_name)
+            self.project_id = self._get_project_id(app_name)
+            self.location = self._get_location(app_name)
         else:
             self.project_id = None
             self.location = None
@@ -109,19 +109,19 @@ class Common:
         return hashlib.md5(text.encode("utf-8")).hexdigest()
 
     @staticmethod
-    def _get_client_options(resource_id: str) -> Dict[str, str]:
+    def _get_client_options(resource_name: str) -> Dict[str, str]:
         """Determine API endpoint based on region."""
-        if not resource_id:
+        if not resource_name:
             return {}
 
         try:
             # projects/<PROJECT>/locations/<LOCATION>/...
             # Attempt to find location
-            if "locations/" in resource_id:
-                location = resource_id.split("locations/")[1].split("/")[0]
+            if "locations/" in resource_name:
+                location = resource_name.split("locations/")[1].split("/")[0]
             else:
                 # If path is just projects/P/locations/L...
-                parts = resource_id.split("/")
+                parts = resource_name.split("/")
                 if len(parts) > 3 and parts[2] == "locations":
                     location = parts[3]
                 else:
@@ -134,12 +134,12 @@ class Common:
         return {"api_endpoint": api_endpoint}
 
     @staticmethod
-    def _get_project_id(resource_id: str) -> Optional[str]:
+    def _get_project_id(resource_name: str) -> Optional[str]:
         """Extract project ID from a resource string."""
-        if not resource_id:
+        if not resource_name:
             return None
         try:
-            parts = resource_id.split("/")
+            parts = resource_name.split("/")
             if len(parts) >= 2 and parts[0] == "projects":
                 return parts[1]
         except Exception:
@@ -147,14 +147,14 @@ class Common:
         return None
 
     @staticmethod
-    def _get_location(resource_id: str) -> Optional[str]:
+    def _get_location(resource_name: str) -> Optional[str]:
         """Extract location from a resource string."""
-        if not resource_id:
+        if not resource_name:
             return None
         try:
-            if "locations/" in resource_id:
-                return resource_id.split("locations/")[1].split("/")[0]
-            parts = resource_id.split("/")
+            if "locations/" in resource_name:
+                return resource_name.split("locations/")[1].split("/")[0]
+            parts = resource_name.split("/")
             if (
                 len(parts) >= 4
                 and parts[0] == "projects"

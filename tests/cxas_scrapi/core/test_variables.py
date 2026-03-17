@@ -10,9 +10,9 @@ def test_list_variables(mock_get_app):
     mock_get_app.return_value = mock_app
 
     v = Variables("projects/p/locations/l/apps/A")
-    res = v.list_variables("app1")
+    res = v.list_variables()
     assert res == ["var1", "var2"]
-    mock_get_app.assert_called_once_with("app1")
+    mock_get_app.assert_called_once_with("A")
 
 
 @patch("cxas_scrapi.core.variables.Variables.get_app")
@@ -24,10 +24,10 @@ def test_get_variable(mock_get_app):
     mock_get_app.return_value = mock_app
 
     v = Variables("projects/p/locations/l/apps/A")
-    res = v.get_variable("app1", "my_var")
+    res = v.get_variable("my_var")
     assert res == v1
 
-    res2 = v.get_variable("app1", "unknown")
+    res2 = v.get_variable("unknown")
     assert res2 is None
 
 
@@ -48,7 +48,7 @@ def test_create_variable(mock_get_app, mock_update_app, mock_vd):
     mock_get_app.return_value = mock_app
 
     v = Variables("projects/p/locations/l/apps/A")
-    v.create_variable("app1", "my_var", "STRING", "val")
+    v.create_variable("my_var", "STRING", "val")
 
     mock_update_app.assert_called_once()
     args = mock_update_app.call_args[1]
@@ -78,7 +78,7 @@ def test_update_variable(mock_get_app, mock_update_app, mock_vd):
     mock_get_app.return_value = mock_app
 
     v = Variables("projects/p/locations/l/apps/A")
-    v.update_variable("app1", "my_var", "INTEGER", 5)
+    v.update_variable("my_var", "INTEGER", 5)
 
     mock_update_app.assert_called_once()
     args = mock_update_app.call_args[1]
@@ -99,7 +99,7 @@ def test_delete_variable(mock_get_app, mock_update_app):
     mock_get_app.return_value = mock_app
 
     v = Variables("projects/p/locations/l/apps/A")
-    v.delete_variable("app1", "rem_var")
+    v.delete_variable("rem_var")
 
     mock_update_app.assert_called_once()
     args = mock_update_app.call_args[1]
@@ -129,7 +129,7 @@ def test_create_variable_already_exists():
         mock_get_app.return_value = mock_app
 
         v = Variables("projects/p/locations/l/apps/A")
-        v.create_variable("app1", "my_var", "STRING", "val")
+        v.create_variable("my_var", "STRING", "val")
 
         mock_update_app.assert_not_called()
 
@@ -145,6 +145,6 @@ def test_delete_variable_not_found():
         mock_get_app.return_value = mock_app
 
         v = Variables("projects/p/locations/l/apps/A")
-        v.delete_variable("app1", "unknown_var")
+        v.delete_variable("unknown_var")
 
         mock_update_app.assert_not_called()

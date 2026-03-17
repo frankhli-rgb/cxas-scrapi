@@ -27,7 +27,7 @@ class Guardrails(Apps):
 
     def __init__(
         self,
-        app_id: str,
+        app_name: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
@@ -35,8 +35,8 @@ class Guardrails(Apps):
         **kwargs
     ):
         """Initializes the Guardrails client."""
-        project_id = app_id.split("/")[1]
-        location = app_id.split("/")[3]
+        project_id = app_name.split("/")[1]
+        location = app_name.split("/")[3]
 
         super().__init__(
             project_id=project_id,
@@ -48,24 +48,23 @@ class Guardrails(Apps):
             **kwargs
         )
         self.resource_type = "guardrails"
-        self.app_id = app_id
+        self.app_name = app_name
 
-    def list_guardrails(self, app_id: str) -> List[types.Guardrail]:
+    def list_guardrails(self) -> List[types.Guardrail]:
         """Lists guardrails within a specific app."""
-        request = types.ListGuardrailsRequest(parent=app_id)
+        request = types.ListGuardrailsRequest(parent=self.app_name)
         response = self.client.list_guardrails(request=request)
         return list(response)
 
     def get_guardrails_map(
-        self, app_id: str, reverse: bool = False
+        self, reverse: bool = False
     ) -> Dict[str, str]:
         """Creates a map of Guardrail full names to display names.
 
         Args:
-            app_id: Parent App ID.
             reverse: If True, map display_name -> name.
         """
-        guardrails = self.list_guardrails(app_id)
+        guardrails = self.list_guardrails()
         guardrails_dict: Dict[str, str] = {}
 
         for guardrail in guardrails:
@@ -80,12 +79,11 @@ class Guardrails(Apps):
 
     def get_guardrail(self, guardrail_id: str) -> types.Guardrail:
         """Gets a specific guardrail."""
-        request = types.GetGuardrailRequest(name=guardrail_id)
+        request = types.GetGuardrailRequest(name=f"{self.app_name}/guardrails/{guardrail_id}")
         return self.client.get_guardrail(request=request)
 
     def create_guardrail(
         self,
-        app_id: str,
         guardrail_id: str,
         display_name: str,
         payload: Dict[str, Any],
@@ -113,13 +111,13 @@ class Guardrails(Apps):
         )
 
         request = types.CreateGuardrailRequest(
-            parent=app_id, guardrail_id=guardrail_id, guardrail=guardrail
+            parent=self.app_name, guardrail_id=guardrail_id, guardrail=guardrail
         )
         return self.client.create_guardrail(request=request)
 
     def update_guardrail(self, guardrail_id: str, **kwargs) -> types.Guardrail:
         """Updates specific fields of an existing Guardrail."""
-        guardrail = types.Guardrail(name=guardrail_id)
+        guardrail = types.Guardrail(name=f"{self.app_name}/guardrails/{guardrail_id}")
         mask_paths = []
 
         for key, value in kwargs.items():
@@ -134,5 +132,5 @@ class Guardrails(Apps):
 
     def delete_guardrail(self, guardrail_id: str) -> None:
         """Deletes a specific guardrail."""
-        request = types.DeleteGuardrailRequest(name=guardrail_id)
+        request = types.DeleteGuardrailRequest(name=f"{self.app_name}/guardrails/{guardrail_id}")
         self.client.delete_guardrail(request=request)

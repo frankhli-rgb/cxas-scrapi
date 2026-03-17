@@ -34,7 +34,7 @@ class Tools(Apps):
 
     def __init__(
         self,
-        app_id: str,
+        app_name: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
@@ -42,8 +42,8 @@ class Tools(Apps):
         **kwargs,
     ):
         """Initializes the Tools client."""
-        project_id = app_id.split("/")[1]
-        location = app_id.split("/")[3]
+        project_id = app_name.split("/")[1]
+        location = app_name.split("/")[3]
 
         super().__init__(
             project_id=project_id,
@@ -54,7 +54,8 @@ class Tools(Apps):
             scope=scope,
             **kwargs,
         )
-        self.app_id = app_id
+        self.app_name = app_name
+        self.app_id = app_name.split("/")[-1]
         self.resource_type = "tools"
         self.client = AgentServiceClient(
             credentials=self.creds, client_options=self.client_options
@@ -63,7 +64,7 @@ class Tools(Apps):
             credentials=self.creds, client_options=self.client_options
         )
         self.var_client = Variables(
-            app_id=self.app_id,
+            app_name=app_name,
             creds_path=creds_path,
             creds_dict=creds_dict,
             creds=creds,
@@ -93,9 +94,9 @@ class Tools(Apps):
         return display_name
 
     @staticmethod
-    def _is_toolset(tool_id: str) -> bool:
+    def _is_toolset(tool_name: str) -> bool:
         """Helper to determine if a full resource name refers to a Toolset."""
-        return "/toolsets/" in tool_id
+        return "/toolsets/" in tool_name
 
     @staticmethod
     def _parse_openapi_schema(
@@ -127,7 +128,6 @@ class Tools(Apps):
 
     def _get_final_variables(
         self,
-        app_id: str,
         variables: Optional[Any],
         context: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
@@ -142,7 +142,7 @@ class Tools(Apps):
 
         if not final_variables:
             # Fetch variables from the app and filter by this list of names.
-            raw_app_vars = self.var_client.list_variables(app_id)
+            raw_app_vars = self.var_client.list_variables()
 
             app_default_vars_cache = {}
             for var in raw_app_vars:
@@ -174,15 +174,14 @@ class Tools(Apps):
         return final_variables
 
     def get_tools_map(
-        self, app_id: str, reverse: bool = False
+        self, reverse: bool = False
     ) -> Dict[str, str]:
         """Creates a map of Tool and Toolset full names to display names.
 
         Args:
-            app_id: Parent App ID.
             reverse: If True, map display_name -> name.
         """
-        resources = self.list_tools(app_id)
+        resources = self.list_tools()
         resources_dict: Dict[str, str] = {}
 
         for resource in resources:
@@ -237,34 +236,33 @@ class Tools(Apps):
 
         return resources_dict
 
-    def _get_or_load_tools_map(self, app_id: str) -> Dict[str, str]:
+    def _get_or_load_tools_map(self) -> Dict[str, str]:
         """Gets a reverse map of tools from cache or loads it if missing."""
         if not self.tools_map:
-            self.tools_map = self.get_tools_map(app_id, reverse=True)
+            self.tools_map = self.get_tools_map(reverse=True)
         return self.tools_map
 
-    def list_tools(self, app_id: str) -> List[Any]:
+    def list_tools(self) -> List[Any]:
         """Lists both tools and toolsets within a specific app."""
-        tools_request = types.ListToolsRequest(parent=app_id)
+        tools_request = types.ListToolsRequest(parent=self.app_name)
         tools_response = self.client.list_tools(request=tools_request)
 
-        toolsets_request = types.ListToolsetsRequest(parent=app_id)
+        toolsets_request = types.ListToolsetsRequest(parent=self.app_name)
         toolsets_response = self.client.list_toolsets(request=toolsets_request)
 
         return list(tools_response) + list(toolsets_response)
 
-    def get_tool(self, tool_id: str) -> Any:
+    def get_tool(self, tool_name: str) -> Any:
         """Gets a specific tool or toolset by full resource name."""
-        if self._is_toolset(tool_id):
-            request = types.GetToolsetRequest(name=tool_id)
+        if self._is_toolset(tool_name):
+            request = types.GetToolsetRequest(name=tool_name)
             return self.client.get_toolset(request=request)
         else:
-            request = types.GetToolRequest(name=tool_id)
+            request = types.GetToolRequest(name=tool_name)
             return self.client.get_tool(request=request)
 
     def create_tool(
         self,
-        app_id: str,
         tool_id: str,
         display_name: str,
         payload: Dict[str, Any],
@@ -294,7 +292,7 @@ class Tools(Apps):
             }
             toolset = types.Toolset(**kwargs)
             request = types.CreateToolsetRequest(
-                parent=app_id, toolset_id=tool_id, toolset=toolset
+                parent=self.app_name, toolset_id=tool_id, toolset=toolset
             )
             return self.client.create_toolset(request=request)
         else:
@@ -304,16 +302,16 @@ class Tools(Apps):
             kwargs = {"display_name": display_name, tool_type: payload_copy}
             tool = types.Tool(**kwargs)
             request = types.CreateToolRequest(
-                parent=app_id, tool_id=tool_id, tool=tool
+                parent=self.app_name, tool_id=tool_id, tool=tool
             )
             return self.client.create_tool(request=request)
 
-    def update_tool(self, tool_id: str, **kwargs) -> Any:
+    def update_tool(self, tool_name: str, **kwargs) -> Any:
         """Updates specific fields of an existing Tool or Toolset."""
         mask_paths = list(kwargs.keys())
 
-        if self._is_toolset(tool_id):
-            toolset = types.Toolset(name=tool_id)
+        if self._is_toolset(tool_name):
+            toolset = types.Toolset(name=tool_name)
             for key, value in kwargs.items():
                 setattr(toolset, key, value)
 
@@ -323,7 +321,7 @@ class Tools(Apps):
             )
             return self.client.update_toolset(request=request)
         else:
-            tool = types.Tool(name=tool_id)
+            tool = types.Tool(name=tool_name)
             for key, value in kwargs.items():
                 setattr(tool, key, value)
 
@@ -333,18 +331,17 @@ class Tools(Apps):
             )
             return self.client.update_tool(request=request)
 
-    def delete_tool(self, tool_id: str) -> None:
+    def delete_tool(self, tool_name: str) -> None:
         """Deletes a specific tool or toolset."""
-        if self._is_toolset(tool_id):
-            request = types.DeleteToolsetRequest(name=tool_id)
+        if self._is_toolset(tool_name):
+            request = types.DeleteToolsetRequest(name=tool_name)
             self.client.delete_toolset(request=request)
         else:
-            request = types.DeleteToolRequest(name=tool_id)
+            request = types.DeleteToolRequest(name=tool_name)
             self.client.delete_tool(request=request)
 
     def execute_tool(
         self,
-        app_id: str,
         tool_display_name: str,
         args: Optional[Dict[str, Any]] = None,
         variables: Optional[Any] = None,  # Accepts Dict, List[str], or None
@@ -353,7 +350,6 @@ class Tools(Apps):
         """Executes a tool directly via the CES API.
 
         Args:
-            app_id: The full App resource name (e.g. projects/.../apps/...).
             tool_display_name: The display name of the tool (or toolset key).
             args: Dictionary of arguments for the tool.
             variables: Can be:
@@ -370,7 +366,7 @@ class Tools(Apps):
         # is missing the 'variables' field in ExecuteToolRequest proto
         import requests
 
-        url = f"https://ces.googleapis.com/v1beta/{app_id}:executeTool"
+        url = f"https://ces.googleapis.com/v1beta/{self.app_name}:executeTool"
 
         headers = {
             "Authorization": f"Bearer {self.creds.token}",
@@ -380,31 +376,31 @@ class Tools(Apps):
 
         payload = {}
 
-        tools_map = self._get_or_load_tools_map(app_id)
-        tool_id = tools_map.get(tool_display_name)
+        tools_map = self._get_or_load_tools_map()
+        tool_name = tools_map.get(tool_display_name)
 
-        if not tool_id:
+        if not tool_name:
             raise ValueError(
-                f"Tool '{tool_display_name}' not found in App '{app_id}'. "
+                f"Tool '{tool_display_name}' not found in App '{self.app_name}'. "
             )
 
-        if "toolsets/" in tool_id and "/tools/" in tool_id:
-            toolset_name, operation_id = tool_id.split("/tools/")
+        if "toolsets/" in tool_name and "/tools/" in tool_name:
+            toolset_name, operation_id = tool_name.split("/tools/")
             payload["toolsetTool"] = {
                 "toolset": toolset_name,
                 "toolId": operation_id,
             }
-        elif "toolsets/" in tool_id:  # fallback for generic toolsets
+        elif "toolsets/" in tool_name:  # fallback for generic toolsets
             payload["toolsetTool"] = {
-                "toolset": tool_id,
+                "toolset": tool_name,
                 "toolId": tool_display_name.split("_")[-1],
             }
         else:
-            payload["tool"] = tool_id
+            payload["tool"] = tool_name
 
         payload["args"] = args or {}
 
-        final_variables = self._get_final_variables(app_id, variables, context)
+        final_variables = self._get_final_variables(variables, context)
 
         # Use context if provided, otherwise use variables.
         if context:
@@ -422,5 +418,5 @@ class Tools(Apps):
 
     def retrieve_tool(self, toolset_id: str) -> Any:
         """Retrieves all tools in a toolset."""
-        request = types.RetrieveToolsRequest(toolset=toolset_id)
+        request = types.RetrieveToolsRequest(toolset=f"{self.app_name}/toolsets/{toolset_id}")
         return self.tool_client.retrieve_tools(request=request)

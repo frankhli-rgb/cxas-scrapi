@@ -27,7 +27,7 @@ class Variables(Apps):
 
     def __init__(
         self,
-        app_id: str,
+        app_name: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
@@ -38,8 +38,8 @@ class Variables(Apps):
         Note that Variables are resources of the App itself, not a standalone resource.
         This class is a wrapper around the App class to make it easier to manage Variables.
         """
-        project_id = app_id.split("/")[1]
-        location = app_id.split("/")[3]
+        project_id = app_name.split("/")[1]
+        location = app_name.split("/")[3]
 
         super().__init__(
             project_id=project_id,
@@ -50,7 +50,8 @@ class Variables(Apps):
             scope=scope,
             **kwargs,
         )
-        self.app_id = app_id
+        self.app_name = app_name
+        self.app_id = app_name.split("/")[-1]
         self.resource_type = "variables"
 
     @staticmethod
@@ -105,14 +106,14 @@ class Variables(Apps):
 
         return variable
 
-    def list_variables(self, app_id: str) -> List[Any]:
+    def list_variables(self) -> List[Any]:
         """Lists variables within a specific app."""
-        app = self.get_app(app_id)
+        app = self.get_app(self.app_id)
         return list(app.variable_declarations)
 
-    def get_variable(self, app_id: str, variable_name: str) -> Optional[Any]:
+    def get_variable(self, variable_name: str) -> Optional[Any]:
         """Gets a specific variable by its name within a specified app."""
-        vars_list = self.list_variables(app_id)
+        vars_list = self.list_variables()
 
         for var in vars_list:
             if var.name == variable_name:
@@ -122,14 +123,13 @@ class Variables(Apps):
 
     def create_variable(
         self,
-        app_id: str,
         variable_name: str,
         variable_type: str,
         variable_value: Optional[Any],
     ) -> None:
         """Creates a new variable within a specified app."""
         self._check_schema_type(variable_type)
-        app = self.get_app(app_id)
+        app = self.get_app(self.app_id)
         vars_list = list(app.variable_declarations)
 
         for var in vars_list:
@@ -143,12 +143,11 @@ class Variables(Apps):
         )
 
         vars_list.append(new_var)
-        self.update_app(app_id, variable_declarations=vars_list)
+        self.update_app(self.app_id, variable_declarations=vars_list)
         logging.info(f"Variable '{variable_name}' created successfully.")
 
     def update_variable(
         self,
-        app_id: str,
         variable_name: str,
         variable_type: str,
         variable_value: Optional[Any],
@@ -158,7 +157,7 @@ class Variables(Apps):
         Acceptable types: STRING, INTEGER, NUMBER, BOOLEAN, ARRAY, OBJECT
         """
         self._check_schema_type(variable_type)
-        app = self.get_app(app_id)
+        app = self.get_app(self.app_id)
         vars_list = list(app.variable_declarations)
 
         updated = False
@@ -182,19 +181,19 @@ class Variables(Apps):
             )
             vars_list.append(new_var)
 
-        self.update_app(app_id, variable_declarations=vars_list)
+        self.update_app(self.app_id, variable_declarations=vars_list)
         logging.info(f"Variable '{variable_name}' set successfully.")
 
-    def delete_variable(self, app_id: str, variable_name: str) -> None:
+    def delete_variable(self, variable_name: str) -> None:
         """Deletes a specific variable within a specified app."""
-        app = self.get_app(app_id)
+        app = self.get_app(self.app_id)
         vars_list = list(app.variable_declarations)
 
         original_len = len(vars_list)
         vars_list = [v for v in vars_list if v.name != variable_name]
 
         if len(vars_list) < original_len:
-            self.update_app(app_id, variable_declarations=vars_list)
+            self.update_app(self.app_id, variable_declarations=vars_list)
             logging.info(f"Variable '{variable_name}' deleted successfully.")
         else:
             logging.warning(f"Variable '{variable_name}' not found.")

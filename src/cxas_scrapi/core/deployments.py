@@ -27,7 +27,7 @@ class Deployments(Apps):
 
     def __init__(
         self,
-        app_id: str,
+        app_name: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
@@ -35,8 +35,8 @@ class Deployments(Apps):
         **kwargs
     ):
         """Initializes the Deployments client."""
-        project_id = app_id.split("/")[1]
-        location = app_id.split("/")[3]
+        project_id = app_name.split("/")[1]
+        location = app_name.split("/")[3]
 
         super().__init__(
             project_id=project_id,
@@ -48,24 +48,23 @@ class Deployments(Apps):
             **kwargs
         )
         self.resource_type = "deployments"
-        self.app_id = app_id
+        self.app_name = app_name
 
-    def list_deployments(self, app_id: str) -> List[types.Deployment]:
+    def list_deployments(self) -> List[types.Deployment]:
         """Lists deployments within a specific app."""
-        request = types.ListDeploymentsRequest(parent=app_id)
+        request = types.ListDeploymentsRequest(parent=self.app_name)
         response = self.client.list_deployments(request=request)
         return list(response)
 
     def get_deployments_map(
-        self, app_id: str, reverse: bool = False
+        self, reverse: bool = False
     ) -> Dict[str, str]:
         """Creates a map of Deployment full names to display names.
 
         Args:
-            app_id: Parent App ID.
             reverse: If True, map display_name -> name.
         """
-        deployments = self.list_deployments(app_id)
+        deployments = self.list_deployments()
         deployments_dict: Dict[str, str] = {}
 
         for deployment in deployments:
@@ -80,12 +79,11 @@ class Deployments(Apps):
 
     def get_deployment(self, deployment_id: str) -> types.Deployment:
         """Gets a specific deployment."""
-        request = types.GetDeploymentRequest(name=deployment_id)
+        request = types.GetDeploymentRequest(name=f"{self.app_name}/deployments/{deployment_id}")
         return self.client.get_deployment(request=request)
 
     def create_deployment(
         self,
-        app_id: str,
         deployment_id: str,
         display_name: str,
         app_version: str,
@@ -104,7 +102,7 @@ class Deployments(Apps):
             )
 
         request = types.CreateDeploymentRequest(
-            parent=app_id, deployment_id=deployment_id, deployment=deployment
+            parent=self.app_name, deployment_id=deployment_id, deployment=deployment
         )
         return self.client.create_deployment(request=request)
 
@@ -112,7 +110,7 @@ class Deployments(Apps):
         self, deployment_id: str, **kwargs
     ) -> types.Deployment:
         """Updates specific fields of an existing Deployment."""
-        deployment = types.Deployment(name=deployment_id)
+        deployment = types.Deployment(name=f"{self.app_name}/deployments/{deployment_id}")
         mask_paths = []
 
         for key, value in kwargs.items():
@@ -127,5 +125,5 @@ class Deployments(Apps):
 
     def delete_deployment(self, deployment_id: str) -> None:
         """Deletes a specific deployment."""
-        request = types.DeleteDeploymentRequest(name=deployment_id)
+        request = types.DeleteDeploymentRequest(name=f"{self.app_name}/deployments/{deployment_id}")
         self.client.delete_deployment(request=request)

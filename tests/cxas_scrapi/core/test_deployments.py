@@ -11,7 +11,7 @@ def test_list_deployments(mock_client_cls):
     mock_client.list_deployments.return_value = [mock_dep]
 
     deps = Deployments("projects/p/locations/l/apps/A")
-    res = deps.list_deployments("app1")
+    res = deps.list_deployments()
     assert len(res) == 1
     assert res[0].name == "dep1"
 
@@ -28,11 +28,11 @@ def test_get_deployments_map(mock_client_cls):
     mock_client.list_deployments.return_value = [mock_dep1, mock_dep2]
 
     deps = Deployments("projects/p/locations/l/apps/A")
-    res = deps.get_deployments_map("app1")
+    res = deps.get_deployments_map()
     assert res["d1"] == "n1"
     assert res["d2"] == "n2"
 
-    res_rev = deps.get_deployments_map("app1", reverse=True)
+    res_rev = deps.get_deployments_map(reverse=True)
     assert res_rev["n1"] == "d1"
     assert res_rev["n2"] == "d2"
 
@@ -41,12 +41,12 @@ def test_get_deployments_map(mock_client_cls):
 def test_get_deployment(mock_client_cls):
     mock_client = mock_client_cls.return_value
     mock_dep = MagicMock()
-    mock_dep.name = "dep_id"
+    mock_dep.name = "projects/p/locations/l/apps/A/deployments/dep_id"
     mock_client.get_deployment.return_value = mock_dep
 
     deps = Deployments("projects/p/locations/l/apps/A")
     res = deps.get_deployment("dep_id")
-    assert res.name == "dep_id"
+    assert res.name == "projects/p/locations/l/apps/A/deployments/dep_id"
     mock_client.get_deployment.assert_called_once()
 
 
@@ -65,10 +65,10 @@ def test_create_deployment(mock_client_cls, mock_req_cls):
     mock_req_cls.side_effect = side_effect
 
     deps = Deployments("projects/p/locations/l/apps/A")
-    res = deps.create_deployment("app1", "dep_id", "my_dep", "v1")
+    res = deps.create_deployment("dep_id", "my_dep", "v1")
     mock_client.create_deployment.assert_called_once()
     args = mock_client.create_deployment.call_args[1]["request"]
-    assert args.parent == "app1"
+    assert args.parent == "projects/p/locations/l/apps/A"
     assert args.deployment_id == "dep_id"
 
 
@@ -92,7 +92,7 @@ def test_update_deployment(mock_client_cls, mock_req_cls, mock_dep_cls):
     res = deps.update_deployment("dep_id", display_name="new_name")
     mock_client.update_deployment.assert_called_once()
     args = mock_client.update_deployment.call_args[1]["request"]
-    assert args.deployment.name == "dep_id"
+    assert args.deployment.name == "projects/p/locations/l/apps/A/deployments/dep_id"
     assert args.deployment.display_name == "new_name"
 
 
@@ -113,4 +113,4 @@ def test_delete_deployment(mock_client_cls, mock_req_cls):
     deps.delete_deployment("dep_id")
     mock_client.delete_deployment.assert_called_once()
     args = mock_client.delete_deployment.call_args[1]["request"]
-    assert args.name == "dep_id"
+    assert args.name == "projects/p/locations/l/apps/A/deployments/dep_id"

@@ -25,7 +25,7 @@ class Versions(Apps):
 
     def __init__(
         self,
-        app_id: str,
+        app_name: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
@@ -33,8 +33,8 @@ class Versions(Apps):
         **kwargs
     ):
         """Initializes the Versions client."""
-        project_id = app_id.split("/")[1]
-        location = app_id.split("/")[3]
+        project_id = app_name.split("/")[1]
+        location = app_name.split("/")[3]
 
         super().__init__(
             project_id=project_id,
@@ -46,24 +46,23 @@ class Versions(Apps):
             **kwargs
         )
         self.resource_type = "versions"
-        self.app_id = app_id
+        self.app_name = app_name
 
-    def list_versions(self, app_id: str) -> List[types.AppVersion]:
-        """Lists versions within a specific app."""
-        request = types.ListAppVersionsRequest(parent=app_id)
+    def list_versions(self) -> List[types.AppVersion]:
+        """Lists versions within the app."""
+        request = types.ListAppVersionsRequest(parent=self.app_name)
         response = self.client.list_app_versions(request=request)
         return list(response)
 
     def get_versions_map(
-        self, app_id: str, reverse: bool = False
+        self, reverse: bool = False
     ) -> Dict[str, str]:
         """Returns a map of version display names to full resource names.
 
         Args:
-            app_id: Parent App ID.
             reverse: If True, map display_name -> name.
         """
-        versions = self.list_versions(app_id)
+        versions = self.list_versions()
         versions_map: Dict[str, str] = {}
 
         for version in versions:
@@ -79,16 +78,15 @@ class Versions(Apps):
 
     def get_version(self, version_id: str) -> types.AppVersion:
         """Gets a specific version."""
-        request = types.GetAppVersionRequest(name=version_id)
+        request = types.GetAppVersionRequest(name=f"{self.app_name}/versions/{version_id}")
         return self.client.get_app_version(request=request)
 
     def delete_version(self, version_id: str) -> None:
         """Deletes a specific version."""
-        request = types.DeleteAppVersionRequest(name=version_id)
+        request = types.DeleteAppVersionRequest(name=f"{self.app_name}/versions/{version_id}")
         self.client.delete_app_version(request=request)
 
     def revert_version(self, version_id: str) -> Any:
         """Reverts (Restores) a specific version."""
-        request = types.RestoreAppVersionRequest(name=version_id)
-        # restore_app_version theoretically returns a RestoreAppVersionResponse, let's just return it
+        request = types.RestoreAppVersionRequest(name=f"{self.app_name}/versions/{version_id}")
         return self.client.restore_app_version(request=request)

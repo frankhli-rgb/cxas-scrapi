@@ -22,33 +22,26 @@ from cxas_scrapi.core.agents import Agents
 class Changelogs(Agents):
     """Core Class for managing Changelog Resources."""
 
-    def __init__(self, app_id: str, **kwargs):
+    def __init__(self, app_name: str, **kwargs):
         """Initializes the Changelogs client.
 
         Args:
-            app_id: The full resource name of the parent App (projects/P/locations/L/apps/A).
+            app_name: The full resource name of the parent App (projects/P/locations/L/apps/A).
         """
         # We inherit from Agents because it holds the AgentServiceClient which contains changelog methods
-        super().__init__(app_id=app_id, **kwargs)
+        super().__init__(app_name=app_name, **kwargs)
+        self.app_name = app_name
         self.resource_type = "changelogs"
 
-    def list_changelogs(
-        self, app_id: Optional[str] = None
-    ) -> List[types.Changelog]:
-        """Lists changelogs within a specific app.
-
-        Args:
-            app_id: Parent App ID. Defaults to self.app_id.
+    def list_changelogs(self) -> List[types.Changelog]:
+        """Lists changelogs within the app.
         """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
 
-        request = types.ListChangelogsRequest(parent=app_id)
+        request = types.ListChangelogsRequest(parent=self.app_name)
         response = self.client.list_changelogs(request=request)
         return list(response)
 
     def get_changelog(self, changelog_id: str) -> types.Changelog:
         """Gets a specific changelog."""
-        request = types.GetChangelogRequest(name=changelog_id)
+        request = types.GetChangelogRequest(name=f"{self.app_name}/changelogs/{changelog_id}")
         return self.client.get_changelog(request=request)

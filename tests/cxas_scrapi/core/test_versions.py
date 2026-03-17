@@ -7,13 +7,13 @@ from cxas_scrapi.core.versions import Versions
 def test_list_versions(mock_client_cls):
     mock_client = mock_client_cls.return_value
     mock_ver = MagicMock()
-    mock_ver.name = "v1"
+    mock_ver.name = "projects/p/locations/l/apps/A/versions/v1"
     mock_client.list_app_versions.return_value = [mock_ver]
 
     v = Versions("projects/p/locations/l/apps/A")
-    res = v.list_versions("app1")
+    res = v.list_versions()
     assert len(res) == 1
-    assert res[0].name == "v1"
+    assert res[0].name == "projects/p/locations/l/apps/A/versions/v1"
     mock_client.list_app_versions.assert_called_once()
 
 
@@ -21,21 +21,21 @@ def test_list_versions(mock_client_cls):
 def test_get_versions_map(mock_client_cls):
     mock_client = mock_client_cls.return_value
     mock_v1 = MagicMock()
-    mock_v1.name = "v1"
+    mock_v1.name = "projects/p/locations/l/apps/A/versions/v1"
     mock_v1.display_name = "n1"
     mock_v2 = MagicMock()
-    mock_v2.name = "v2"
+    mock_v2.name = "projects/p/locations/l/apps/A/versions/v2"
     mock_v2.display_name = "n2"
     mock_client.list_app_versions.return_value = [mock_v1, mock_v2]
 
     v = Versions("projects/p/locations/l/apps/A")
-    res = v.get_versions_map("app1")
-    assert res["v1"] == "n1"
-    assert res["v2"] == "n2"
+    res = v.get_versions_map()
+    assert res["projects/p/locations/l/apps/A/versions/v1"] == "n1"
+    assert res["projects/p/locations/l/apps/A/versions/v2"] == "n2"
 
-    res_rev = v.get_versions_map("app1", reverse=True)
-    assert res_rev["n1"] == "v1"
-    assert res_rev["n2"] == "v2"
+    res_rev = v.get_versions_map(reverse=True)
+    assert res_rev["n1"] == "projects/p/locations/l/apps/A/versions/v1"
+    assert res_rev["n2"] == "projects/p/locations/l/apps/A/versions/v2"
 
 
 @patch("cxas_scrapi.core.versions.types.GetAppVersionRequest")
@@ -43,7 +43,7 @@ def test_get_versions_map(mock_client_cls):
 def test_get_version(mock_client_cls, mock_req_cls):
     mock_client = mock_client_cls.return_value
     mock_v = MagicMock()
-    mock_v.name = "v_id"
+    mock_v.name = "projects/p/locations/l/apps/A/versions/v1"
     mock_client.get_app_version.return_value = mock_v
 
     def side_effect(**kwargs):
@@ -55,10 +55,10 @@ def test_get_version(mock_client_cls, mock_req_cls):
     mock_req_cls.side_effect = side_effect
 
     v = Versions("projects/p/locations/l/apps/A")
-    res = v.get_version("v_id")
-    assert res.name == "v_id"
+    res = v.get_version("v1")
+    assert res.name == "projects/p/locations/l/apps/A/versions/v1"
     mock_client.get_app_version.assert_called_once()
-    assert mock_client.get_app_version.call_args[1]["request"].name == "v_id"
+    assert mock_client.get_app_version.call_args[1]["request"].name == "projects/p/locations/l/apps/A/versions/v1"
 
 
 @patch("cxas_scrapi.core.versions.types.DeleteAppVersionRequest")
@@ -78,7 +78,7 @@ def test_delete_version(mock_client_cls, mock_req_cls):
     v.delete_version("v_id")
     mock_client.delete_app_version.assert_called_once()
     args = mock_client.delete_app_version.call_args[1]["request"]
-    assert args.name == "v_id"
+    assert args.name == "projects/p/locations/l/apps/A/versions/v_id"
 
 
 @patch("cxas_scrapi.core.versions.types.RestoreAppVersionRequest")
@@ -99,4 +99,4 @@ def test_revert_version(mock_client_cls, mock_req_cls):
     res = v.revert_version("v_id")
     mock_client.restore_app_version.assert_called_once()
     args = mock_client.restore_app_version.call_args[1]["request"]
-    assert args.name == "v_id"
+    assert args.name == "projects/p/locations/l/apps/A/versions/v_id"

@@ -7,46 +7,46 @@ from cxas_scrapi.core.guardrails import Guardrails
 def test_list_guardrails(mock_client_cls):
     mock_client = mock_client_cls.return_value
     mock_gr = MagicMock()
-    mock_gr.name = "gr1"
+    mock_gr.name = "projects/p/locations/l/apps/A/guardrails/gr1"
     mock_client.list_guardrails.return_value = [mock_gr]
 
     grs = Guardrails("projects/p/locations/l/apps/A")
-    res = grs.list_guardrails("app1")
+    res = grs.list_guardrails()
     assert len(res) == 1
-    assert res[0].name == "gr1"
+    assert res[0].name == "projects/p/locations/l/apps/A/guardrails/gr1"
 
 
 @patch("cxas_scrapi.core.apps.AgentServiceClient")
 def test_get_guardrails_map(mock_client_cls):
     mock_client = mock_client_cls.return_value
     mock_gr1 = MagicMock()
-    mock_gr1.name = "g1"
+    mock_gr1.name = "projects/p/locations/l/apps/A/guardrails/g1"
     mock_gr1.display_name = "n1"
     mock_gr2 = MagicMock()
-    mock_gr2.name = "g2"
+    mock_gr2.name = "projects/p/locations/l/apps/A/guardrails/g2"
     mock_gr2.display_name = "n2"
     mock_client.list_guardrails.return_value = [mock_gr1, mock_gr2]
 
     grs = Guardrails("projects/p/locations/l/apps/A")
-    res = grs.get_guardrails_map("app1")
-    assert res["g1"] == "n1"
-    assert res["g2"] == "n2"
+    res = grs.get_guardrails_map()
+    assert res["projects/p/locations/l/apps/A/guardrails/g1"] == "n1"
+    assert res["projects/p/locations/l/apps/A/guardrails/g2"] == "n2"
 
-    res_rev = grs.get_guardrails_map("app1", reverse=True)
-    assert res_rev["n1"] == "g1"
-    assert res_rev["n2"] == "g2"
+    res_rev = grs.get_guardrails_map(reverse=True)
+    assert res_rev["n1"] == "projects/p/locations/l/apps/A/guardrails/g1"
+    assert res_rev["n2"] == "projects/p/locations/l/apps/A/guardrails/g2"
 
 
 @patch("cxas_scrapi.core.apps.AgentServiceClient")
 def test_get_guardrail(mock_client_cls):
     mock_client = mock_client_cls.return_value
     mock_gr = MagicMock()
-    mock_gr.name = "gr_id"
+    mock_gr.name = "projects/p/locations/l/apps/A/guardrails/gr_id"
     mock_client.get_guardrail.return_value = mock_gr
 
     grs = Guardrails("projects/p/locations/l/apps/A")
     res = grs.get_guardrail("gr_id")
-    assert res.name == "gr_id"
+    assert res.name == "projects/p/locations/l/apps/A/guardrails/gr_id"
     mock_client.get_guardrail.assert_called_once()
 
 
@@ -72,11 +72,11 @@ def test_create_guardrail(mock_client_cls, mock_req_cls, mock_gr_cls):
         "model_safety": {"safety_settings": []},
         "display_name": "ignore_me",
     }
-    res = grs.create_guardrail("app1", "gr_id", "my_gr", payload=payload)
+    res = grs.create_guardrail("gr_id", "my_gr", payload=payload)
     mock_client.create_guardrail.assert_called_once()
 
     args = mock_client.create_guardrail.call_args[1]["request"]
-    assert args.parent == "app1"
+    assert args.parent == "projects/p/locations/l/apps/A"
     assert args.guardrail_id == "gr_id"
     assert args.guardrail.display_name == "my_gr"
     assert args.guardrail.model_safety is not None
@@ -103,7 +103,7 @@ def test_update_guardrail(mock_client_cls, mock_req_cls, mock_gr_cls):
     mock_client.update_guardrail.assert_called_once()
 
     args = mock_client.update_guardrail.call_args[1]["request"]
-    assert args.guardrail.name == "gr_id"
+    assert args.guardrail.name == "projects/p/locations/l/apps/A/guardrails/gr_id"
     assert args.guardrail.action == "DENY"
 
 
@@ -125,4 +125,4 @@ def test_delete_guardrail(mock_client_cls, mock_req_cls):
     mock_client.delete_guardrail.assert_called_once()
 
     args = mock_client.delete_guardrail.call_args[1]["request"]
-    assert args.name == "gr_id"
+    assert args.name == "projects/p/locations/l/apps/A/guardrails/gr_id"

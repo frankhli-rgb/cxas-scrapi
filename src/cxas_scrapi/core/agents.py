@@ -30,7 +30,7 @@ class Agents(Apps):
 
     def __init__(
         self,
-        app_id: str,
+        app_name: str,
         creds_path: str = None,
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
@@ -38,8 +38,8 @@ class Agents(Apps):
         **kwargs,
     ):
         """Initializes the Agents client."""
-        project_id = app_id.split("/")[1]
-        location = app_id.split("/")[3]
+        project_id = app_name.split("/")[1]
+        location = app_name.split("/")[3]
 
         super().__init__(
             project_id=project_id,
@@ -51,39 +51,27 @@ class Agents(Apps):
             **kwargs,
         )
 
-        self.app_id = app_id
+        self.app_name = app_name
         self.resource_type = "agents"
         self.client = AgentServiceClient(
             credentials=self.creds, client_options=self.client_options
         )
 
-    def list_agents(self, app_id: Optional[str] = None) -> List[types.Agent]:
-        """Lists agents within a specific app.
-
-        Args:
-            app_id: Parent App ID. Defaults to self.app_id.
-        """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
-
-        request = types.ListAgentsRequest(parent=app_id)
+    def list_agents(self) -> List[types.Agent]:
+        """Lists agents within the app."""
+        request = types.ListAgentsRequest(parent=self.app_name)
         response = self.client.list_agents(request=request)
         return list(response)
 
     def get_agents_map(
-        self, app_id: Optional[str] = None, reverse: bool = False
+        self, reverse: bool = False
     ) -> Dict[str, str]:
         """Creates a map of Agent full names to display names.
 
         Args:
-            app_id: Parent App ID. Defaults to self.app_id.
             reverse: If True, map display_name -> name.
         """
-        app_id = app_id or self.app_id
-        # list_agents check will handle empty app_id check, but good to be safe if reusing logic
-
-        agents = self.list_agents(app_id)
+        agents = self.list_agents(self.app_name)
         agents_dict: Dict[str, str] = {}
 
         for agent in agents:
@@ -104,7 +92,7 @@ class Agents(Apps):
     def create_agent(
         self,
         display_name: str,
-        app_id: Optional[str] = None,
+        agent_id: str = "",
         agent_type: str = "llm",  # llm, dfcx, workflow
         model: Optional[str] = "gemini-2.5-flash",
         instruction: Optional[str] = None,
@@ -117,7 +105,7 @@ class Agents(Apps):
 
         Args:
             display_name: Human readable name.
-            app_id: Parent App ID. Defaults to self.app_id if initialized.
+            agent_id: Optional agent ID.
             agent_type: One of 'llm', 'dfcx', 'workflow'.
             model: (LLM) Model name to use.
             instruction: (LLM) System instruction.
@@ -126,15 +114,7 @@ class Agents(Apps):
             workflow_config: (Workflow) Dict config or WorkflowAgent object.
             **kwargs: Additional fields for types.Agent.
         """
-        # Resolve App ID
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError(
-                "app_id is required (passed to create_agent or set in Agents init)."
-            )
-
         agent_data = {"display_name": display_name, **kwargs}
-
         if agent_type == "llm":
             # Construct LLM Agent
             # Note: based on inspection, LLMAgent field key is likely 'llm_agent'
@@ -184,7 +164,7 @@ class Agents(Apps):
             # Endpoint from self.client.transport.host works but standard is usually ces.googleapis.com
             # We can use Common logic or just standard "https://ces.googleapis.com"
             api_endpoint = "https://ces.googleapis.com"
-            url = f"{api_endpoint}/v1beta/{app_id}/agents"
+            url = f"{api_endpoint}/v1beta/{self.app_name}/agents"
 
             # Refresh token just in case
             if self.creds.expired:
@@ -214,7 +194,7 @@ class Agents(Apps):
                 response.json(), types.Agent(), ignore_unknown_fields=True
             )
 
-        request = types.CreateAgentRequest(parent=app_id, agent=agent_data)
+        request = types.CreateAgentRequest(parent=self.app_name, agent=agent_data, agent_id=agent_id)
         return self.client.create_agent(request=request)
 
     def update_agent(self, agent_id: str, **kwargs: Any) -> types.Agent:
@@ -224,7 +204,7 @@ class Agents(Apps):
 
         # Construct Agent object with only updated fields (for the body)
         agent_data = kwargs.copy()
-        agent_data["name"] = agent_id
+        agent_data["name"] = f"{self.app_name}/agents/{agent_id}"
 
         # Update Mask
         paths = list(kwargs.keys())
@@ -235,5 +215,5 @@ class Agents(Apps):
 
     def delete_agent(self, agent_id: str):
         """Deletes an agent."""
-        request = types.DeleteAgentRequest(name=agent_id)
+        request = types.DeleteAgentRequest(name=f"{self.app_name}/agents/{agent_id}")
         self.client.delete_agent(request=request)
