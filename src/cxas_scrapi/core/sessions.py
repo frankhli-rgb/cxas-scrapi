@@ -5,6 +5,7 @@ import base64
 import uuid
 from google.cloud.ces_v1beta import SessionServiceClient, types
 from google.cloud import ces_v1beta
+from cxas_scrapi.core.conversation_history import ConversationHistory
 from cxas_scrapi.core.common import Common
 from cxas_scrapi.core.audio_transformer import AudioTransformer
 import logging
@@ -197,6 +198,32 @@ class BidiSessionHandler:
                 if "audio" in input_item:
                     self._send_audio_message(input_item["audio"], idx)
                     continue
+
+                # Handle non-audio structured inputs (event, text, variables)
+                try:
+                    session_input_pb = ces_v1beta.SessionInput()._pb
+                    json_format.ParseDict(input_item, session_input_pb, ignore_unknown_fields=False)
+                    session_input = ces_v1beta.SessionInput(session_input_pb)
+                    
+                    query_message = ces_v1beta.BidiSessionClientMessage(
+                        realtime_input=session_input
+                    )
+                    query_json = json_format.MessageToJson(
+                        query_message._pb, preserving_proto_field_name=False, indent=None
+                    )
+                    logging.debug("Sending non-audio input: %s", query_json)
+                    self.ws_app.send(query_json)
+                    
+                    if "text" in input_item or "event" in input_item:
+                        logging.debug("Waiting for agent to finish processing turn %d...", idx)
+                        while not self.agent_turn_manager.is_agent_done_talking():
+                            time.sleep(1)
+                            
+                        self.agent_turn_manager.reset()
+                        time.sleep(1)
+
+                except Exception as e:
+                    logging.debug("Failed to send generic input: %s", e)
 
             logging.debug("All inputs sent and turns completed.")
             time.sleep(1)  # arbitrary short wait before disconnecting
@@ -492,6 +519,8 @@ class Sessions(Common):
         output_audio_config: Optional[Dict[str, Any]] = None,
         deployment_id: Optional[str] = None,
         version_id: Optional[str] = None,
+        historical_contexts: Optional[List[Dict[str, Any]] | str] = None,
+        turn_count: Optional[int] = None,
         modality: Modality | str = Modality.TEXT,
     ):
         """Sends inputs to a Conversational Agents Session and returns the response."""
@@ -528,6 +557,46 @@ class Sessions(Common):
             config["deployment"] = f"{self.app_name}/deployments/{deployment_id or self.deployment_id}"
         if version_id or self.version_id:
             config["app_version"] = f"{self.app_name}/app_versions/{version_id or self.version_id}"
+
+        if historical_contexts:
+            parsed_contexts = []
+            if isinstance(historical_contexts, str):
+                ch = ConversationHistory(app_id=self.app_id, creds=self.creds)
+                conv = ch.get_conversation(historical_contexts)
+                d = type(conv).to_dict(conv)
+                if "turns" in d and d["turns"]:
+                    turns_to_process = d["turns"]
+                    if turn_count is not None and turn_count > 0:
+                        turns_to_process = turns_to_process[:turn_count]
+
+                    for turn in turns_to_process:
+                        msgs = turn.get("messages", [])
+                        for m in msgs:
+                            # only add chunks that have a role and text
+                            if "role" in m and "chunks" in m:
+                                parsed_contexts.append({"role": m["role"], "chunks": m["chunks"]})
+            else:
+                for ctx in historical_contexts:
+                    if isinstance(ctx, dict):
+                        if "role" in ctx and "chunks" in ctx:
+                            parsed_contexts.append(ctx)
+                        elif "user" in ctx:
+                            parsed_contexts.append({"role": "user", "chunks": [{"text": str(ctx["user"])}]})
+                        elif "agent" in ctx or "model" in ctx:
+                            role_name = ctx.get("name", "model")
+                            text_val = ctx.get("text", "")
+                            
+                            if not text_val:
+                                val = ctx.get("agent") or ctx.get("model")
+                                if isinstance(val, str):
+                                    text_val = val
+                                    
+                            parsed_contexts.append({"role": role_name, "chunks": [{"text": str(text_val)}]})
+                        else:
+                            parsed_contexts.append(ctx)
+                    else:
+                        raise ValueError(f"historical_contexts must be a list of dictionaries. Received: {type(ctx)}")
+            config["historical_contexts"] = parsed_contexts
 
         if variables is not None:
             inputs.append({"variables": variables})
@@ -571,21 +640,18 @@ class Sessions(Common):
                             project_id=self.project_id,
                         )
                     )
-                batch_inputs = []
                 for input_data in input_audio_bytes:
                     # Construct input payload matching sessions.py expectation
                     audio_payload = {
                         "audio": input_data["audio_bytes"],
                         "text": input_data["text"],
                     }
-                    batch_inputs.append({"audio": audio_payload})
-                return self.async_bidi_run_session(
-                    config=config, inputs=batch_inputs
-                )
+                    inputs.append({"audio": audio_payload})
+                return self.async_bidi_run_session(config=config, inputs=inputs)
+            elif inputs:
+                return self.async_bidi_run_session(config=config, inputs=inputs)
             else:
-                raise ValueError(
-                    "Text utterance inputs must be provided for audio modality."
-                )
+                 raise ValueError("Input payloads (text, audio, event, etc.) must be provided for audio modality.")
         elif modality == Modality.TEXT:
             if text is not None and isinstance(text, str):
                 text = [text]

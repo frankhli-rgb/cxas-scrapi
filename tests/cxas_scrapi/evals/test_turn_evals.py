@@ -107,7 +107,7 @@ def test_validate_turn_test_success(mock_message_to_dict, mock_turn_evals):
         ],
     )
 
-    errors = mock_turn_evals.validate_turn_test(test_case, MagicMock())
+    errors, _, _ = mock_turn_evals.validate_turn_test(test_case, MagicMock())
     assert len(errors) == 0
 
 
@@ -153,7 +153,7 @@ def test_validate_turn_test_failures(mock_message_to_dict, mock_turn_evals):
         ],
     )
 
-    errors = mock_turn_evals.validate_turn_test(test_case, MagicMock())
+    errors, _, _ = mock_turn_evals.validate_turn_test(test_case, MagicMock())
     assert len(errors) == 5
     assert any("CONTAINS failed" in e for e in errors)
     assert any("EQUALS failed" in e for e in errors)
