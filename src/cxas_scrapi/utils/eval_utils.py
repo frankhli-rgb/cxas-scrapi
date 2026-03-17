@@ -58,6 +58,7 @@ class ToolCall(BaseModel):
     action: str
     args: Dict[str, Any] = {}
     output: Optional[Union[str, Dict[str, Any]]] = None
+    agent: Optional[str] = None
 
 
 class Turn(BaseModel):
@@ -192,12 +193,11 @@ class EvalUtils(Evaluations):
         for tool_call in turn.tool_calls:
             action = tool_call.action
 
-            if action == "transfer_to_agent" and tool_call.args.get(
-                "agent"
+            if action == "transfer_to_agent" and (
+                tool_call.args.get("agent") or tool_call.agent
             ):
-                agent_resource = self.agent_map.get(
-                    tool_call.args["agent"], tool_call.args["agent"]
-                )
+                agent_name = tool_call.args.get("agent") or tool_call.agent
+                agent_resource = self.agent_map.get(agent_name, agent_name)
                 steps.append(
                     {
                         "expectation": {
@@ -212,6 +212,13 @@ class EvalUtils(Evaluations):
             tool_call_id = f"adk-{uuid.uuid4()}"
             # Resolve tool name
             tool_resource = self.tool_map.get(action, action)
+
+            # Fallback for built-in actions or tools not in map
+            if (
+                action not in self.tool_map
+                and not tool_resource.startswith("projects/")
+            ):
+                tool_resource = f"{self.app_id}/tools/{action}"
 
             tool_call_expectation = {
                 "expectation": {
