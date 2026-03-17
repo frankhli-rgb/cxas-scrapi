@@ -76,16 +76,16 @@ class GuardrailTestCase(BaseModel):
 class GuardrailEvals:
     """Utility class for testing CXAS Guardrails."""
 
-    def __init__(self, app_id: str, **kwargs):
+    def __init__(self, app_name: str, **kwargs):
         """Initializes the GuardrailEvals class.
 
         Args:
-            app_id: CXAS App ID
+            app_name: CXAS App name
                 (projects/{project}/locations/{location}/apps/{app}).
         """
-        self.app_id = app_id
+        self.app_name = app_name
         self.kwargs = kwargs
-        self.agents_client = Agents(app_id=self.app_id, **kwargs)
+        self.agents_client = Agents(app_name=self.app_name, **kwargs)
 
     def _get_project_id(self, name: str) -> str:
         """Extracts the project ID from a resource name."""
@@ -162,18 +162,18 @@ class GuardrailEvals:
                     f"Required column '{col}' not found in DataFrame."
                 )
 
-        sessions_client = Sessions(app_id=self.app_id, **self.kwargs)
+        sessions_client = Sessions(app_name=self.app_name, **self.kwargs)
 
         # Try to get the app display name and configured model
         app_display_name = "Unknown App"
         configured_model = "Unknown Model"
         try:
             apps_client = Apps(
-                project_id=self._get_project_id(self.app_id),
-                location=self._get_location(self.app_id),
+                project_id=self._get_project_id(self.app_name),
+                location=self._get_location(self.app_name),
                 **self.kwargs,
             )
-            app_obj = apps_client.get_app(self.app_id)
+            app_obj = apps_client.get_app(self.app_name.split("/")[-1])
             app_display_name = app_obj.display_name
 
             # Default to the app model setting
@@ -190,7 +190,7 @@ class GuardrailEvals:
         except (AttributeError, KeyError, RuntimeError, ValueError) as e:
             logger.warning(
                 "Could not retrieve app display name or model for "
-                f"{self.app_id}: {e}"
+                f"{self.app_name}: {e}"
             )
 
         results = []
@@ -395,7 +395,7 @@ class GuardrailEvals:
                 "error": error_msg,
                 "error_details": error_details,
                 "pass": passed,
-                "app_id": self.app_id,
+                "app_name": self.app_name,
                 "app_display_name": app_display_name,
                 "model": configured_model,
             }
