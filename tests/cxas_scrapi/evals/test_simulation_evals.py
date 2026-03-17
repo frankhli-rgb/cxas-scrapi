@@ -136,7 +136,6 @@ def test_llm_user_conversation_max_turns():
 
 from cxas_scrapi.evals.simulation_evals import SimulationEvals
 
-
 @patch("cxas_scrapi.evals.simulation_evals.Sessions")
 @patch("cxas_scrapi.evals.simulation_evals.LLMUserConversation")
 def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
@@ -152,35 +151,34 @@ def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
 
     # Setup mock agent responses
     mock_response_1 = MagicMock()
-    mock_response_1.session.name = "sessions/123"
+    mock_response_1.session.name = "projects/test/locations/us/apps/123-abc/sessions/123"
     mock_output_1 = MagicMock()
     mock_output_1.text = "Where to?"
     mock_response_1.outputs = [mock_output_1]
 
     mock_response_2 = MagicMock()
-    mock_response_2.session.name = "sessions/123"
+    mock_response_2.session.name = "projects/test/locations/us/apps/123-abc/sessions/123"
     mock_output_2 = MagicMock()
     mock_output_2.text = "Flight booked."
     mock_response_2.outputs = [mock_output_2]
     mock_sessions.run.side_effect = [mock_response_1, mock_response_2]
-    mock_sessions.create_session_id.return_value = "mock_session"
 
     # Initialize the SimulationEvals
-    app_id = "projects/test/locations/us/apps/123-abc"
+    app_name = "projects/test/locations/us/apps/123-abc"
     with patch("cxas_scrapi.evals.simulation_evals.genai.Client"):
         with patch("cxas_scrapi.core.apps.AgentServiceClient"):
-            simulator = SimulationEvals(app_id=app_id)
+            simulator = SimulationEvals(app_name=app_name)
 
     # Run the simulation
     test_case = {"steps": []}
     result_conv = simulator.simulate_conversation(
-        test_case=test_case, initial_utterance="Hi", console_logging=False
+        test_case=test_case, initial_utterance="Hi", session_id="123", console_logging=False
     )
 
     # Assertions
-    mock_sessions.run.assert_any_call(session_id="mock_session", text="Hi")
+    mock_sessions.run.assert_any_call(session_id="123", text="Hi")
     mock_sessions.run.assert_any_call(
-        session_id="mock_session", text="I want to book a flight"
+        session_id="123", text="I want to book a flight"
     )
     mock_eval_conv.next_user_utterance.assert_any_call("Where to?")
     mock_eval_conv.next_user_utterance.assert_any_call("Flight booked.")

@@ -28,11 +28,11 @@ def test_tool_evals_init(mock_variables, mock_tools):
     mock_tools_instance = mock_tools.return_value
     mock_tools_instance.get_tools_map.return_value = {"tool1": "id1"}
 
-    tu = ToolEvals(app_id="test_app", creds=None)
-    assert tu.app_id == "test_app"
+    tu = ToolEvals(app_name="projects/p/locations/l/apps/test_app", creds=None)
+    assert tu.app_name == "projects/p/locations/l/apps/test_app"
     assert tu.tool_map == {"tool1": "id1"}
     mock_tools_instance.get_tools_map.assert_called_once_with(
-        "test_app", reverse=True
+        reverse=True
     )
 
 
@@ -258,7 +258,9 @@ def test_validate_tool_test():
 @patch("cxas_scrapi.evals.tool_evals.Apps")
 def test_run_tool_tests(mock_apps, mock_variables, mock_tools):
     mock_tools_instance = mock_tools.return_value
-    mock_tools_instance.get_tools_map.return_value = {"tool1": "id1"}
+    mock_tools_instance.get_tools_map.return_value = {
+        "tool1": "projects/p/locations/l/apps/test_app/tools/tool1"
+    }
     mock_tools_instance.execute_tool.return_value = {
         "response": {"status": "OK"}
     }
@@ -270,7 +272,7 @@ def test_run_tool_tests(mock_apps, mock_variables, mock_tools):
     mock_app_instance.display_name = "Test App"
     mock_apps.return_value.get_app.return_value = mock_app_instance
 
-    tu = ToolEvals(app_id="test_app", creds=None)
+    tu = ToolEvals(app_name="projects/p/locations/l/apps/test_app", creds=None)
 
     tc = ToolTestCase(
         name="test1",
@@ -294,7 +296,6 @@ def test_run_tool_tests(mock_apps, mock_variables, mock_tools):
 
     # Ensure it calls execute_tool correctly
     mock_tools_instance.execute_tool.assert_called_once_with(
-        app_id="test_app",
         tool_display_name="tool1",
         args={},
         variables={},
@@ -307,7 +308,7 @@ def test_run_tool_tests(mock_apps, mock_variables, mock_tools):
 @patch("cxas_scrapi.evals.tool_evals.Apps")
 def test_run_tool_tests_with_context(mock_apps, mock_variables, mock_tools):
     mock_tools_instance = mock_tools.return_value
-    mock_tools_instance.get_tools_map.return_value = {"tool1": "id1"}
+    mock_tools_instance.get_tools_map.return_value = {"tool1": "projects/p/locations/l/apps/test_app/tools/tool1"}
     mock_tools_instance.execute_tool.return_value = {
         "response": {"status": "OK"}
     }
@@ -319,7 +320,7 @@ def test_run_tool_tests_with_context(mock_apps, mock_variables, mock_tools):
     mock_app_instance.display_name = "Test App"
     mock_apps.return_value.get_app.return_value = mock_app_instance
 
-    tu = ToolEvals(app_id="test_app", creds=None)
+    tu = ToolEvals(app_name="projects/p/locations/l/apps/test_app", creds=None)
 
     tc = ToolTestCase(
         name="test2",
@@ -343,7 +344,6 @@ def test_run_tool_tests_with_context(mock_apps, mock_variables, mock_tools):
 
     # Ensure it calls execute_tool correctly
     mock_tools_instance.execute_tool.assert_called_once_with(
-        app_id="test_app",
         tool_display_name="tool1",
         args={},
         variables={},
@@ -367,7 +367,7 @@ def test_run_tool_tests_openapi_with_context_fails(mock_apps, mock_variables, mo
     mock_app_instance.display_name = "Test App"
     mock_apps.return_value.get_app.return_value = mock_app_instance
 
-    tu = ToolEvals(app_id="test_app", creds=None)
+    tu = ToolEvals(app_name="projects/p/locations/l/apps/test_app", creds=None)
 
     tc = ToolTestCase(
         name="test_openapi",

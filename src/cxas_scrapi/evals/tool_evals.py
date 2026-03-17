@@ -94,30 +94,28 @@ class Expectation(BaseModel):
 class ToolEvals:
     """Utility class for testing CXAS Tools."""
 
-    def __init__(self, app_id: str, creds=None):
+    def __init__(self, app_name: str, creds=None):
         """Initializes the ToolEvals class.
 
         Args:
-            app_id: CXAS App ID
+            app_name: CXAS App name
                 (projects/{project}/locations/{location}/apps/{app}).
             creds: Optional Google Cloud credentials.
         """
-        self.app_id = app_id
+        self.app_name = app_name
         
-        parts = self.app_id.split("/")
+        parts = self.app_name.split("/")
         self.project_id = parts[1] if len(parts) > 1 else ""
         self.location = parts[3] if len(parts) > 3 else "us"
         
         self.creds = creds
-        self.tools_client = Tools(app_id=self.app_id, creds=self.creds)
-        self.var_client = Variables(app_id=self.app_id, creds=self.creds)
+        self.tools_client = Tools(app_name=self.app_name, creds=self.creds)
+        self.var_client = Variables(app_name=self.app_name, creds=self.creds)
         try:
-            self.tool_map = self.tools_client.get_tools_map(
-                self.app_id, reverse=True
-            )
+            self.tool_map = self.tools_client.get_tools_map(reverse=True)
         except (AttributeError, KeyError, RuntimeError, ValueError) as e:
             logger.warning(
-                "Failed to fetch tool map for %s: %s", self.app_id, e
+                "Failed to fetch tool map for %s: %s", self.app_name, e
             )
             self.tool_map = {}
 
@@ -401,7 +399,7 @@ class ToolEvals:
         mined_data = {}
         try:
             history_client = ConversationHistory(
-                app_id=self.app_id, creds=self.creds
+                app_name=self.app_name, creds=self.creds
             )
             convs = list(history_client.list_conversations())[:limit]
             for c in convs:
@@ -585,7 +583,7 @@ class ToolEvals:
             A pandas DataFrame of results with status and errors.
         """
         # Fetch and unwrap app variables once
-        raw_app_vars = self.var_client.list_variables(self.app_id)
+        raw_app_vars = self.var_client.list_variables()
         app_vars_cache = {}
         for var in raw_app_vars:
             try:
@@ -603,7 +601,7 @@ class ToolEvals:
             location=self.location,
             creds=self.creds
         )
-        app = app_client.get_app(self.app_id)
+        app = app_client.get_app(self.app_name.split("/")[-1])
         app_display_name = app.display_name if app else "Unknown App"
         tester_email = getattr(self.creds, "service_account_email", "Unknown")
 
@@ -670,7 +668,6 @@ class ToolEvals:
 
                 start_time = time.perf_counter()
                 tool_response = self.tools_client.execute_tool(
-                    app_id=self.app_id,
                     tool_display_name=test_case.tool,
                     args=test_case.args,
                     variables=final_variables,

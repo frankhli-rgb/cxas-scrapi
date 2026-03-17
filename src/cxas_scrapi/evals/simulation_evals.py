@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Any
 import json
 import re
 import warnings
+import uuid
 
 from google import genai
 import pydantic
@@ -198,12 +199,12 @@ class LLMUserConversation(Conversation):
 class SimulationEvals(Apps):
     """Wrapper class to simulate entire multi-turn conversations with a CXAS Agent."""
 
-    def __init__(self, app_id: str, **kwargs):
-        self.app_id = app_id
-        project_id = app_id.split("/")[1]
-        location = app_id.split("/")[3]
+    def __init__(self, app_name: str, **kwargs):
+        self.app_name = app_name
+        project_id = app_name.split("/")[1]
+        location = app_name.split("/")[3]
         super().__init__(project_id=project_id, location=location, **kwargs)
-        self.sessions_client = Sessions(app_id, **kwargs)
+        self.sessions_client = Sessions(app_name, **kwargs)
 
         # Vertex AI requires a specific region (e.g. global), whereas CXAS Apps use 'us' or 'eu'
         location_map = {"us": "global", "global": "global", "eu": "global"}
@@ -221,6 +222,7 @@ class SimulationEvals(Apps):
         test_case: Dict[str, Any],
         initial_utterance: str = _FIRST_UTTERANCE,
         model: str = _DEFAULT_GEMINI_MODEL,
+        session_id: str = str(uuid.uuid4()),
         console_logging: bool = True,
         **kwargs,
     ) -> LLMUserConversation:
@@ -245,8 +247,6 @@ class SimulationEvals(Apps):
         user_utterance = initial_utterance
         eval_conv._add_user_utterance(user_utterance)
         eval_conv.current_turn += 1
-
-        session_id = self.sessions_client.create_session_id()
 
         while user_utterance:
             # Send utterance to the CES Agent with exponential backoff for transient 500s

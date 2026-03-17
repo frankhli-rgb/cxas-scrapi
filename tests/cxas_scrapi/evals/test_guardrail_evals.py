@@ -8,7 +8,7 @@ from cxas_scrapi.evals.guardrail_evals import GuardrailEvals
 
 
 @pytest.fixture
-def dummy_app_id():
+def dummy_app_name():
     return "projects/test-project/locations/us-central1/apps/test-app"
 
 
@@ -29,7 +29,7 @@ def test_guardrail_execution_flow(
     mock_agents_class,
     mock_apps_class,
     mock_sessions_class,
-    dummy_app_id,
+    dummy_app_name,
     mock_df,
 ):
     """
@@ -77,7 +77,7 @@ def test_guardrail_execution_flow(
     mock_sessions.run.side_effect = [response_triggered, response_clean]
 
     # Initialize GuardrailEvals securely with mock args
-    guard_utils = GuardrailEvals(app_id=dummy_app_id)
+    guard_utils = GuardrailEvals(app_name=dummy_app_name)
 
     # Execute tests
     results_df = guard_utils.run_guardrail_tests(mock_df, console_logging=False)
