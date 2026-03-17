@@ -912,50 +912,75 @@ class EvalUtils(Evaluations):
         Returns:
             A dictionary matching the Golden Evaluation proto structure.
         """
+        evals = self.load_golden_evals_from_yaml(yaml_file_path)
+        return evals[0] if evals else None
+
+    def load_golden_evals_from_yaml(
+        self,
+        yaml_file_path: str,
+    ) -> List[Dict[str, Any]]:
+        """Parses a YAML file and returns a list of Golden eval inputs.
+
+        Similar to load_golden_eval_from_yaml, but returns all conversations
+        found in a dataset format instead of just the first one.
+
+        Args:
+            yaml_file_path: Path to the YAML file to be parsed.
+
+        Returns:
+            A list of dictionaries matching the Golden Evaluation proto structure.
+        """
         try:
             with open(yaml_file_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
         except (IOError, yaml.YAMLError) as e:
             logger.error("Failed to load YAML from %s: %s", yaml_file_path, e)
-            return None
+            return []
 
         if not data:
-            return None
+            return []
 
         base_dir = os.path.dirname(yaml_file_path)
-        tags = []
+        all_evals = []
 
-        # Handle Dataset format (list of conversations) - pick the first one
-
+        # Handle Dataset format (list of conversations)
         if "conversations" in data and isinstance(data["conversations"], list):
             dataset = Conversations.model_validate(data)
-            conversation = dataset.conversations[0]
+            for conversation in dataset.conversations:
+                # Merge session parameters
+                session_params = dataset.common_session_parameters.copy()
+                session_params.update(conversation.session_parameters)
 
-            logger.info(
-                "Picking first conversation from dataset: %s", yaml_file_path
-            )
+                # Extract basic info
+                display_name = conversation.conversation
 
-            # Merge session parameters
-            session_params = dataset.common_session_parameters.copy()
-            session_params.update(conversation.session_parameters)
+                # Process turns
+                json_turns = []
+                params_injected = False
+                for turn in conversation.turns:
+                    result = self._process_dataset_turn(
+                        turn, session_params, params_injected
+                    )
+                    json_turns.append({"steps": result["steps"]})
+                    params_injected = result["params_injected"]
 
-            # Extract basic info
-            display_name = conversation.conversation
+                # Combine common and conversation-specific expectations
+                expectations = dataset.common_expectations + conversation.expectations
+                tags = conversation.tags
 
-            # Process turns
-            json_turns = []
-            params_injected = False
-            for turn in conversation.turns:
-                result = self._process_dataset_turn(
-                    turn, session_params, params_injected
+                # Final processing of expectations (handles side-loading)
+                eval_expectations = self._process_conversation_expectations(
+                    expectations, base_dir=base_dir
                 )
-                json_turns.append({"steps": result["steps"]})
-                params_injected = result["params_injected"]
 
-            # Combine common and conversation-specific expectations
-            expectations = dataset.common_expectations + conversation.expectations
-            tags = conversation.tags
-
+                all_evals.append({
+                    "displayName": display_name,
+                    "tags": tags,
+                    "golden": {
+                        "turns": json_turns,
+                        "evaluationExpectations": eval_expectations,
+                    },
+                })
 
         # Handle Evaluation Resource or Direct Export format
         else:
@@ -985,25 +1010,27 @@ class EvalUtils(Evaluations):
                     )
                     json_turns.append({"steps": result["steps"]})
 
-
             expectations = (
                 golden.get("evaluationExpectations")
                 or data.get("expectations")
                 or []
             )
 
-        # Final processing of expectations (handles side-loading)
-        eval_expectations = self._process_conversation_expectations(
-            expectations, base_dir=base_dir
-        )
-        return {
-            "displayName": display_name,
-            "tags": tags,
-            "golden": {
-                "turns": json_turns,
-                "evaluationExpectations": eval_expectations,
-            },
-        }
+            # Final processing of expectations (handles side-loading)
+            eval_expectations = self._process_conversation_expectations(
+                expectations, base_dir=base_dir
+            )
+
+            all_evals.append({
+                "displayName": display_name,
+                "tags": tags,
+                "golden": {
+                    "turns": json_turns,
+                    "evaluationExpectations": eval_expectations,
+                },
+            })
+
+        return all_evals
 
     def _process_conversation_expectations(
         self, expectations: List[Any], base_dir: Optional[str] = None

@@ -158,8 +158,41 @@ def test_load_golden_eval_from_compressed_yaml():
             eval_exps[0]
             == "projects/p/locations/l/apps/a/evaluationExpectations/exp1"
         )
-        mock_eval_instance.find_or_create_evaluation_expectation.assert_called_once_with(
+        mock_eval_instance.find_or_create_evaluation_expectation.assert_any_call(
             llm_prompt="There must be a transfer_to_cx tool call with the intent parameter set to Unlock"
+        )
+
+
+def test_load_golden_evals_from_compressed_yaml():
+    """Test load_golden_evals_from_yaml returns all conversations."""
+    test_file_path = "tests/testdata/compressed_example.yaml"
+    with (
+        patch("cxas_scrapi.utils.eval_utils.uuid.uuid4") as mock_uuid,
+        patch("cxas_scrapi.utils.eval_utils.Evaluations") as mock_eval_cls,
+    ):
+        mock_uuid.return_value = "mock_uuid"
+        mock_eval_instance = mock_eval_cls.return_value
+        mock_eval_instance.find_or_create_evaluation_expectation.side_effect = (
+            lambda llm_prompt, **kwargs: f"resolved/{llm_prompt[:10]}"
+        )
+
+        utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
+        results = utils.load_golden_evals_from_yaml(test_file_path)
+
+        assert isinstance(results, list)
+        assert len(results) == 3
+
+        # Verify names
+        assert results[0]["displayName"] == "Unlock_Intent1"
+        assert results[1]["displayName"] == "Unlock.Intent2"
+        assert results[2]["displayName"] == "Datastore_Intent1"
+
+        # Verify expectations were resolved
+        assert results[0]["golden"]["evaluationExpectations"][0].startswith(
+            "resolved/"
+        )
+        assert results[2]["golden"]["evaluationExpectations"][0].startswith(
+            "resolved/"
         )
 
 
