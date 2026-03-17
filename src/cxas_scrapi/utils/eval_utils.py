@@ -35,9 +35,11 @@ from pydantic import (
     AliasPath,
     BaseModel,
     BeforeValidator,
+    ConfigDict,
     Field,
     TypeAdapter,
 )
+
 from tqdm import tqdm
 
 from cxas_scrapi.core.apps import Apps
@@ -50,6 +52,32 @@ from cxas_scrapi.core.variables import Variables
 from cxas_scrapi.utils.latency_parser import LatencyParser
 
 logger = logging.getLogger(__name__)
+
+
+class ToolCall(BaseModel):
+    action: str
+    args: Dict[str, Any] = {}
+    output: Optional[Union[str, Dict[str, Any]]] = None
+
+
+class Turn(BaseModel):
+    user: Optional[str] = None
+    agent: Optional[str] = None
+    tool_calls: List[ToolCall] = []
+
+
+class Conversation(BaseModel):
+    conversation: str
+    expectations: List[str] = []
+    tags: List[str] = []
+    session_parameters: Dict[str, Any] = {}
+    turns: List[Turn]
+
+
+class Conversations(BaseModel):
+    common_session_parameters: Dict[str, Any] = {}
+    common_expectations: List[str] = []
+    conversations: List[Conversation]
 
 
 class EvalUtils(Evaluations):
@@ -125,7 +153,7 @@ class EvalUtils(Evaluations):
 
     def _process_dataset_turn(
         self,
-        turn: Dict[str, Any],
+        turn: Turn,
         session_params: Dict[str, Any],
         params_injected: bool,
     ) -> Dict[str, Any]:
@@ -135,7 +163,7 @@ class EvalUtils(Evaluations):
             A tuple of (steps_list, updated_params_injected).
         """
         steps = []
-        user_input_text = turn.get("user")
+        user_input_text = turn.user
 
         if not params_injected and session_params:
             steps.append({"userInput": {"variables": session_params}})
@@ -149,78 +177,68 @@ class EvalUtils(Evaluations):
 
         steps.append({"userInput": user_input_obj})
 
-        if (
-            "agent" in turn
-            and isinstance(turn["agent"], str)
-            and "# silent" not in turn["agent"]
-        ):
+        if turn.agent and "# silent" not in turn.agent:
             steps.append(
                 {
                     "expectation": {
                         "agentResponse": {
                             "role": "agent",
-                            "chunks": [{"text": turn["agent"]}],
+                            "chunks": [{"text": turn.agent}],
                         }
                     }
                 }
             )
 
-        if "tool_calls" in turn:
-            for tool_call in turn["tool_calls"]:
-                action = tool_call["action"]
+        for tool_call in turn.tool_calls:
+            action = tool_call.action
 
-                if action == "transfer_to_agent" and "agent" in tool_call:
-                    agent_resource = self.agent_map.get(
-                        tool_call["agent"], tool_call["agent"]
-                    )
-                    steps.append(
-                        {
-                            "expectation": {
-                                "agentTransfer": {
-                                    "targetAgent": agent_resource
-                                }
+            if action == "transfer_to_agent" and tool_call.args.get(
+                "agent"
+            ):
+                agent_resource = self.agent_map.get(
+                    tool_call.args["agent"], tool_call.args["agent"]
+                )
+                steps.append(
+                    {
+                        "expectation": {
+                            "agentTransfer": {
+                                "targetAgent": agent_resource
                             }
-                        }
-                    )
-                    continue
-
-                tool_call_id = f"adk-{uuid.uuid4()}"
-                tool_resource = self.tool_map.get(action, action)
-
-                # Fallback for built-in actions or tools not in map
-                if (
-                    action not in self.tool_map
-                    and not tool_resource.startswith("projects/")
-                ):
-                    tool_resource = f"{self.app_id}/tools/{action}"
-
-                tool_call_expectation = {
-                    "expectation": {
-                        "toolCall": {
-                            "id": tool_call_id,
-                            "tool": tool_resource,
-                            "args": EvalUtils._extract_tool_call_args(
-                                tool_call
-                            ),
                         }
                     }
-                }
-                steps.append(tool_call_expectation)
+                )
+                continue
 
-                if tool_call.get("output") is not None:
-                    steps.append(
-                        {
-                            "expectation": {
-                                "toolResponse": {
-                                    "id": tool_call_id,
-                                    "tool": tool_resource,
-                                    "response": tool_call["output"],
-                                }
+            tool_call_id = f"adk-{uuid.uuid4()}"
+            # Resolve tool name
+            tool_resource = self.tool_map.get(action, action)
+
+            tool_call_expectation = {
+                "expectation": {
+                    "toolCall": {
+                        "id": tool_call_id,
+                        "tool": tool_resource,
+                        "args": tool_call.args,
+                    }
+                }
+            }
+            steps.append(tool_call_expectation)
+
+            if tool_call.output is not None:
+                steps.append(
+                    {
+                        "expectation": {
+                            "toolResponse": {
+                                "id": tool_call_id,
+                                "tool": tool_resource,
+                                "response": tool_call.output,
                             }
                         }
-                    )
+                    }
+                )
 
         return {"steps": steps, "params_injected": params_injected}
+
 
     def _parse_eval_results(
         self,
@@ -864,7 +882,7 @@ class EvalUtils(Evaluations):
         if_exists: str = "append",
     ):
         """Exports a pandas DataFrame to a Google BigQuery table."""
-        target_project = project_id or self.get_project_id(self.app_id)
+        target_project = project_id or self._get_project_id(self.app_id)
         df.to_gbq(
             destination_table=dataset_table,
             project_id=target_project,
@@ -905,36 +923,39 @@ class EvalUtils(Evaluations):
             return None
 
         base_dir = os.path.dirname(yaml_file_path)
+        tags = []
 
         # Handle Dataset format (list of conversations) - pick the first one
+
         if "conversations" in data and isinstance(data["conversations"], list):
+            dataset = Conversations.model_validate(data)
+            conversation = dataset.conversations[0]
+
             logger.info(
                 "Picking first conversation from dataset: %s", yaml_file_path
             )
-            common_params = data.get("common_session_parameters", {})
-            conversation = data["conversations"][0]
 
             # Merge session parameters
-            session_params = common_params.copy()
-            session_params.update(conversation.get("session_parameters", {}))
+            session_params = dataset.common_session_parameters.copy()
+            session_params.update(conversation.session_parameters)
 
             # Extract basic info
-            display_name = conversation.get("conversation", "Imported_Eval")
-            tags = conversation.get("tags") or []
-            if isinstance(tags, str):
-                tags = [t.strip() for t in tags.split(",")]
+            display_name = conversation.conversation
 
             # Process turns
             json_turns = []
             params_injected = False
-            for turn in conversation.get("turns", []):
+            for turn in conversation.turns:
                 result = self._process_dataset_turn(
                     turn, session_params, params_injected
                 )
                 json_turns.append({"steps": result["steps"]})
                 params_injected = result["params_injected"]
 
-            expectations = conversation.get("expectations", [])
+            # Combine common and conversation-specific expectations
+            expectations = dataset.common_expectations + conversation.expectations
+            tags = conversation.tags
+
 
         # Handle Evaluation Resource or Direct Export format
         else:
@@ -958,10 +979,12 @@ class EvalUtils(Evaluations):
             # Otherwise process raw YAML turns (Case 1b)
             elif "turns" in golden:
                 for t in golden["turns"]:
+                    turn = Turn.model_validate(t)
                     result = self._process_dataset_turn(
-                        t, session_params={}, params_injected=True
+                        turn, session_params={}, params_injected=True
                     )
                     json_turns.append({"steps": result["steps"]})
+
 
             expectations = (
                 golden.get("evaluationExpectations")
@@ -973,7 +996,6 @@ class EvalUtils(Evaluations):
         eval_expectations = self._process_conversation_expectations(
             expectations, base_dir=base_dir
         )
-
         return {
             "displayName": display_name,
             "tags": tags,
@@ -995,7 +1017,7 @@ class EvalUtils(Evaluations):
         for exp in expectations:
             if isinstance(exp, str):
                 # Proactive side-loading: If it's a raw prompt and we have a base_dir,
-                # ensure it's saved to the local filesystem in FDE format.
+                # ensure it's saved to the local filesystem.
                 if base_dir and not exp.startswith("projects/"):
                     try:
                         exp_id = Common.sanitize_expectation_id(exp)
@@ -1034,6 +1056,8 @@ class EvalUtils(Evaluations):
                 # Handle non-string expectations by skipping or logging
                 logger.warning("Skipping non-string expectation: %s", exp)
         return processed_expectations
+
+
 
     def wait_for_run_and_get_results(
         self,

@@ -12,7 +12,8 @@ sys.modules["google.cloud.secretmanager"] = MagicMock()
 sys.modules["google.cloud.bigquery"] = MagicMock()
 sys.modules["pandas_gbq"] = MagicMock()
 
-from cxas_scrapi.utils.eval_utils import EvalUtils
+from cxas_scrapi.utils.eval_utils import EvalUtils, Turn
+
 
 
 def test_evals_to_dataframe_empty():
@@ -205,7 +206,8 @@ def test_process_dataset_turn_with_tool_mapping():
         ],
     }
 
-    result = utils._process_dataset_turn(turn, {}, False)
+    result = utils._process_dataset_turn(Turn.model_validate(turn), {}, False)
+
     steps = result["steps"]
 
     # User input step
