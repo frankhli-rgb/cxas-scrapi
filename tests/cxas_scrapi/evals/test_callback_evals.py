@@ -101,7 +101,7 @@ def test_test_single_callback_for_agent(tmp_path):
         mock_client.get_agent.return_value = mock_agent
 
         result = utils.test_single_callback_for_agent(
-            app_id="projects/P/locations/L/apps/A",
+            app_name="projects/P/locations/L/apps/A",
             agent_name="agentA",
             callback_type="before_model_callback",
             test_file_path=str(test_file),

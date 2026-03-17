@@ -35,7 +35,7 @@ class CallbackEvals:
 
     def test_single_callback_for_agent(
         self,
-        app_id: str,
+        app_name: str,
         agent_name: str,
         callback_type: str,
         test_file_path: str,
@@ -45,7 +45,7 @@ class CallbackEvals:
         """Runs test against a single callback fetched from the agent proto.
 
         Args:
-            app_id: The CXAS App ID.
+            app_name: The CXAS App name.
             agent_name: The name or display name of the agent.
             callback_type: The type of callback (e.g., 'before_model', 'after_tool').
             test_file_path: Path to the test.py file to run.
@@ -53,13 +53,12 @@ class CallbackEvals:
             pytest_args: Optional. Additional arguments to pass to pytest.
         """
 
-        agents_client = Agents(app_id=app_id)
+        agents_client = Agents(app_name=app_name)
 
         # Get agent ID
         try:
             agents_map = agents_client.get_agents_map(reverse=True)
-            agent_id = agents_map.get(agent_name, agent_name)
-            agent = agents_client.get_agent(agent_id)
+            agent = agents_client.get_agent(agents_map.get(agent_name).split("/")[-1])
         except Exception as e:
             logger.error(f"Failed to fetch agent {agent_name}: {e}")
             raise ValueError(
