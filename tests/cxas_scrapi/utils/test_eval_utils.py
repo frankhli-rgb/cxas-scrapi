@@ -142,12 +142,12 @@ def test_load_golden_eval_from_compressed_yaml():
 
         # First tool: retrieve_intent_matches
         tool1 = turn1_steps[1]["expectation"]["toolCall"]
-        assert tool1["tool"] == "retrieve_intent_matches"
+        assert tool1["tool"] == "projects/p/locations/l/apps/a/tools/retrieve_intent_matches"
         assert tool1["id"] == "adk-mock_uuid"
 
         # Second tool: transfer_to_cx
         tool2 = turn1_steps[2]["expectation"]["toolCall"]
-        assert tool2["tool"] == "transfer_to_cx"
+        assert tool2["tool"] == "projects/p/locations/l/apps/a/tools/transfer_to_cx"
         assert tool2["id"] == "adk-mock_uuid"
         assert tool2["args"] == {"intent": "Unlock"}
 

@@ -11,7 +11,7 @@ def pytest_generate_tests(metafunc):
         eval_dir = metafunc.config.getoption("eval_dir")
         if eval_dir:
             target_dir = os.path.abspath(eval_dir)
-            yaml_files = sorted(glob.glob(os.path.join(target_dir, "*.yaml")) + 
+            yaml_files = sorted(glob.glob(os.path.join(target_dir, "*.yaml")) +
                                 glob.glob(os.path.join(target_dir, "*.yml")))
             metafunc.parametrize("yaml_path", yaml_files, ids=lambda x: os.path.basename(x))
         else:
@@ -34,14 +34,15 @@ def test_evaluation_from_yaml(yaml_path, request):
     # Reload logic: Delete existing evaluation if flag is set
     reload = request.config.getoption("--reload")
 
-    evaluation_dict = eval_utils.load_golden_eval_from_yaml(yaml_path)
+    evaluations = eval_utils.load_golden_evals_from_yaml(yaml_path)
     if reload:
-        eval_utils.update_evaluation(
-            evaluation=evaluation_dict, app_id=app_id
-        )
+        for evaluation in evaluations:
+            eval_utils.update_evaluation(
+                evaluation=evaluation, app_id=app_id
+            )
 
 
-    evals_to_run = [evaluation_dict.get("displayName")]
+    evals_to_run = [evaluation["displayName"] for evaluation in evaluations]
 
     # Run Evals
     responses = eval_utils.run_evaluation(evaluations=evals_to_run)
