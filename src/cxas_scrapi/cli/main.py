@@ -312,7 +312,7 @@ def test_single_callback(args: argparse.Namespace) -> None:
 
     try:
         results = callback_evals.test_single_callback_for_agent(
-            app_id=args.app_id,
+            app_name=args.app_id,
             agent_name=args.agent_name,
             callback_type=args.callback_type,
             test_file_path=args.test_file_path,
@@ -683,8 +683,8 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_test_callbacks.add_argument(
         "--pytest_args",
-        required=False,
-        help="Optional: Additional arguments to pass to pytest.",
+        type=lambda s: [item for item in s.split(",")],
+        help='Comma-separated list (e.g., "-v,-s")',
     )
 
     parser_test_callbacks.set_defaults(func=test_callbacks)
@@ -721,8 +721,8 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_test_single_callback.add_argument(
         "--pytest_args",
-        required=False,
-        help="Optional: Additional arguments to pass to pytest.",
+        type=lambda s: [item for item in s.split(",")],
+        help='Comma-separated list (e.g., "-v,-s")',
     )
 
     parser_test_single_callback.set_defaults(func=test_single_callback)

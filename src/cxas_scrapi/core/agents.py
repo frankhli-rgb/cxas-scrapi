@@ -63,15 +63,13 @@ class Agents(Apps):
         response = self.client.list_agents(request=request)
         return list(response)
 
-    def get_agents_map(
-        self, reverse: bool = False
-    ) -> Dict[str, str]:
+    def get_agents_map(self, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of Agent full names to display names.
 
         Args:
             reverse: If True, map display_name -> name.
         """
-        agents = self.list_agents(self.app_name)
+        agents = self.list_agents()
         agents_dict: Dict[str, str] = {}
 
         for agent in agents:
@@ -86,7 +84,9 @@ class Agents(Apps):
 
     def get_agent(self, agent_id: str) -> types.Agent:
         """Gets a specific agent."""
-        request = types.GetAgentRequest(name=agent_id)
+        request = types.GetAgentRequest(
+            name=f"{self.app_name}/agents/{agent_id}"
+        )
         return self.client.get_agent(request=request)
 
     def create_agent(
@@ -194,7 +194,9 @@ class Agents(Apps):
                 response.json(), types.Agent(), ignore_unknown_fields=True
             )
 
-        request = types.CreateAgentRequest(parent=self.app_name, agent=agent_data, agent_id=agent_id)
+        request = types.CreateAgentRequest(
+            parent=self.app_name, agent=agent_data, agent_id=agent_id
+        )
         return self.client.create_agent(request=request)
 
     def update_agent(self, agent_id: str, **kwargs: Any) -> types.Agent:
@@ -215,5 +217,7 @@ class Agents(Apps):
 
     def delete_agent(self, agent_id: str):
         """Deletes an agent."""
-        request = types.DeleteAgentRequest(name=f"{self.app_name}/agents/{agent_id}")
+        request = types.DeleteAgentRequest(
+            name=f"{self.app_name}/agents/{agent_id}"
+        )
         self.client.delete_agent(request=request)

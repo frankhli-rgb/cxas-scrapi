@@ -58,29 +58,25 @@ class CallbackEvals:
         # Get agent ID
         try:
             agents_map = agents_client.get_agents_map(reverse=True)
-            agent = agents_client.get_agent(agents_map.get(agent_name).split("/")[-1])
+            agent = agents_client.get_agent(
+                agents_map.get(agent_name).split("/")[-1]
+            )
         except Exception as e:
-            logger.error(f"Failed to fetch agent {agent_name}: {e}")
+            logger.error(f"Failed to get agent {agent_name}: {e}")
             raise ValueError(
-                f"Failed to fetch agent {agent_name} from application to run callback test."
+                f"Failed to get agent {agent_name} from application to run callback test."
             ) from e
 
         # Fetch callback
-        if callback_type == "before_model_callback":
-            callback = agent.before_model_callbacks
-        elif callback_type == "after_model_callback":
-            callback = agent.after_model_callbacks
-        elif callback_type == "before_tool_callback":
-            callback = agent.before_tool_callbacks
-        elif callback_type == "after_tool_callback":
-            callback = agent.after_tool_callbacks
-        elif callback_type == "before_agent_callbacks":
-            callback = agent.before_agent_callbacks
-        elif callback_type == "after_agent_callbacks":
-            callback = agent.after_agent_callbacks
-        else:
-            raise ValueError(f"Invalid callback type: {callback_type}")
-
+        all_callbacks = {
+            "before_model_callback": agent.before_model_callbacks,
+            "after_model_callback": agent.after_model_callbacks,
+            "before_tool_callback": agent.before_tool_callbacks,
+            "after_tool_callback": agent.after_tool_callbacks,
+            "before_agent_callbacks": agent.before_agent_callbacks,
+            "after_agent_callbacks": agent.after_agent_callbacks,
+        }
+        callback = all_callbacks.get(callback_type)
         if not callback:
             raise ValueError(
                 f"No callback found of type {callback_type} for agent {agent_name}"
@@ -244,7 +240,7 @@ class CallbackEvals:
 
         if log_file:
             log_file = os.path.abspath(log_file)
-            with open(log_file, "w", encoding="utf-8") as f:
+            with open(log_file, "a", encoding="utf-8") as f:
                 f.write("--- Starting callback tests ---\n")
 
         with tempfile.TemporaryDirectory() as temp_dir:
