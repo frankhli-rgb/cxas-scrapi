@@ -73,34 +73,13 @@ class Tools(Apps):
         self.tools_map: Dict[str, str] = {}
 
     @staticmethod
-    def _get_tool_display_name(tool: types.Tool) -> Optional[str]:
-        """Helper to get the display name of a tool."""
-        display_name = ""
-        if tool.python_function:
-            display_name = tool.python_function.name
-        elif tool.data_store_tool:
-            display_name = tool.data_store_tool.name
-        elif tool.open_api_tool:
-            display_name = tool.open_api_tool.name
-        elif tool.google_search_tool:
-            display_name = tool.google_search_tool.name
-        elif tool.connector_tool:
-            display_name = tool.connector_tool.name
-        elif tool.mcp_tool:
-            display_name = tool.mcp_tool.name
-        elif tool.file_search_tool:
-            display_name = tool.file_search_tool.name
-
-        return display_name
-
-    @staticmethod
     def _is_toolset(tool_name: str) -> bool:
         """Helper to determine if a full resource name refers to a Toolset."""
         return "/toolsets/" in tool_name
 
     @staticmethod
     def _parse_openapi_schema(
-        schema_str: str, display_name: str, name: str, reverse: bool
+        schema_str: str, display_name: str, tool_name: str, reverse: bool
     ) -> Dict[str, str]:
         """Parses an OpenAPI schema to extract tool endpoints locally."""
         parsed_tools: Dict[str, str] = {}
@@ -115,11 +94,10 @@ class Tools(Apps):
                     op_id = details.get("operationId")
                     if op_id:
                         tool_display_name = f"{display_name}_{op_id}"
-                        tool_name = name
                         if reverse:
-                            parsed_tools[tool_display_name] = tool_name
+                            parsed_tools[tool_display_name] = f"{tool_name}/tools/{op_id}"
                         else:
-                            parsed_tools[tool_name] = tool_display_name
+                            parsed_tools[f"{tool_name}/tools/{op_id}"] = tool_display_name
         except Exception as e:
             print(
                 f"[WARNING] Failed to parse OpenAPI schema for {display_name}: {e}"
@@ -181,60 +159,39 @@ class Tools(Apps):
         Args:
             reverse: If True, map display_name -> name.
         """
-        resources = self.list_tools()
-        resources_dict: Dict[str, str] = {}
+        tools = self.list_tools()
+        tools_dict: Dict[str, str] = {}
 
-        for resource in resources:
-            display_name = getattr(resource, "display_name", None)
-            name = getattr(resource, "name", None)
-
-            if not display_name or not name:
-                continue
-
-            if self._is_toolset(name):
-                # Try to parse OpenAPI toolsets locally to avoid N+1 API calls
-                schema_str = None
-                if getattr(resource, "open_api_toolset", None):
+        for tool in tools:
+            if self._is_toolset(tool.name):
+                # Try to parse OpenAPI toolsets locally to avoid excessive API calls
+                if getattr(tool, "open_api_toolset", None):
                     schema_str = getattr(
-                        resource.open_api_toolset, "open_api_schema", None
+                        tool.open_api_toolset, "open_api_schema", None
                     )
-
-                if schema_str:
-                    openapi_tools = self._parse_openapi_schema(
-                        schema_str, display_name, name, reverse
-                    )
-                    resources_dict.update(openapi_tools)
-                else:
-                    # Fallback to API for MCP/Connector toolsets where tools are abstract
-                    try:
-                        tools = self.retrieve_tool(name)
-                        for tool in tools.tools:
-                            tool_display_name = self._get_tool_display_name(
-                                tool
-                            )
-                            if tool_display_name and tool.name:
-                                tool_display_name = (
-                                    f"{display_name}_{tool_display_name}"
-                                )
-                                if reverse:
-                                    resources_dict[tool_display_name] = (
-                                        tool.name
-                                    )
-                                else:
-                                    resources_dict[tool.name] = (
-                                        tool_display_name
-                                    )
-                    except Exception as e:
-                        print(
-                            f"[WARNING] Failed to retrieve tools for toolset {display_name}: {e}"
+                    if schema_str:
+                        openapi_tools = self._parse_openapi_schema(
+                            schema_str, tool.display_name, tool.name, reverse
                         )
+                        tools_dict.update(openapi_tools)
+                else:
+                    toolset_tools = self.retrieve_tools(tool.name.split("/")[-1])
+                    for toolset_tool in toolset_tools.tools:
+                        if reverse:
+                            tools_dict[toolset_tool.display_name] = (
+                                toolset_tool.name
+                            )
+                        else:
+                            tools_dict[toolset_tool.name] = (
+                                toolset_tool.display_name
+                            )
             else:
                 if reverse:
-                    resources_dict[display_name] = name
+                    tools_dict[tool.display_name] = tool.name
                 else:
-                    resources_dict[name] = display_name
+                    tools_dict[tool.name] = tool.display_name
 
-        return resources_dict
+        return tools_dict
 
     def _get_or_load_tools_map(self) -> Dict[str, str]:
         """Gets a reverse map of tools from cache or loads it if missing."""
@@ -385,15 +342,10 @@ class Tools(Apps):
             )
 
         if "toolsets/" in tool_name and "/tools/" in tool_name:
-            toolset_name, operation_id = tool_name.split("/tools/")
+            toolset_name, tool_id = tool_name.split("/tools/")
             payload["toolsetTool"] = {
                 "toolset": toolset_name,
-                "toolId": operation_id,
-            }
-        elif "toolsets/" in tool_name:  # fallback for generic toolsets
-            payload["toolsetTool"] = {
-                "toolset": tool_name,
-                "toolId": tool_display_name.split("_")[-1],
+                "toolId": tool_id,
             }
         else:
             payload["tool"] = tool_name
@@ -416,7 +368,16 @@ class Tools(Apps):
 
         return response.json()
 
-    def retrieve_tool(self, toolset_id: str) -> Any:
+    def retrieve_tools(self, toolset_id: str) -> Any:
         """Retrieves all tools in a toolset."""
         request = types.RetrieveToolsRequest(toolset=f"{self.app_name}/toolsets/{toolset_id}")
         return self.tool_client.retrieve_tools(request=request)
+    
+    def retrieve_tool_schema(self, tool_name: str) -> Any:
+        """Retrieves all tools in a toolset."""
+        if '/toolsets/' not in tool_name:
+            request = types.RetrieveToolSchemaRequest(parent=self.app_name, tool=tool_name)
+            return self.tool_client.retrieve_tool_schema(request=request)
+        toolset_name, tool_id = tool_name.split('/tools/')
+        request = types.RetrieveToolSchemaRequest(parent=self.app_name, toolset_tool=types.ToolsetTool(toolset=toolset_name, tool_id=tool_id))
+        return self.tool_client.retrieve_tool_schema(request=request)
