@@ -1,11 +1,11 @@
 import argparse
+import re
 import os
 import stat
 import subprocess
 import yaml
 
 from cxas_scrapi.core.common import Common
-from cxas_scrapi.core.evaluations import Evaluations
 
 """Templates used by the CXAS SCRAPI CLI."""
 
@@ -234,16 +234,145 @@ ENTRYPOINT ["cxas-eval"]
 """
 
 
+def _get_github_details(agent_dir: str) -> tuple[str | None, str | None]:
+    """Infers GitHub Owner and Repo from git remote origin URL."""
+    try:
+        url = subprocess.check_output(
+            ["git", "config", "--get", "remote.origin.url"],
+            cwd=agent_dir,
+            text=True,
+            stderr=subprocess.DEVNULL
+        ).strip()
+
+        if "github.com" in url:
+            if url.startswith("git@"):
+                path = url.split("github.com:")[1]
+            else:
+                path = url.split("github.com/")[1]
+
+            if path.endswith(".git"):
+                path = path[:-4]
+
+            parts = path.split("/")
+            if len(parts) >= 2:
+                return parts[0], parts[1]
+    except Exception:
+        pass
+    return None, None
+
+
+def _auto_setup_wif(project_id: str, github_owner: str, github_repo: str, pool_name: str = "github-actions-pool-scrapi") -> tuple[str | None, str | None]:
+    """Creates WIF Pool, Provider, and Service Account via gcloud."""
+    print(f"\\n--- Starting Automated WIF Setup for {github_owner}/{github_repo} ---", flush=True)
+
+    try:
+        print("Fetching Project Number...", flush=True)
+        project_number = subprocess.check_output(
+            ["gcloud", "projects", "describe", project_id, "--format=value(projectNumber)", "--quiet"],
+            text=True
+        ).strip()
+        print(f"Project Number: {project_number}", flush=True)
+
+        provider_name = "github-provider"
+        sa_name = "github-actions-sa"
+
+        print(f"Checking/Creating Workload Identity Pool '{pool_name}'...", flush=True)
+        res = subprocess.run(
+            ["gcloud", "iam", "workload-identity-pools", "describe", pool_name, "--location=global", f"--project={project_id}", "--quiet"],
+            stderr=subprocess.DEVNULL
+        )
+        if res.returncode != 0:
+             subprocess.check_call([
+                 "gcloud", "iam", "workload-identity-pools", "create", pool_name,
+                 "--location=global", "--display-name=GitHub Actions Pool (SCRAPI)", f"--project={project_id}", "--quiet"
+             ])
+             print(f"Created Pool {pool_name}", flush=True)
+        else:
+             print(f"Pool {pool_name} already exists.", flush=True)
+
+        print(f"Checking/Creating Provider '{provider_name}'...", flush=True)
+        res = subprocess.run(
+            ["gcloud", "iam", "workload-identity-pools", "providers", "describe", provider_name,
+             f"--workload-identity-pool={pool_name}", "--location=global", f"--project={project_id}", "--quiet"],
+            stderr=subprocess.DEVNULL
+        )
+        if res.returncode != 0:
+             subprocess.check_call([
+                 "gcloud", "iam", "workload-identity-pools", "providers", "create-oidc", provider_name,
+                 f"--workload-identity-pool={pool_name}",
+                 "--location=global",
+                 "--issuer-uri=https://token.actions.githubusercontent.com",
+                 "--attribute-mapping=google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner",
+                 f"--attribute-condition=attribute.repository_owner == '{github_owner}'",
+                 f"--project={project_id}",
+                 "--quiet"
+             ])
+             print(f"Created Provider {provider_name}", flush=True)
+        else:
+             print(f"Provider {provider_name} already exists.", flush=True)
+
+        print(f"Checking/Creating Service Account '{sa_name}'...", flush=True)
+        sa_email = f"{sa_name}@{project_id}.iam.gserviceaccount.com"
+        res = subprocess.run(
+            ["gcloud", "iam", "service-accounts", "describe", sa_email, f"--project={project_id}", "--quiet"],
+            stderr=subprocess.DEVNULL
+        )
+        if res.returncode != 0:
+             subprocess.check_call([
+                 "gcloud", "iam", "service-accounts", "create", sa_name,
+                 f"--display-name=GitHub Actions Service Account (SCRAPI)",
+                 f"--project={project_id}",
+                 "--quiet"
+             ])
+             print(f"Created SA {sa_email}", flush=True)
+        else:
+             print(f"SA {sa_email} already exists.", flush=True)
+
+        print("Binding IAM Policy...", flush=True)
+        member = f"principalSet://iam.googleapis.com/projects/{project_number}/locations/global/workloadIdentityPools/{pool_name}/attribute.repository/{github_owner}/{github_repo}"
+        subprocess.check_call([
+            "gcloud", "iam", "service-accounts", "add-iam-policy-binding", sa_email,
+            "--role=roles/iam.workloadIdentityUser",
+            f"--member={member}",
+            f"--project={project_id}",
+            "--quiet"
+        ])
+        print("IAM Policy bound.", flush=True)
+
+        wip = f"projects/{project_number}/locations/global/workloadIdentityPools/{pool_name}/providers/{provider_name}"
+        return wip, sa_email
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error during WIF setup: {e}")
+        return None, None
+
+
 def init_github_action(args: argparse.Namespace) -> None:
     """Handles the 'init-github-action' command."""
 
-    print("Generating GitHub Actions workflow template...")
+    print("Generating GitHub Actions workflow template...", flush=True)
 
     agent_name = args.agent_name
     app_id = args.app_id
 
     # Try to extract details from app.yaml if available
     agent_dir = args.agent_dir if args.agent_dir else "."
+
+    try:
+        agent_abs_path = os.path.abspath(agent_dir)
+        git_root = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=agent_abs_path,
+            text=True,
+            stderr=subprocess.DEVNULL
+        ).strip()
+
+        if os.path.commonpath([git_root, agent_abs_path]) != git_root:
+            raise ValueError("Discovered Git root does not encapsulate the agent directory.")
+
+    except Exception:
+        git_root = os.path.abspath(agent_dir)
+
     app_yaml_path = os.path.join(agent_dir, "app.yaml")
 
     if os.path.exists(app_yaml_path):
@@ -292,57 +421,40 @@ def init_github_action(args: argparse.Namespace) -> None:
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
 
-    eval_id = args.evaluation_id
-    eval_comments = ""
 
-    # Try to fetch real evaluations if app_id is valid
-    if not eval_id and app_id and "YOUR_PROJECT_ID" not in app_id:
-        try:
 
-            print(f"Fetching evaluations for {app_id}...")
-            eval_client = Evaluations(app_id=app_id)
-            evals_map = eval_client.get_evaluations_map()
+    if getattr(args, "auto_create_wif", False):
+        github_owner, github_repo = None, None
+        if getattr(args, "github_repo", None):
+            if "/" in args.github_repo:
+                github_owner, github_repo = args.github_repo.split("/", 1)
 
-            if evals_map and (
-                evals_map.get("goldens") or evals_map.get("scenarios")
-            ):
-                all_evals = list(evals_map.get("goldens", {}).keys()) + list(
-                    evals_map.get("scenarios", {}).keys()
-                )
-                eval_id = all_evals[0]
-                print(
-                    f"Found {len(all_evals)} evaluations. Using '{eval_id}' as default."
-                )
+        if not github_owner or not github_repo:
+             print("Inferring GitHub details...")
+             # Use absolute git_root we calculated earlier
+             github_owner, github_repo = _get_github_details(git_root)
 
-                if len(all_evals) > 1:
-                    eval_comments = (
-                        "\n  # Other evaluations found for reference:\n"
-                    )
-                    for name in all_evals[1:]:
-                        # Reverse lookup the display names from the maps
-                        display_name = evals_map.get("goldens", {}).get(
-                            name
-                        ) or evals_map.get("scenarios", {}).get(name)
-                        eval_comments += f"  # - {name} ({display_name})\n"
-            else:
-                print(f"No evaluations found for {app_id}. Using placeholder.")
-                eval_id = f"{app_id}/evaluations/YOUR_EVAL_ID"
-        except Exception as e:
-            print(f"Warning: Could not fetch evaluations: {e}")
-            eval_id = f"{app_id}/evaluations/YOUR_EVAL_ID"
-    elif not eval_id:
-        eval_id = f"{app_id}/evaluations/YOUR_EVAL_ID"
+        if not github_owner or not github_repo:
+             print("Warning: Could not infer GitHub details. Skipping automated WIF setup.")
+        else:
+             print(f"Inferred GitHub: {github_owner}/{github_repo}")
+             if project_id == "YOUR_PROJECT_ID":
+                  print("Warning: Cannot setup WIF with placeholder Project ID. Please provide --project_id.")
+             else:
+                  pool_name = getattr(args, "wif_pool_name", "github-actions-pool-scrapi")
+                  auto_wip, auto_sa = _auto_setup_wif(project_id, github_owner, github_repo, pool_name)
+                  if auto_wip and auto_sa:
+                       print("Automated WIF setup successful.")
+                       args.workload_identity_provider = auto_wip
+                       args.service_account = auto_sa
+    wip = args.workload_identity_provider
+    sa = args.service_account
 
-    wip = (
-        args.workload_identity_provider
-        if args.workload_identity_provider
-        else "projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/YOUR_POOL/providers/YOUR_PROVIDER"
-    )
-    sa = (
-        args.service_account
-        if args.service_account
-        else "YOUR_SERVICE_ACCOUNT@YOUR_PROJECT.iam.gserviceaccount.com"
-    )
+    if not wip or not sa:
+        raise ValueError(
+            "Either provide --workload_identity_provider and --service_account, "
+            "or use --auto-create-wif to let the CLI generate them for you."
+        )
 
     # Generate the path string. If they used an absolute path like `/Users/.../pilot`, just use `pilot/**`
     agent_basename = os.path.basename(agent_dir.rstrip(os.sep))
@@ -350,11 +462,11 @@ def init_github_action(args: argparse.Namespace) -> None:
     github_context_path = agent_basename if agent_dir != "." else "."
 
     # Configure auth blocks
-    auth_method = args.auth_method
-    if auth_method == "wif":
-        auth_env = f"""  GCP_WORKLOAD_IDENTITY_PROVIDER: "{wip}"
-  GCP_SERVICE_ACCOUNT: "{sa}" """
-        auth_step = f"""      # Authenticate to Google Cloud via Workload Identity Federation
+    auth_env = (
+        f'  GCP_WORKLOAD_IDENTITY_PROVIDER: "{wip}"\n'
+        f'  GCP_SERVICE_ACCOUNT: "{sa}"'
+    )
+    auth_step = f"""      # Authenticate to Google Cloud via Workload Identity Federation
       # See https://github.com/google-github-actions/auth for configuration instructions
       - name: Authenticate to Google Cloud
         id: auth
@@ -362,46 +474,13 @@ def init_github_action(args: argparse.Namespace) -> None:
         with:
           workload_identity_provider: ${{{{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}}}
           service_account: ${{{{ env.GCP_SERVICE_ACCOUNT }}}}"""
-        setup_gcloud_step = """      - name: Set up Cloud SDK
+    setup_gcloud_step = """      - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker Auth
         run: gcloud auth configure-docker us-central1-docker.pkg.dev"""
-        docker_auth_args = """            -e GOOGLE_APPLICATION_CREDENTIALS=/workspace/application_default_credentials.json \\
+    docker_auth_args = """            -e GOOGLE_APPLICATION_CREDENTIALS=/workspace/application_default_credentials.json \\
             -v ${{ steps.auth.outputs.credentials_file_path }}:/workspace/application_default_credentials.json \\"""
-    elif auth_method == "sa_key":
-        auth_env = "  # Ensure GCP_CREDENTIALS containing your JSON key is in your GitHub Secrets"
-        auth_step = f"""      # Authenticate to Google Cloud using a Service Account JSON Key
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{{{ secrets.GCP_CREDENTIALS }}}}"""
-        setup_gcloud_step = """      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Configure Docker Auth
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev"""
-        docker_auth_args = """            -e GOOGLE_APPLICATION_CREDENTIALS=/workspace/application_default_credentials.json \\
-            -v ${{ steps.auth.outputs.credentials_file_path }}:/workspace/application_default_credentials.json \\"""
-    elif auth_method == "api_key":
-        auth_env = "  # Store your API Key string (starting with AIza) in GitHub Secrets\n  GOOGLE_API_KEY: ${{ secrets.GCP_API_KEY }}"
-        auth_step = """      # Authentication is handled via the GOOGLE_API_KEY environment variable defined above.
-      # No separate auth step is necessary."""
-        setup_gcloud_step = ""
-        docker_auth_args = (
-            """            -e GOOGLE_API_KEY=${{ env.GOOGLE_API_KEY }} \\"""
-        )
-    elif auth_method == "oauth_token":
-        auth_env = "  # Store your OAuth Token string in GitHub Secrets\n  CXAS_OAUTH_TOKEN: ${{ secrets.CXAS_OAUTH_TOKEN }}"
-        auth_step = """      # Authentication is handled via the CXAS_OAUTH_TOKEN environment variable defined above.
-      # No separate auth step is necessary."""
-        setup_gcloud_step = ""
-        docker_auth_args = (
-            """            -e CXAS_OAUTH_TOKEN=${{ env.CXAS_OAUTH_TOKEN }} \\"""
-        )
-
-    import re
 
     safe_agent_name = agent_name.lower().replace(" ", "_")
     safe_agent_name = re.sub(r"[^a-z0-9_-]", "", safe_agent_name)
@@ -433,29 +512,7 @@ def init_github_action(args: argparse.Namespace) -> None:
         setup_gcloud_step=setup_gcloud_step,
     )
 
-    # We want to output the GitHub Actions workflows into the `.github/workflows` directory
-    # of the target agent's Git repository, rather than the directory where the user happens
-    # to be running the `cxas-eval` command from. We use `git rev-parse` to find this root.
-    try:
-        agent_abs_path = os.path.abspath(agent_dir)
-        git_root = subprocess.check_output(
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=agent_abs_path,
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip()
-
-        # Security/Sanity Check: Ensure the git_root we found actually encapsulates the agent_dir.
-        # If the user runs the CLI from a git repo (cxas-scrapi) but points --agent_dir to an
-        # un-tracked sibling folder (/tmp/agent), `git` might accidentally resolve the cxas-scrapi repo!
-        if os.path.commonpath([git_root, agent_abs_path]) != git_root:
-            raise ValueError(
-                "Discovered Git root does not encapsulate the agent directory."
-            )
-
-    except Exception:
-        # Fallback to the provided agent directory if it's not a git repository
-        git_root = os.path.abspath(agent_dir)
+    # Workflows directory calculation (git_root is now calculated at the top)
 
     workflows_dir = os.path.join(git_root, ".github", "workflows")
     os.makedirs(workflows_dir, exist_ok=True)
@@ -529,6 +586,60 @@ def init_github_action(args: argparse.Namespace) -> None:
     print(
         f"Successfully generated GitHub Actions workflows to {os.path.dirname(test_output_path)}"
     )
+
+    # Generate run_tests_docker.sh for streamlined auth locally and on runner
+    script_path = os.path.join(git_root, "run_tests_docker.sh")
+    print(f"Generating helper script at {script_path}...")
+
+    script_content = r"""#!/bin/sh
+# Auto-generated by cxas-scrapi for local/CI Docker unified execution
+
+AGENT_DIR=$1
+PROJECT_ID=$2
+LOCATION=${3:-us}
+
+if [ -z "$AGENT_DIR" ] || [ -z "$PROJECT_ID" ]; then
+  echo "Usage: $0 <agent_dir> <project_id> [location]"
+  exit 1
+fi
+
+ADC_FILE_HOST=""
+
+if [ ! -z "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+  ADC_FILE_HOST="$GOOGLE_APPLICATION_CREDENTIALS"
+elif [ -f "$HOME/.config/gcloud/application_default_credentials.json" ]; then
+  ADC_FILE_HOST="$HOME/.config/gcloud/application_default_credentials.json"
+fi
+
+if [ -z "$ADC_FILE_HOST" ]; then
+  echo "Error: No application default credentials found. Run 'gcloud auth application-default login' locally."
+  exit 1
+fi
+
+echo "Downloading cxas-scrapi CLI Wheel..."
+gsutil cp gs://cxas-scrapi-github/cxas_scrapi-*.whl "$(dirname "$0")/$AGENT_DIR/"
+
+echo "Building Docker Image..."
+docker build -t agent-image "$(dirname "$0")/$AGENT_DIR"
+
+echo "Running Docker Container..."
+docker run --rm \
+  -v "$(dirname "$0")":/workspace \
+  -w /workspace \
+  -e PROJECT_ID="$PROJECT_ID" \
+  -e LOCATION="$LOCATION" \
+  -e GOOGLE_CLOUD_PROJECT="$PROJECT_ID" \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/workspace/application_default_credentials.json \
+  -v "$ADC_FILE_HOST":/workspace/application_default_credentials.json \
+  agent-image \
+  ci-test --agent_dir "$AGENT_DIR" \
+            --project_id "$PROJECT_ID" \
+            --location "$LOCATION" \
+            --display_name "[Local] $(basename "$AGENT_DIR")"
+"""
+    with open(script_path, "w") as f:
+        f.write(script_content)
+    os.chmod(script_path, 0o755)
 
     if args.install_hook:
         hook_path = os.path.join(git_root, ".git", "hooks", "pre-push")
