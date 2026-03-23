@@ -241,7 +241,7 @@ def _get_github_details(agent_dir: str) -> tuple[str | None, str | None]:
             ["git", "config", "--get", "remote.origin.url"],
             cwd=agent_dir,
             text=True,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
         ).strip()
 
         if "github.com" in url:
@@ -261,82 +261,155 @@ def _get_github_details(agent_dir: str) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _auto_setup_wif(project_id: str, github_owner: str, github_repo: str, pool_name: str = "github-actions-pool-scrapi") -> tuple[str | None, str | None]:
+def _auto_setup_wif(
+    project_id: str,
+    github_owner: str,
+    github_repo: str,
+    pool_name: str = "github-actions-pool-scrapi",
+) -> tuple[str | None, str | None]:
     """Creates WIF Pool, Provider, and Service Account via gcloud."""
-    print(f"\\n--- Starting Automated WIF Setup for {github_owner}/{github_repo} ---", flush=True)
+    print(
+        f"\\n--- Starting Automated WIF Setup for {github_owner}/{github_repo} ---",
+        flush=True,
+    )
 
     try:
         print("Fetching Project Number...", flush=True)
         project_number = subprocess.check_output(
-            ["gcloud", "projects", "describe", project_id, "--format=value(projectNumber)", "--quiet"],
-            text=True
+            [
+                "gcloud",
+                "projects",
+                "describe",
+                project_id,
+                "--format=value(projectNumber)",
+                "--quiet",
+            ],
+            text=True,
         ).strip()
         print(f"Project Number: {project_number}", flush=True)
 
         provider_name = "github-provider"
         sa_name = "github-actions-sa"
 
-        print(f"Checking/Creating Workload Identity Pool '{pool_name}'...", flush=True)
+        print(
+            f"Checking/Creating Workload Identity Pool '{pool_name}'...",
+            flush=True,
+        )
         res = subprocess.run(
-            ["gcloud", "iam", "workload-identity-pools", "describe", pool_name, "--location=global", f"--project={project_id}", "--quiet"],
-            stderr=subprocess.DEVNULL
+            [
+                "gcloud",
+                "iam",
+                "workload-identity-pools",
+                "describe",
+                pool_name,
+                "--location=global",
+                f"--project={project_id}",
+                "--quiet",
+            ],
+            stderr=subprocess.DEVNULL,
         )
         if res.returncode != 0:
-             subprocess.check_call([
-                 "gcloud", "iam", "workload-identity-pools", "create", pool_name,
-                 "--location=global", "--display-name=GitHub Actions Pool (SCRAPI)", f"--project={project_id}", "--quiet"
-             ])
-             print(f"Created Pool {pool_name}", flush=True)
+            subprocess.check_call(
+                [
+                    "gcloud",
+                    "iam",
+                    "workload-identity-pools",
+                    "create",
+                    pool_name,
+                    "--location=global",
+                    "--display-name=GitHub Actions Pool (SCRAPI)",
+                    f"--project={project_id}",
+                    "--quiet",
+                ]
+            )
+            print(f"Created Pool {pool_name}", flush=True)
         else:
-             print(f"Pool {pool_name} already exists.", flush=True)
+            print(f"Pool {pool_name} already exists.", flush=True)
 
         print(f"Checking/Creating Provider '{provider_name}'...", flush=True)
         res = subprocess.run(
-            ["gcloud", "iam", "workload-identity-pools", "providers", "describe", provider_name,
-             f"--workload-identity-pool={pool_name}", "--location=global", f"--project={project_id}", "--quiet"],
-            stderr=subprocess.DEVNULL
+            [
+                "gcloud",
+                "iam",
+                "workload-identity-pools",
+                "providers",
+                "describe",
+                provider_name,
+                f"--workload-identity-pool={pool_name}",
+                "--location=global",
+                f"--project={project_id}",
+                "--quiet",
+            ],
+            stderr=subprocess.DEVNULL,
         )
         if res.returncode != 0:
-             subprocess.check_call([
-                 "gcloud", "iam", "workload-identity-pools", "providers", "create-oidc", provider_name,
-                 f"--workload-identity-pool={pool_name}",
-                 "--location=global",
-                 "--issuer-uri=https://token.actions.githubusercontent.com",
-                 "--attribute-mapping=google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner",
-                 f"--attribute-condition=attribute.repository_owner == '{github_owner}'",
-                 f"--project={project_id}",
-                 "--quiet"
-             ])
-             print(f"Created Provider {provider_name}", flush=True)
+            subprocess.check_call(
+                [
+                    "gcloud",
+                    "iam",
+                    "workload-identity-pools",
+                    "providers",
+                    "create-oidc",
+                    provider_name,
+                    f"--workload-identity-pool={pool_name}",
+                    "--location=global",
+                    "--issuer-uri=https://token.actions.githubusercontent.com",
+                    "--attribute-mapping=google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner",
+                    f"--attribute-condition=attribute.repository_owner == '{github_owner}'",
+                    f"--project={project_id}",
+                    "--quiet",
+                ]
+            )
+            print(f"Created Provider {provider_name}", flush=True)
         else:
-             print(f"Provider {provider_name} already exists.", flush=True)
+            print(f"Provider {provider_name} already exists.", flush=True)
 
         print(f"Checking/Creating Service Account '{sa_name}'...", flush=True)
         sa_email = f"{sa_name}@{project_id}.iam.gserviceaccount.com"
         res = subprocess.run(
-            ["gcloud", "iam", "service-accounts", "describe", sa_email, f"--project={project_id}", "--quiet"],
-            stderr=subprocess.DEVNULL
+            [
+                "gcloud",
+                "iam",
+                "service-accounts",
+                "describe",
+                sa_email,
+                f"--project={project_id}",
+                "--quiet",
+            ],
+            stderr=subprocess.DEVNULL,
         )
         if res.returncode != 0:
-             subprocess.check_call([
-                 "gcloud", "iam", "service-accounts", "create", sa_name,
-                 f"--display-name=GitHub Actions Service Account (SCRAPI)",
-                 f"--project={project_id}",
-                 "--quiet"
-             ])
-             print(f"Created SA {sa_email}", flush=True)
+            subprocess.check_call(
+                [
+                    "gcloud",
+                    "iam",
+                    "service-accounts",
+                    "create",
+                    sa_name,
+                    f"--display-name=GitHub Actions Service Account (SCRAPI)",
+                    f"--project={project_id}",
+                    "--quiet",
+                ]
+            )
+            print(f"Created SA {sa_email}", flush=True)
         else:
-             print(f"SA {sa_email} already exists.", flush=True)
+            print(f"SA {sa_email} already exists.", flush=True)
 
         print("Binding IAM Policy...", flush=True)
         member = f"principalSet://iam.googleapis.com/projects/{project_number}/locations/global/workloadIdentityPools/{pool_name}/attribute.repository/{github_owner}/{github_repo}"
-        subprocess.check_call([
-            "gcloud", "iam", "service-accounts", "add-iam-policy-binding", sa_email,
-            "--role=roles/iam.workloadIdentityUser",
-            f"--member={member}",
-            f"--project={project_id}",
-            "--quiet"
-        ])
+        subprocess.check_call(
+            [
+                "gcloud",
+                "iam",
+                "service-accounts",
+                "add-iam-policy-binding",
+                sa_email,
+                "--role=roles/iam.workloadIdentityUser",
+                f"--member={member}",
+                f"--project={project_id}",
+                "--quiet",
+            ]
+        )
         print("IAM Policy bound.", flush=True)
 
         wip = f"projects/{project_number}/locations/global/workloadIdentityPools/{pool_name}/providers/{provider_name}"
@@ -364,11 +437,13 @@ def init_github_action(args: argparse.Namespace) -> None:
             ["git", "rev-parse", "--show-toplevel"],
             cwd=agent_abs_path,
             text=True,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
         ).strip()
 
         if os.path.commonpath([git_root, agent_abs_path]) != git_root:
-            raise ValueError("Discovered Git root does not encapsulate the agent directory.")
+            raise ValueError(
+                "Discovered Git root does not encapsulate the agent directory."
+            )
 
     except Exception:
         git_root = os.path.abspath(agent_dir)
@@ -421,8 +496,6 @@ def init_github_action(args: argparse.Namespace) -> None:
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
 
-
-
     if getattr(args, "auto_create_wif", False):
         github_owner, github_repo = None, None
         if getattr(args, "github_repo", None):
@@ -430,23 +503,31 @@ def init_github_action(args: argparse.Namespace) -> None:
                 github_owner, github_repo = args.github_repo.split("/", 1)
 
         if not github_owner or not github_repo:
-             print("Inferring GitHub details...")
-             # Use absolute git_root we calculated earlier
-             github_owner, github_repo = _get_github_details(git_root)
+            print("Inferring GitHub details...")
+            # Use absolute git_root we calculated earlier
+            github_owner, github_repo = _get_github_details(git_root)
 
         if not github_owner or not github_repo:
-             print("Warning: Could not infer GitHub details. Skipping automated WIF setup.")
+            print(
+                "Warning: Could not infer GitHub details. Skipping automated WIF setup."
+            )
         else:
-             print(f"Inferred GitHub: {github_owner}/{github_repo}")
-             if project_id == "YOUR_PROJECT_ID":
-                  print("Warning: Cannot setup WIF with placeholder Project ID. Please provide --project_id.")
-             else:
-                  pool_name = getattr(args, "wif_pool_name", "github-actions-pool-scrapi")
-                  auto_wip, auto_sa = _auto_setup_wif(project_id, github_owner, github_repo, pool_name)
-                  if auto_wip and auto_sa:
-                       print("Automated WIF setup successful.")
-                       args.workload_identity_provider = auto_wip
-                       args.service_account = auto_sa
+            print(f"Inferred GitHub: {github_owner}/{github_repo}")
+            if project_id == "YOUR_PROJECT_ID":
+                print(
+                    "Warning: Cannot setup WIF with placeholder Project ID. Please provide --project_id."
+                )
+            else:
+                pool_name = getattr(
+                    args, "wif_pool_name", "github-actions-pool-scrapi"
+                )
+                auto_wip, auto_sa = _auto_setup_wif(
+                    project_id, github_owner, github_repo, pool_name
+                )
+                if auto_wip and auto_sa:
+                    print("Automated WIF setup successful.")
+                    args.workload_identity_provider = auto_wip
+                    args.service_account = auto_sa
     wip = args.workload_identity_provider
     sa = args.service_account
 

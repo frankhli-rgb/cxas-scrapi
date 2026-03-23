@@ -16,7 +16,7 @@ def test_evaluations_list(mock_client_cls):
     mock_eval.display_name = "Eval 1"
     mock_client.list_evaluations.return_value = [mock_eval]
 
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
     res = evals_client.list_evaluations()
 
     assert len(res) == 1
@@ -43,7 +43,7 @@ def test_evaluations_get_map(mock_client_cls):
 
     mock_client.list_evaluations.return_value = [mock_eval1, mock_eval2]
 
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
 
     res_normal = evals_client.get_evaluations_map()
     assert (
@@ -74,7 +74,7 @@ def test_evaluations_get(mock_client_cls):
     mock_eval.name = "projects/p/locations/l/apps/a/evaluations/e1"
     mock_client.get_evaluation.return_value = mock_eval
 
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
     res = evals_client.get_evaluation(
         "projects/p/locations/l/apps/a/evaluations/e1"
     )
@@ -181,7 +181,7 @@ def test_export_evaluation(mock_get_eval):
         )
         mock_type.return_value.to_dict = mock_to_dict
 
-        evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+        evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
         # We also need to mock credentials properly if it tries to init client
         with patch("cxas_scrapi.core.evaluations.EvaluationServiceClient"):
             yaml_str = evals_client.export_evaluation(
@@ -200,7 +200,7 @@ def test_export_evaluation(mock_get_eval):
 def test_import_evaluations(mock_client_cls):
     """Test Evaluations.import_evaluations."""
     mock_client = mock_client_cls.return_value
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
 
     # Test GCS URI
     evals_client.import_evaluations(
@@ -229,7 +229,7 @@ def test_list_evaluation_expectations(mock_client_cls):
     mock_client = mock_client_cls.return_value
     mock_client.list_evaluation_expectations.return_value = ["exp1", "exp2"]
 
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
     res = evals_client.list_evaluation_expectations()
 
     assert len(res) == 2
@@ -244,7 +244,7 @@ def test_get_evaluation_expectation(mock_client_cls):
     mock_exp.name = "projects/p/locations/l/apps/a/evaluationExpectations/e1"
     mock_client.get_evaluation_expectation.return_value = mock_exp
 
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
     res = evals_client.get_evaluation_expectation(
         "projects/p/locations/l/apps/a/evaluationExpectations/e1"
     )
@@ -261,7 +261,7 @@ def test_create_evaluation_expectation(mock_client_cls):
         name="created_exp"
     )
 
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
 
     # Test with dict
     res = evals_client.create_evaluation_expectation(
@@ -276,7 +276,7 @@ def test_update_evaluation_expectation(mock_client_cls):
     """Test Evaluations.update_evaluation_expectation."""
     mock_client = mock_client_cls.return_value
 
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
     mock_exp = MagicMock()
 
     evals_client.update_evaluation_expectation(mock_exp)
@@ -289,7 +289,7 @@ def test_delete_evaluation_expectation(mock_client_cls):
     """Test Evaluations.delete_evaluation_expectation."""
     mock_client = mock_client_cls.return_value
 
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
     evals_client.delete_evaluation_expectation(
         "projects/p/locations/l/apps/a/evaluationExpectations/e1"
     )
@@ -332,7 +332,7 @@ def test_get_evaluation_thresholds(mock_agent_client_cls):
                 }
             }
         }
-        evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+        evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
         res = evals_client.get_evaluation_thresholds()
 
     mock_agent_client.get_app.assert_called_once()
@@ -352,7 +352,7 @@ def test_run_evaluation(mock_client_cls, mock_types):
     """Test Evaluations.run_evaluation."""
     mock_client = mock_client_cls.return_value
 
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
 
     mock_map = {
         "goldens": {
@@ -414,7 +414,7 @@ def test_run_evaluation(mock_client_cls, mock_types):
 def test_get_evaluation_run(mock_client_cls, mock_types):
     """Test Evaluations.get_evaluation_run."""
     mock_client = mock_client_cls.return_value
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
 
     mock_types.GetEvaluationRunRequest.reset_mock()
     evals_client.get_evaluation_run(
@@ -434,23 +434,19 @@ def test_get_evaluation_run(mock_client_cls, mock_types):
 def test_list_evaluation_results_by_run(mock_client_cls, mock_types):
     """Test Evaluations.list_evaluation_results_by_run."""
     mock_client = mock_client_cls.return_value
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    mock_run = MagicMock()
+    mock_run.evaluation_results = ["res1", "res2"]
+    mock_client.get_evaluation_run.return_value = mock_run
 
-    mock_types.ListEvaluationResultsRequest.reset_mock()
-    evals_client.list_evaluation_results_by_run(
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
+
+    res = evals_client.list_evaluation_results_by_run(
         evaluation_run_id="projects/p/locations/l/apps/other/evaluationRuns/r1"
     )
 
-    mock_client.list_evaluation_results.assert_called_once()
-    request_kwargs = mock_types.ListEvaluationResultsRequest.call_args[1]
-    assert (
-        request_kwargs["parent"]
-        == "projects/p/locations/l/apps/other/evaluations/-"
-    )
-    assert (
-        request_kwargs["filter"]
-        == 'evaluation_run:"projects/p/locations/l/apps/other/evaluationRuns/r1"'
-    )
+    mock_client.get_evaluation_run.assert_called_once_with(name="projects/p/locations/l/apps/other/evaluationRuns/r1")
+    assert mock_client.get_evaluation_result.call_count == 2
+    assert len(res) == 2
 
     # Test error condition
     with pytest.raises(ValueError):
@@ -474,7 +470,7 @@ class MockEval:
 @patch("cxas_scrapi.core.evaluations.EvaluationServiceClient")
 def test_build_search_index(mock_client_cls):
     """Test Evaluations.build_search_index."""
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
     evals_client.list_evaluations = MagicMock(
         return_value=[
             MockEval(
@@ -505,7 +501,7 @@ def test_build_search_index(mock_client_cls):
 @patch("cxas_scrapi.core.evaluations.EvaluationServiceClient")
 def test_search_evaluations(mock_client_cls, mock_tools_cls, mock_agents_cls):
     """Test Evaluations.search_evaluations."""
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
     evals_client.list_evaluations = MagicMock(
         return_value=[
             MockEval(
@@ -536,25 +532,25 @@ def test_search_evaluations(mock_client_cls, mock_tools_cls, mock_agents_cls):
 
     # Search for tool 1
     res = evals_client.search_evaluations(
-        app_id="projects/p/locations/l/apps/a", tools=["My Tool 1"]
+        app_name="projects/p/locations/l/apps/a", tools=["My Tool 1"]
     )
     assert res == ["Eval Tool 1"]
 
     # Search for agent 1
     res = evals_client.search_evaluations(
-        app_id="projects/p/locations/l/apps/a", agents=["My Agent 1"]
+        app_name="projects/p/locations/l/apps/a", agents=["My Agent 1"]
     )
     assert set(res) == {"Eval Agent 1", "Eval Both"}
 
     # Search by variable
     res = evals_client.search_evaluations(
-        app_id="projects/p/locations/l/apps/a", variables=["var1"]
+        app_name="projects/p/locations/l/apps/a", variables=["var1"]
     )
     assert res == ["Eval Tool 1"]
 
     # Search by multiple
     res = evals_client.search_evaluations(
-        app_id="projects/p/locations/l/apps/a",
+        app_name="projects/p/locations/l/apps/a",
         tools=["My Tool 2"],
         agents=["My Agent 1"],
     )
@@ -563,18 +559,18 @@ def test_search_evaluations(mock_client_cls, mock_tools_cls, mock_agents_cls):
     # Test error cases
     with pytest.raises(ValueError):
         evals_client.search_evaluations(
-            app_id="projects/p/locations/l/apps/a", tools=["Invalid Tool"]
+            app_name="projects/p/locations/l/apps/a", tools=["Invalid Tool"]
         )
 
     with pytest.raises(ValueError):
         evals_client.search_evaluations(
-            app_id="projects/p/locations/l/apps/a", agents=["Invalid Agent"]
+            app_name="projects/p/locations/l/apps/a", agents=["Invalid Agent"]
         )
 
     with pytest.raises(
         ValueError, match="Must provide at least one search term"
     ):
-        evals_client.search_evaluations(app_id="projects/p/locations/l/apps/a")
+        evals_client.search_evaluations(app_name="projects/p/locations/l/apps/a")
 
 
 @patch("cxas_scrapi.core.evaluations.json_format")
@@ -585,7 +581,7 @@ def test_evaluations_create_evaluation(
 ):
     """Test Evaluations.create_evaluation."""
     mock_client = mock_client_cls.return_value
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
 
     # Test with dict
     evaluation_dict = {"display_name": "New Eval"}
@@ -614,9 +610,9 @@ def test_evaluations_create_evaluation(
     )
     mock_client.create_evaluation.assert_called_once()
 
-    # Test missing app_id
-    evals_client.app_id = None
-    with pytest.raises(ValueError, match="app_id is required"):
+    # Test missing app_name
+    evals_client.app_name = None
+    with pytest.raises(ValueError, match="app_name is required"):
         evals_client.create_evaluation(evaluation=evaluation_dict)
 
 
@@ -627,7 +623,7 @@ def test_bulk_export_evals(mock_get_map, mock_export, mock_makedirs):
     """Test Evaluations.bulk_export_evals."""
     from unittest.mock import mock_open
 
-    evals_client = Evaluations(app_id="projects/p/locations/l/apps/a")
+    evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
 
     # Mock get_evaluations_map
     mock_get_map.return_value = {

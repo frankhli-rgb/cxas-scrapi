@@ -51,8 +51,8 @@ def export_eval(args: argparse.Namespace) -> None:
     """Handles the 'export' command."""
 
     print(f"Exporting evaluation: {args.evaluation_id}")
-    # Use app_id to init client. Eval ID might be full resource name.
-    eval_client = Evaluations(app_id=args.app_id)
+    # Use app_name to init client. Eval ID might be full resource name.
+    eval_client = Evaluations(app_name=args.app_name)
 
     try:
         format_enum = (
@@ -78,7 +78,7 @@ def export_eval(args: argparse.Namespace) -> None:
 def wait_for_evaluation_completion(
     eval_utils: EvalUtils,
     old_result_ids: List[str],
-    app_id: str,
+    app_name: str,
     timeout_seconds: int = 600,
 ) -> Dict[str, pd.DataFrame]:
     """Waits for a new evaluation result to appear."""
@@ -195,10 +195,10 @@ def run_eval(args: argparse.Namespace) -> None:
 
     print(
         f"Triggering evaluation: {args.evaluation_id} "
-        f"for App: {args.app_id}"
+        f"for App: {args.app_name}"
     )
-    eval_client = Evaluations(app_id=args.app_id)
-    eval_utils = EvalUtils(app_id=args.app_id)
+    eval_client = Evaluations(app_name=args.app_name)
+    eval_utils = EvalUtils(app_name=args.app_name)
 
     try:
         # Step 1: Capture existing evaluation runs to diff against later
@@ -211,14 +211,14 @@ def run_eval(args: argparse.Namespace) -> None:
 
         # Step 2: Trigger evaluation
         eval_client.run_evaluation(
-            evaluations=[args.evaluation_id], app_id=args.app_id
+            evaluations=[args.evaluation_id], app_name=args.app_name
         )
         print("Evaluation triggered successfully based on CLI call.")
 
         # Step 3: Wait and backoff on pending evaluations.
         if args.wait:
             df_new_run = wait_for_evaluation_completion(
-                eval_utils, old_result_ids, args.app_id
+                eval_utils, old_result_ids, args.app_name
             )
             pass_status = filter_metrics_and_assess(
                 df_new_run, args.filter_auto_metrics
@@ -240,10 +240,10 @@ def test_tools(args: argparse.Namespace) -> None:
     """Handles the 'test-tools' command."""
 
     print(
-        f"Running tool tests for App: {args.app_id} "
+        f"Running tool tests for App: {args.app_name} "
         f"using file: {args.test_file}"
     )
-    tool_evals = ToolEvals(app_id=args.app_id)
+    tool_evals = ToolEvals(app_name=args.app_name)
 
     try:
         test_cases = tool_evals.load_tool_test_cases_from_file(args.test_file)
@@ -312,7 +312,7 @@ def test_single_callback(args: argparse.Namespace) -> None:
 
     try:
         results = callback_evals.test_single_callback_for_agent(
-            app_name=args.app_id,
+            app_name=args.app_name,
             agent_name=args.agent_name,
             callback_type=args.callback_type,
             test_file_path=args.test_file_path,
@@ -349,14 +349,14 @@ def ci_test(args: argparse.Namespace) -> None:
         temp_display_name = f"[CI] PR Test {uuid.uuid4().hex[:8]}"
 
     args.display_name = temp_display_name
-    args.app_id = None  # Force create by default
+    args.app_name = None  # Force create by default
 
     apps_client = Apps(project_id=args.project_id, location=args.location)
 
     existing_app = apps_client.get_app_by_display_name(temp_display_name)
     if existing_app:
         print(f"Found existing temp agent: {existing_app.name}. Updating...")
-        args.app_id = existing_app.name
+        args.app_name = existing_app.name
 
     temp_app_name = app_push(args)
 
@@ -373,7 +373,7 @@ def ci_test(args: argparse.Namespace) -> None:
             cmd = [
                 "cxas-eval",
                 "test-tools",
-                "--app_id",
+                "--app_name",
                 temp_app_name,
                 "--test_file",
                 test_file,
@@ -387,7 +387,7 @@ def ci_test(args: argparse.Namespace) -> None:
         # We must evaluate using the API or SDK
         print(f"\\n--- Running Evaluations on {temp_app_name} ---")
 
-        evals_client = Evaluations(app_id=temp_app_name)
+        evals_client = Evaluations(app_name=temp_app_name)
         evals_map = evals_client.get_evaluations_map()
 
         if not evals_map or (
@@ -402,7 +402,7 @@ def ci_test(args: argparse.Namespace) -> None:
                 cmd = [
                     "cxas-eval",
                     "run",
-                    "--app_id",
+                    "--app_name",
                     temp_app_name,
                     "--evaluation_id",
                     eval_id,
@@ -554,11 +554,11 @@ def get_parser() -> argparse.ArgumentParser:
         "--agent_dir",
         help=(
             "Optional: The path to the agent directory (e.g., 'pilot') "
-            "to extract app_id and agent_name from app.yaml."
+            "to extract app_name and agent_name from app.yaml."
         ),
     )
     parser_init_gh.add_argument(
-        "--app_id",
+        "--app_name",
         help=(
             "Optional: The CXAS App ID (projects/.../apps/...). "
             "If missing, extracts from agent_dir/app.yaml."

@@ -37,14 +37,17 @@ class TurnExpectation(BaseModel):
     type: TurnOperator
     value: Optional[Any] = None
 
+
 class TurnStep(BaseModel):
     """Data model for a single step inside a multi-turn conversation."""
+
     turn: str
     user: Optional[str] = None
     event: Optional[str] = None
     variables: Dict[str, Any] = Field(default_factory=dict)
     config: Dict[str, Any] = Field(default_factory=dict)
     expectations: List[TurnExpectation] = Field(default_factory=list)
+
 
 class TurnTestCase(BaseModel):
     """Data model for a single-turn test case."""
@@ -74,7 +77,9 @@ class TurnEvals:
         """
         self.app_name = app_name
         self.creds = creds
-        self.sessions_client = Sessions(app_name=self.app_name, creds=self.creds)
+        self.sessions_client = Sessions(
+            app_name=self.app_name, creds=self.creds
+        )
         self.var_client = Variables(app_name=self.app_name, creds=self.creds)
 
     def load_turn_test_cases_from_file(
@@ -116,16 +121,16 @@ class TurnEvals:
         raw_tests = raw_data.get("conversations", raw_data.get("tests", []))
         if not raw_tests:
             return []
-            
+
         # Map 'conversation' to 'name' for Pydantic validation if needed
         for t in raw_tests:
             if "conversation" in t and "name" not in t:
                 t["name"] = t["conversation"]
-        
+
         global_config = raw_data.get("config", {})
         adapter = TypeAdapter(List[TurnTestCase])
         tests = adapter.validate_python(raw_tests)
-        
+
         for t in tests:
             merged = global_config.copy()
             merged.update(t.config)
@@ -135,7 +140,7 @@ class TurnEvals:
                     step_merged = merged.copy()
                     step_merged.update(step.config)
                     step.config = step_merged
-                    
+
         return tests
 
     def _check_dict_subset(self, subset: dict, superset: dict) -> bool:
@@ -143,15 +148,16 @@ class TurnEvals:
         Supports {} as a wildcard meaning 'the key must exist, but values do not matter'.
         """
         import json
+
         for k, v in subset.items():
             if k not in superset:
                 return False
             # {} acts as a wildcard asserting exists
             if isinstance(v, dict) and not v:
                 continue
-                
+
             super_val = superset[k]
-            
+
             # If expected is a dict but actual is a JSON string, try to parse the actual
             if isinstance(v, dict) and isinstance(super_val, str):
                 try:
@@ -168,7 +174,13 @@ class TurnEvals:
                     return False
         return True
 
-    def _extract_tools_from_span(self, span: Dict[str, Any], called_tools: List[str], tool_inputs: Dict[str, Any], tool_outputs: Dict[str, Any]):
+    def _extract_tools_from_span(
+        self,
+        span: Dict[str, Any],
+        called_tools: List[str],
+        tool_inputs: Dict[str, Any],
+        tool_outputs: Dict[str, Any],
+    ):
         """Recursively extract tool calls from a span and its children."""
         if span.get("name") == "Tool":
             attrs = span.get("attributes", {})
@@ -176,21 +188,23 @@ class TurnEvals:
             if tool_name:
                 if tool_name not in called_tools:
                     called_tools.append(tool_name)
-                    
+
                 if "args" in attrs and tool_name not in tool_inputs:
                     tool_inputs[tool_name] = attrs["args"]
                 if "response" in attrs and tool_name not in tool_outputs:
                     tool_outputs[tool_name] = attrs["response"]
-                    
+
         for child in span.get("childSpans", []):
-            self._extract_tools_from_span(child, called_tools, tool_inputs, tool_outputs)
+            self._extract_tools_from_span(
+                child, called_tools, tool_inputs, tool_outputs
+            )
 
     def validate_turn_test(self, test_case: Any, turn_response: Any):
         """Validates the turn response against defined expectations."""
         errors = []
         expected_vals = []
         actual_vals = []
-        
+
         # Extract meaningful data from turn_response protobuf/dict
         from google.protobuf.json_format import MessageToDict
 
@@ -230,19 +244,21 @@ class TurnEvals:
             # only collect the raw output text for this turn, avoiding trace history
             if "text" in out:
                 add_snippet(out["text"])
-                
+
             diag = out.get("diagnosticInfo", {})
             messages = diag.get("messages", [])
-            
+
             # Extract any nested tools from rootSpan
             root_span = diag.get("rootSpan", {})
             if root_span:
-                self._extract_tools_from_span(root_span, called_tools, tool_inputs, tool_outputs)
-                
+                self._extract_tools_from_span(
+                    root_span, called_tools, tool_inputs, tool_outputs
+                )
+
             for msg in messages:
                 if msg.get("role") == "user":
                     continue
-                
+
                 for chunk in msg.get("chunks", []):
                     if "text" in chunk:
                         add_snippet(chunk["text"])
@@ -291,7 +307,7 @@ class TurnEvals:
             expected = exp.value
 
             expected_vals.append(str(expected))
-            
+
             if op == TurnOperator.EQUALS:
                 actual_vals.append(full_text.strip())
                 if full_text.strip() != str(expected).strip():
@@ -394,8 +410,14 @@ class TurnEvals:
                     # Multi-turn sequence
                     for step in case.turns:
                         if debug:
-                            input_str = step.user if step.user else f"<event>{step.event}</event>"
-                            print(f"[DEBUG] Step: {step.turn} | Input: {input_str}")
+                            input_str = (
+                                step.user
+                                if step.user
+                                else f"<event>{step.event}</event>"
+                            )
+                            print(
+                                f"[DEBUG] Step: {step.turn} | Input: {input_str}"
+                            )
                             print(f"[DEBUG] Session ID: {test_session_id}")
                             print(f"[DEBUG] Variables: {step.variables}")
 
@@ -409,39 +431,57 @@ class TurnEvals:
                             event=step.event,
                             variables=step.variables,
                             historical_contexts=None,
-                            **merged_config
+                            **merged_config,
                         )
-                        
-                        errors, expected_vals, actual_vals = self.validate_turn_test(step, turn_response)
-                        
+
+                        errors, expected_vals, actual_vals = (
+                            self.validate_turn_test(step, turn_response)
+                        )
+
                         status = "SUCCESS"
                         if errors:
                             status = "FAILURE"
-                            
+
                         print(f"{status}: {case.name} - {step.turn}")
                         if errors:
                             for err in errors:
                                 print(f"  - {err}")
-                            
-                        results.append({
-                            "test_name": case.name,
-                            "turn": step.turn,
-                            "user": step.user or f"Event: {step.event}",
-                            "status": status,
-                            "errors": "; ".join(errors) if errors else "",
-                            "expected": "\n".join(expected_vals) if expected_vals else "",
-                            "actual": "\n".join(actual_vals) if actual_vals else "",
-                            "session_id": test_session_id,
-                        })
-                        
+
+                        results.append(
+                            {
+                                "test_name": case.name,
+                                "turn": step.turn,
+                                "user": step.user or f"Event: {step.event}",
+                                "status": status,
+                                "errors": "; ".join(errors) if errors else "",
+                                "expected": (
+                                    "\n".join(expected_vals)
+                                    if expected_vals
+                                    else ""
+                                ),
+                                "actual": (
+                                    "\n".join(actual_vals)
+                                    if actual_vals
+                                    else ""
+                                ),
+                                "session_id": test_session_id,
+                            }
+                        )
+
                         if errors:
-                            print(f"Aborting multi-turn sequence '{case.name}' due to failure at '{step.turn}'.")
+                            print(
+                                f"Aborting multi-turn sequence '{case.name}' due to failure at '{step.turn}'."
+                            )
                             break
                         print("-" * 30)
                 else:
                     # 2. Run the single turn
                     if debug:
-                        input_str = case.user if case.user else f"<event>{case.event}</event>"
+                        input_str = (
+                            case.user
+                            if case.user
+                            else f"<event>{case.event}</event>"
+                        )
                         print(f"[DEBUG] Input: {input_str}")
                         print(f"[DEBUG] Session ID: {test_session_id}")
                         print(f"[DEBUG] Variables: {case.variables}")
@@ -451,47 +491,67 @@ class TurnEvals:
                         text=case.user,
                         event=case.event,
                         variables=case.variables,
-                        historical_contexts=case.historical_contexts if case.historical_contexts else None,
-                        turn_count=case.turn_count if case.turn_count is not None else None,
-                        **case.config
+                        historical_contexts=(
+                            case.historical_contexts
+                            if case.historical_contexts
+                            else None
+                        ),
+                        turn_count=(
+                            case.turn_count
+                            if case.turn_count is not None
+                            else None
+                        ),
+                        **case.config,
                     )
-                    
+
                     # 3. Validate expectations
-                    errors, expected_vals, actual_vals = self.validate_turn_test(case, turn_response)
-                    
+                    errors, expected_vals, actual_vals = (
+                        self.validate_turn_test(case, turn_response)
+                    )
+
                     status = "SUCCESS"
                     if errors:
                         status = "FAILURE"
-                        
+
                     print(f"{status}: {case.name}")
                     if errors:
                         for err in errors:
                             print(f"  - {err}")
-                        
-                    results.append({
-                        "test_name": case.name,
-                        "turn": "",
-                        "user": case.user or f"Event: {case.event}",
-                        "status": status,
-                        "errors": "; ".join(errors) if errors else "",
-                        "expected": "\n".join(expected_vals) if expected_vals else "",
-                        "actual": "\n".join(actual_vals) if actual_vals else "",
-                        "session_id": test_session_id,
-                    })
-                
+
+                    results.append(
+                        {
+                            "test_name": case.name,
+                            "turn": "",
+                            "user": case.user or f"Event: {case.event}",
+                            "status": status,
+                            "errors": "; ".join(errors) if errors else "",
+                            "expected": (
+                                "\n".join(expected_vals)
+                                if expected_vals
+                                else ""
+                            ),
+                            "actual": (
+                                "\n".join(actual_vals) if actual_vals else ""
+                            ),
+                            "session_id": test_session_id,
+                        }
+                    )
+
             except Exception as e:
                 print(f"FAILURE: Exception {e}")
-                results.append({
-                    "test_name": case.name,
-                    "turn": "",
-                    "user": case.user,
-                    "status": "FAILURE",
-                    "errors": str(e),
-                    "expected": "",
-                    "actual": "",
-                    "session_id": test_session_id,
-                })
-                
+                results.append(
+                    {
+                        "test_name": case.name,
+                        "turn": "",
+                        "user": case.user,
+                        "status": "FAILURE",
+                        "errors": str(e),
+                        "expected": "",
+                        "actual": "",
+                        "session_id": test_session_id,
+                    }
+                )
+
             print("=" * 30)
-            
+
         return pd.DataFrame(results)

@@ -176,23 +176,25 @@ class Apps(Common):
         """
         # Validate that exactly one source is provided if both are given
         if gcs_uri and local_path:
-            raise ValueError("Only one of 'gcs_uri' or 'local_path' can be provided.")
+            raise ValueError(
+                "Only one of 'gcs_uri' or 'local_path' can be provided."
+            )
 
         request = types.ExportAppRequest(
             name=f"{self.parent}/apps/{app_id}",
             gcs_uri=gcs_uri if gcs_uri else None,
             export_format=export_format,
         )
-        
+
         operation = self.client.export_app(request=request)
-        
+
         if local_path:
             # We must wait for the result if writing to a local path
             response = operation.result()
             with open(local_path, "wb") as f:
                 f.write(response.app_content)
             return response
-            
+
         return operation
 
     def import_as_new_app(
@@ -211,9 +213,17 @@ class Apps(Common):
             local_path: Optional. The local path to the zip archive of the app.
         """
         # Validate that exactly one source is provided
-        sources_provided = sum([app_content is not None, gcs_uri is not None, local_path is not None])
+        sources_provided = sum(
+            [
+                app_content is not None,
+                gcs_uri is not None,
+                local_path is not None,
+            ]
+        )
         if sources_provided != 1:
-            raise ValueError("Exactly one of 'app_content', 'gcs_uri', or 'local_path' must be provided.")
+            raise ValueError(
+                "Exactly one of 'app_content', 'gcs_uri', or 'local_path' must be provided."
+            )
 
         request_kwargs = {
             "parent": self.parent,
@@ -249,9 +259,17 @@ class Apps(Common):
             conflict_strategy: Optional. The conflict resolution strategy to use ('REPLACE' or 'OVERWRITE').
         """
         # Validate that exactly one source is provided
-        sources_provided = sum([app_content is not None, gcs_uri is not None, local_path is not None])
+        sources_provided = sum(
+            [
+                app_content is not None,
+                gcs_uri is not None,
+                local_path is not None,
+            ]
+        )
         if sources_provided != 1:
-            raise ValueError("Exactly one of 'app_content', 'gcs_uri', or 'local_path' must be provided.")
+            raise ValueError(
+                "Exactly one of 'app_content', 'gcs_uri', or 'local_path' must be provided."
+            )
 
         request_kwargs = {
             "parent": self.parent,
@@ -269,16 +287,25 @@ class Apps(Common):
         if conflict_strategy:
             strategy_upper = conflict_strategy.upper()
             if strategy_upper not in ["REPLACE", "OVERWRITE"]:
-                raise ValueError("conflict_strategy must be either 'REPLACE' or 'OVERWRITE'")
-                
-            strategy_enum = getattr(types.ImportAppRequest.ImportOptions.ConflictResolutionStrategy, strategy_upper)
-            request_kwargs["import_options"] = types.ImportAppRequest.ImportOptions(
-                conflict_resolution_strategy=strategy_enum
+                raise ValueError(
+                    "conflict_strategy must be either 'REPLACE' or 'OVERWRITE'"
+                )
+
+            strategy_enum = getattr(
+                types.ImportAppRequest.ImportOptions.ConflictResolutionStrategy,
+                strategy_upper,
+            )
+            request_kwargs["import_options"] = (
+                types.ImportAppRequest.ImportOptions(
+                    conflict_resolution_strategy=strategy_enum
+                )
             )
         else:
             # Maintain backward compatibility where app_id implied REPLACE
-            request_kwargs["import_options"] = types.ImportAppRequest.ImportOptions(
-                conflict_resolution_strategy=types.ImportAppRequest.ImportOptions.ConflictResolutionStrategy.REPLACE
+            request_kwargs["import_options"] = (
+                types.ImportAppRequest.ImportOptions(
+                    conflict_resolution_strategy=types.ImportAppRequest.ImportOptions.ConflictResolutionStrategy.REPLACE
+                )
             )
 
         request = types.ImportAppRequest(**request_kwargs)

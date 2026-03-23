@@ -202,23 +202,34 @@ class BidiSessionHandler:
                 # Handle non-audio structured inputs (event, text, variables)
                 try:
                     session_input_pb = ces_v1beta.SessionInput()._pb
-                    json_format.ParseDict(input_item, session_input_pb, ignore_unknown_fields=False)
+                    json_format.ParseDict(
+                        input_item,
+                        session_input_pb,
+                        ignore_unknown_fields=False,
+                    )
                     session_input = ces_v1beta.SessionInput(session_input_pb)
-                    
+
                     query_message = ces_v1beta.BidiSessionClientMessage(
                         realtime_input=session_input
                     )
                     query_json = json_format.MessageToJson(
-                        query_message._pb, preserving_proto_field_name=False, indent=None
+                        query_message._pb,
+                        preserving_proto_field_name=False,
+                        indent=None,
                     )
                     logging.debug("Sending non-audio input: %s", query_json)
                     self.ws_app.send(query_json)
-                    
+
                     if "text" in input_item or "event" in input_item:
-                        logging.debug("Waiting for agent to finish processing turn %d...", idx)
-                        while not self.agent_turn_manager.is_agent_done_talking():
+                        logging.debug(
+                            "Waiting for agent to finish processing turn %d...",
+                            idx,
+                        )
+                        while (
+                            not self.agent_turn_manager.is_agent_done_talking()
+                        ):
                             time.sleep(1)
-                            
+
                         self.agent_turn_manager.reset()
                         time.sleep(1)
 
@@ -554,9 +565,13 @@ class Sessions(Common):
 
         # Determine deployment/version
         if deployment_id or self.deployment_id:
-            config["deployment"] = f"{self.app_name}/deployments/{deployment_id or self.deployment_id}"
+            config["deployment"] = (
+                f"{self.app_name}/deployments/{deployment_id or self.deployment_id}"
+            )
         if version_id or self.version_id:
-            config["app_version"] = f"{self.app_name}/app_versions/{version_id or self.version_id}"
+            config["app_version"] = (
+                f"{self.app_name}/app_versions/{version_id or self.version_id}"
+            )
 
         if historical_contexts:
             parsed_contexts = []
@@ -574,28 +589,42 @@ class Sessions(Common):
                         for m in msgs:
                             # only add chunks that have a role and text
                             if "role" in m and "chunks" in m:
-                                parsed_contexts.append({"role": m["role"], "chunks": m["chunks"]})
+                                parsed_contexts.append(
+                                    {"role": m["role"], "chunks": m["chunks"]}
+                                )
             else:
                 for ctx in historical_contexts:
                     if isinstance(ctx, dict):
                         if "role" in ctx and "chunks" in ctx:
                             parsed_contexts.append(ctx)
                         elif "user" in ctx:
-                            parsed_contexts.append({"role": "user", "chunks": [{"text": str(ctx["user"])}]})
+                            parsed_contexts.append(
+                                {
+                                    "role": "user",
+                                    "chunks": [{"text": str(ctx["user"])}],
+                                }
+                            )
                         elif "agent" in ctx or "model" in ctx:
                             role_name = ctx.get("name", "model")
                             text_val = ctx.get("text", "")
-                            
+
                             if not text_val:
                                 val = ctx.get("agent") or ctx.get("model")
                                 if isinstance(val, str):
                                     text_val = val
-                                    
-                            parsed_contexts.append({"role": role_name, "chunks": [{"text": str(text_val)}]})
+
+                            parsed_contexts.append(
+                                {
+                                    "role": role_name,
+                                    "chunks": [{"text": str(text_val)}],
+                                }
+                            )
                         else:
                             parsed_contexts.append(ctx)
                     else:
-                        raise ValueError(f"historical_contexts must be a list of dictionaries. Received: {type(ctx)}")
+                        raise ValueError(
+                            f"historical_contexts must be a list of dictionaries. Received: {type(ctx)}"
+                        )
             config["historical_contexts"] = parsed_contexts
 
         if variables is not None:
@@ -651,7 +680,9 @@ class Sessions(Common):
             elif inputs:
                 return self.async_bidi_run_session(config=config, inputs=inputs)
             else:
-                 raise ValueError("Input payloads (text, audio, event, etc.) must be provided for audio modality.")
+                raise ValueError(
+                    "Input payloads (text, audio, event, etc.) must be provided for audio modality."
+                )
         elif modality == Modality.TEXT:
             if text is not None and isinstance(text, str):
                 text = [text]

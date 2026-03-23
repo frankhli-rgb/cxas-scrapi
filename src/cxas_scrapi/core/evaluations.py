@@ -40,21 +40,21 @@ class ExportFormat(Enum):
 
 
 class Evaluations(Common):
-    def __init__(self, app_id: str, env: str = "PROD", **kwargs):
+    def __init__(self, app_name: str, env: str = "PROD", **kwargs):
         """Initializes the Evaluations client.
 
         Args:
-            app_id: CXAS App ID (projects/{project}/locations/{location}/apps/{app}).
+            app_name: CXAS App ID (projects/{project}/locations/{location}/apps/{app}).
             env: Environment override (default: PROD).
         """
-        # Pass app_id to Common for client_options determination
-        super().__init__(agent_id=app_id, **kwargs)
+        # Pass app_name to Common for client_options determination
+        super().__init__(app_name=app_name, **kwargs)
 
-        self.app_id = app_id
+        self.app_name = app_name
 
-        # Parse project and location from app_id using Common helpers
-        self.project_id = self._get_project_id(app_id)
-        self.location = self._get_location(app_id)
+        # Parse project and location from app_name using Common helpers
+        self.project_id = self._get_project_id(app_name)
+        self.location = self._get_location(app_name)
 
         # Initialize SDK Client
         self.client = EvaluationServiceClient(
@@ -253,18 +253,18 @@ class Evaluations(Common):
             return None
 
     def list_evaluations(
-        self, app_id: Optional[str] = None
+        self, app_name: Optional[str] = None
     ) -> List[types.Evaluation]:
         """Lists evaluations within a specific app.
 
         Args:
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
         """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
+        app_name = app_name or self.app_name
+        if not app_name:
+            raise ValueError("app_name is required.")
 
-        request = types.ListEvaluationsRequest(parent=app_id)
+        request = types.ListEvaluationsRequest(parent=app_name)
         response = self.client.list_evaluations(request=request)
         return list(response)
 
@@ -278,11 +278,11 @@ class Evaluations(Common):
         """
         evaluation_name = evaluation_display_name
         if "/evaluations/" not in evaluation_name:
-            if not getattr(self, "app_id", None):
+            if not getattr(self, "app_name", None):
                 raise ValueError(
-                    "app_id must be set to look up evaluations by display name."
+                    "app_name must be set to look up evaluations by display name."
                 )
-            evals_map = self._get_or_load_evals_map(self.app_id)
+            evals_map = self._get_or_load_evals_map(self.app_name)
 
             if evaluation_name in evals_map.get("goldens", {}):
                 evaluation_name = evals_map["goldens"][evaluation_name]
@@ -327,22 +327,20 @@ class Evaluations(Common):
 
         return results
 
-
-
     def build_search_index(
-        self, app_id: Optional[str] = None, force: bool = False
+        self, app_name: Optional[str] = None, force: bool = False
     ) -> None:
         """Builds a JSON string index of all evaluations for fast searching.
 
         Args:
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
             force: If True, rebuilds the index even if already built.
         """
-        app_id = app_id or self.app_id
+        app_name = app_name or self.app_name
         if not force and self._eval_search_index:
             return
 
-        evaluations = self.list_evaluations(app_id)
+        evaluations = self.list_evaluations(app_name)
         self._eval_search_index = {}
 
         for eval_obj in evaluations:
@@ -355,7 +353,7 @@ class Evaluations(Common):
 
     def search_evaluations(
         self,
-        app_id: str,
+        app_name: str,
         tools: Optional[List[str]] = None,
         variables: Optional[List[str]] = None,
         agents: Optional[List[str]] = None,
@@ -364,7 +362,7 @@ class Evaluations(Common):
         """Searches querying evaluations and filters by connected tools, variables, or agents.
 
         Args:
-            app_id: Parent App ID.
+            app_name: Parent App ID.
             tools: List of tool display names to search for.
             variables: List of variable names to search for.
             agents: List of agent display names to search for.
@@ -376,8 +374,8 @@ class Evaluations(Common):
         search_terms = []
 
         if tools:
-            tools_client = Tools(app_id=app_id, creds=self.creds)
-            tools_map = tools_client.get_tools_map(app_id, reverse=True)
+            tools_client = Tools(app_name=app_name, creds=self.creds)
+            tools_map = tools_client.get_tools_map(reverse=True)
             for tool_name in tools:
                 if tool_name in tools_map:
                     # Append the resource ID name in lowercase
@@ -386,8 +384,8 @@ class Evaluations(Common):
                     raise ValueError(f"Tool '{tool_name}' not found in App.")
 
         if agents:
-            agents_client = Agents(app_id=app_id, creds=self.creds)
-            agents_map = agents_client.get_agents_map(app_id, reverse=True)
+            agents_client = Agents(app_name=app_name, creds=self.creds)
+            agents_map = agents_client.get_agents_map(reverse=True)
             for agent_name in agents:
                 if agent_name in agents_map:
                     # Append the resource ID name in lowercase
@@ -404,7 +402,7 @@ class Evaluations(Common):
                 "Must provide at least one search term (tools, variables, or agents)."
             )
 
-        self.build_search_index(app_id, force=rebuild_index)
+        self.build_search_index(app_name, force=rebuild_index)
 
         matched_evals = []
         for eval_name, eval_str in self._eval_search_index.items():
@@ -415,7 +413,7 @@ class Evaluations(Common):
         return matched_evals
 
     def get_evaluations_map(
-        self, app_id: Optional[str] = None, reverse: bool = False
+        self, app_name: Optional[str] = None, reverse: bool = False
     ) -> Dict[str, Dict[str, str]]:
         """Creates a map of Evaluation full names to display names, grouped by type.
 
@@ -423,12 +421,12 @@ class Evaluations(Common):
         a sub-dictionary of the mappings.
 
         Args:
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
             reverse: If True, map display_name -> name.
         """
-        app_id = app_id or self.app_id
+        app_name = app_name or self.app_name
 
-        evaluations = self.list_evaluations(app_id)
+        evaluations = self.list_evaluations(app_name)
         evaluations_dict: Dict[str, Dict[str, str]] = {
             "goldens": {},
             "scenarios": {},
@@ -455,11 +453,11 @@ class Evaluations(Common):
         return evaluations_dict
 
     def _get_or_load_evals_map(
-        self, app_id: Optional[str] = None
+        self, app_name: Optional[str] = None
     ) -> Dict[str, Dict[str, str]]:
         """Gets a map of reverse evaluations from cache or loads it if missing."""
         if not self.evals_map:
-            self.evals_map = self.get_evaluations_map(app_id, reverse=True)
+            self.evals_map = self.get_evaluations_map(app_name, reverse=True)
         return self.evals_map
 
     def get_evaluation(self, evaluation_id: str) -> types.Evaluation:
@@ -579,17 +577,17 @@ class Evaluations(Common):
     def create_evaluation(
         self,
         evaluation: Union[types.Evaluation, Dict[str, Any]],
-        app_id: Optional[str] = None,
+        app_name: Optional[str] = None,
     ) -> types.Evaluation:
         """Creates an evaluation.
 
         Args:
             evaluation: The Evaluation object or dict to create.
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
         """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
+        app_name = app_name or self.app_name
+        if not app_name:
+            raise ValueError("app_name is required.")
 
         if isinstance(evaluation, dict):
             # Use json_format to parse dict to message to handle camelCase/snake_case
@@ -601,24 +599,24 @@ class Evaluations(Common):
             evaluation = eval_message
 
         request = types.CreateEvaluationRequest(
-            parent=app_id, evaluation=evaluation
+            parent=app_name, evaluation=evaluation
         )
         return self.client.create_evaluation(request=request)
 
     def update_evaluation(
         self,
         evaluation: Union[types.Evaluation, Dict[str, Any]],
-        app_id: Optional[str] = None,
+        app_name: Optional[str] = None,
     ) -> types.Evaluation:
         """Updates an evaluation. If it doesn't exist, it creates it.
 
         Args:
             evaluation: The Evaluation object or dict to update.
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
         """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
+        app_name = app_name or self.app_name
+        if not app_name:
+            raise ValueError("app_name is required.")
 
         # Convert dict to types.Evaluation if needed
         if isinstance(evaluation, dict):
@@ -632,7 +630,7 @@ class Evaluations(Common):
 
         # If name is missing, try to find it by display name
         if not evaluation.name:
-            existing_evals = self.list_evaluations(app_id)
+            existing_evals = self.list_evaluations(app_name)
             for existing in existing_evals:
                 if existing.display_name == evaluation.display_name:
                     evaluation.name = existing.name
@@ -640,13 +638,15 @@ class Evaluations(Common):
 
         # If still no name, it's a new evaluation, call create instead
         if not evaluation.name:
-            print(f"Evaluation '{evaluation.display_name}' not found. Creating it instead.")
-            return self.create_evaluation(evaluation=evaluation, app_id=app_id)
+            print(
+                f"Evaluation '{evaluation.display_name}' not found. Creating it instead."
+            )
+            return self.create_evaluation(
+                evaluation=evaluation, app_name=app_name
+            )
 
         print(f"Updating existing evaluation: {evaluation.name}")
-        request = types.UpdateEvaluationRequest(
-            evaluation=evaluation
-        )
+        request = types.UpdateEvaluationRequest(evaluation=evaluation)
         return self.client.update_evaluation(request=request)
 
     def delete_evaluation(self, name: str, force: bool = False) -> None:
@@ -663,7 +663,7 @@ class Evaluations(Common):
         self,
         evaluations: Optional[Union[str, List[str]]] = None,
         eval_type: Optional[str] = None,
-        app_id: Optional[str] = None,
+        app_name: Optional[str] = None,
     ) -> Any:
         """Runs an evaluation on the specified app.
 
@@ -671,11 +671,11 @@ class Evaluations(Common):
             evaluations: A single display name or a list of display names to run.
             eval_type: Run a specific type of evaluation. Must be one of:
                       'goldens', 'scenarios', or 'all'.
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
         """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
+        app_name = app_name or self.app_name
+        if not app_name:
+            raise ValueError("app_name is required.")
 
         if not evaluations and not eval_type:
             raise ValueError(
@@ -683,7 +683,7 @@ class Evaluations(Common):
             )
 
         resolved_names = set()
-        evals_map = self._get_or_load_evals_map(app_id)
+        evals_map = self._get_or_load_evals_map(app_name)
 
         # Handle explicit evaluation display names
         if evaluations:
@@ -724,14 +724,14 @@ class Evaluations(Common):
             )
 
         request = types.RunEvaluationRequest(
-            app=app_id, evaluations=list(resolved_names)
+            app=app_name, evaluations=list(resolved_names)
         )
 
         return self.client.run_evaluation(request=request)
 
     def import_evaluations(
         self,
-        app_id: Optional[str] = None,
+        app_name: Optional[str] = None,
         gcs_uri: Optional[str] = None,
         csv_content: Optional[bytes] = None,
         conversations: Optional[List[str]] = None,
@@ -740,18 +740,18 @@ class Evaluations(Common):
         """Imports evaluations into the app.
 
         Args:
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
             gcs_uri: The GCS URI to import from (gs://...).
             csv_content: Raw bytes representing the csv file.
             conversations: A list of conversation resource names.
             conflict_strategy: See types.ImportEvaluationsRequest.ImportOptions.ConflictResolutionStrategy
                                (0=UNSPECIFIED, 1=OVERWRITE, 2=SKIP, 3=DUPLICATE)
         """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
+        app_name = app_name or self.app_name
+        if not app_name:
+            raise ValueError("app_name is required.")
 
-        request = types.ImportEvaluationsRequest(parent=app_id)
+        request = types.ImportEvaluationsRequest(parent=app_name)
 
         if gcs_uri:
             request.gcs_uri = gcs_uri
@@ -778,18 +778,18 @@ class Evaluations(Common):
         return self.client.import_evaluations(request=request)
 
     def list_evaluation_expectations(
-        self, app_id: Optional[str] = None
+        self, app_name: Optional[str] = None
     ) -> List[types.EvaluationExpectation]:
         """Lists all evaluation expectations in the given app.
 
         Args:
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
         """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
+        app_name = app_name or self.app_name
+        if not app_name:
+            raise ValueError("app_name is required.")
 
-        request = types.ListEvaluationExpectationsRequest(parent=app_id)
+        request = types.ListEvaluationExpectationsRequest(parent=app_name)
         response = self.client.list_evaluation_expectations(request=request)
         return list(response)
 
@@ -809,17 +809,17 @@ class Evaluations(Common):
         evaluation_expectation: Union[
             types.EvaluationExpectation, Dict[str, Any]
         ],
-        app_id: Optional[str] = None,
+        app_name: Optional[str] = None,
     ) -> types.EvaluationExpectation:
         """Creates an evaluation expectation.
 
         Args:
             evaluation_expectation: The EvaluationExpectation object or dict to create.
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
         """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
+        app_name = app_name or self.app_name
+        if not app_name:
+            raise ValueError("app_name is required.")
 
         if isinstance(evaluation_expectation, dict):
             evaluation_expectation = types.EvaluationExpectation(
@@ -827,7 +827,7 @@ class Evaluations(Common):
             )
 
         request = types.CreateEvaluationExpectationRequest(
-            parent=app_id, evaluation_expectation=evaluation_expectation
+            parent=app_name, evaluation_expectation=evaluation_expectation
         )
         return self.client.create_evaluation_expectation(request=request)
 
@@ -858,16 +858,16 @@ class Evaluations(Common):
         self.client.delete_evaluation_expectation(request=request)
 
     def get_evaluation_expectation_by_display_name(
-        self, display_name: str, app_id: Optional[str] = None
+        self, display_name: str, app_name: Optional[str] = None
     ) -> Optional[types.EvaluationExpectation]:
         """Gets an evaluation expectation by its display name.
 
         Args:
             display_name: The display name of the evaluation expectation.
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
         """
-        app_id = app_id or self.app_id
-        expectations = self.list_evaluation_expectations(app_id=app_id)
+        app_name = app_name or self.app_name
+        expectations = self.list_evaluation_expectations(app_name=app_name)
         for exp in expectations:
             if exp.display_name == display_name:
                 return exp
@@ -921,27 +921,27 @@ class Evaluations(Common):
         return created_exp.name
 
     def get_evaluation_thresholds(
-        self, app_id: Optional[str] = None, print_console: bool = False
+        self, app_name: Optional[str] = None, print_console: bool = False
     ) -> Dict[str, Any]:
         """Gets the evaluation metrics thresholds for the app.
 
         Args:
-            app_id: Parent App ID. Defaults to self.app_id.
+            app_name: Parent App ID. Defaults to self.app_name.
             print_console: If True, prints a formatted summary of the settings to the console.
 
         Returns:
             A dictionary containing the evaluation metrics thresholds,
             with any enums resolved to their string representations.
         """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
+        app_name = app_name or self.app_name
+        if not app_name:
+            raise ValueError("app_name is required.")
 
         agent_client = AgentServiceClient(
             credentials=self.creds, client_options=self.client_options
         )
 
-        request = types.GetAppRequest(name=app_id)
+        request = types.GetAppRequest(name=app_name)
         app_obj = agent_client.get_app(request=request)
 
         # Convert the app protobuf to a dictionary, forcing enums to strings
@@ -1010,7 +1010,9 @@ class Evaluations(Common):
         """
 
         print("Fetching evaluations map...")
-        evals_map = self.get_evaluations_map(app_id=self.app_id, reverse=True)
+        evals_map = self.get_evaluations_map(
+            app_name=self.app_name, reverse=True
+        )
 
         if eval_type not in ["goldens", "scenarios"]:
             raise ValueError(

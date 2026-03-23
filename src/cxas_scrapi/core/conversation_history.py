@@ -191,6 +191,9 @@ class ConversationHistory(Common):
         """
         # pylint: disable=import-outside-toplevel
         from cxas_scrapi.utils.latency_parser import LatencyParser
+
+        limit = int(limit) if limit is not None else 50
+
         convs = self.list_conversations(
             time_filter=time_filter,
             source_filter=source_filter,
@@ -222,11 +225,15 @@ class ConversationHistory(Common):
 
     def get_conversation(self, conversation_id: str) -> types.Conversation:
         """Gets a specific conversation by its ID."""
-        request = types.GetConversationRequest(name=f"{self.app_name}/conversations/{conversation_id}")
+        request = types.GetConversationRequest(
+            name=f"{self.app_name}/conversations/{conversation_id}"
+        )
         return self.client.get_conversation(request=request)
 
     def delete_conversation(self, conversation_id: str) -> None:
-        request = types.DeleteConversationRequest(name=f"{self.app_name}/conversations/{conversation_id}")
+        request = types.DeleteConversationRequest(
+            name=f"{self.app_name}/conversations/{conversation_id}"
+        )
         self.client.delete_conversation(request=request)
 
     def export_conversation_to_yaml(self, conversation_id: str) -> str:

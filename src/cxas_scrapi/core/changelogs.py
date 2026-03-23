@@ -34,8 +34,7 @@ class Changelogs(Agents):
         self.resource_type = "changelogs"
 
     def list_changelogs(self) -> List[types.Changelog]:
-        """Lists changelogs within the app.
-        """
+        """Lists changelogs within the app."""
 
         request = types.ListChangelogsRequest(parent=self.app_name)
         response = self.client.list_changelogs(request=request)
@@ -43,5 +42,7 @@ class Changelogs(Agents):
 
     def get_changelog(self, changelog_id: str) -> types.Changelog:
         """Gets a specific changelog."""
-        request = types.GetChangelogRequest(name=f"{self.app_name}/changelogs/{changelog_id}")
+        request = types.GetChangelogRequest(
+            name=f"{self.app_name}/changelogs/{changelog_id}"
+        )
         return self.client.get_changelog(request=request)

@@ -84,41 +84,37 @@ class Conversations(BaseModel):
 class EvalUtils(Evaluations):
     """Utility class for processing and exporting CXAS Evaluation Results."""
 
-    def __init__(self, app_id: str, env: str = "PROD"):
+    def __init__(self, app_name: str, env: str = "PROD"):
         """Initializes the EvalUtils class for processing Evaluation Results.
 
         Args:
-            app_id: CXAS App ID
+            app_name: CXAS App ID
                 (projects/{project}/locations/{location}/apps/{app}).
             env: Environment override (default: PROD).
         """
-        super().__init__(app_id=app_id, env=env)
-        self.app_id = app_id
-        self.tools_client = Tools(app_id=self.app_id, creds=self.creds)
-        self.var_client = Variables(app_id=self.app_id, creds=self.creds)
+        super().__init__(app_name=app_name, env=env)
+        self.app_name = app_name
+        self.tools_client = Tools(app_name=self.app_name, creds=self.creds)
+        self.var_client = Variables(app_name=self.app_name, creds=self.creds)
         try:
-            self.tool_map = self.tools_client.get_tools_map(
-                self.app_id, reverse=True
-            )
+            self.tool_map = self.tools_client.get_tools_map(reverse=True)
         except (AttributeError, KeyError, RuntimeError, ValueError) as e:
             logger.warning(
-                "Failed to fetch tool map for %s: %s", self.app_id, e
+                "Failed to fetch tool map for %s: %s", self.app_name, e
             )
             self.tool_map = {}
-        self.agents_client = Agents(app_id=self.app_id, creds=self.creds)
+        self.agents_client = Agents(app_name=self.app_name, creds=self.creds)
         try:
-            self.agent_map = self.agents_client.get_agents_map(
-                self.app_id, reverse=True
-            )
+            self.agent_map = self.agents_client.get_agents_map(reverse=True)
         except (AttributeError, KeyError, RuntimeError, ValueError) as e:
             logger.warning(
-                "Failed to fetch agent map for %s: %s", self.app_id, e
+                "Failed to fetch agent map for %s: %s", self.app_name, e
             )
             self.agent_map = {}
         self.ch_client = ConversationHistory(
-            app_id=self.app_id, creds=self.creds
+            app_name=self.app_name, creds=self.creds
         )
-        self.eval_client = Evaluations(app_id=self.app_id, env=env)
+        self.eval_client = Evaluations(app_name=self.app_name, env=env)
 
     @staticmethod
     def parse_variables_input(v: Any) -> Dict[str, Any]:
@@ -201,9 +197,7 @@ class EvalUtils(Evaluations):
                 steps.append(
                     {
                         "expectation": {
-                            "agentTransfer": {
-                                "targetAgent": agent_resource
-                            }
+                            "agentTransfer": {"targetAgent": agent_resource}
                         }
                     }
                 )
@@ -214,11 +208,10 @@ class EvalUtils(Evaluations):
             tool_resource = self.tool_map.get(action, action)
 
             # Fallback for built-in actions or tools not in map
-            if (
-                action not in self.tool_map
-                and not tool_resource.startswith("projects/")
+            if action not in self.tool_map and not tool_resource.startswith(
+                "projects/"
             ):
-                tool_resource = f"{self.app_id}/tools/{action}"
+                tool_resource = f"{self.app_name}/tools/{action}"
 
             tool_call_expectation = {
                 "expectation": {
@@ -246,7 +239,6 @@ class EvalUtils(Evaluations):
 
         return {"steps": steps, "params_injected": params_injected}
 
-
     def _parse_eval_results(
         self,
         results: Optional[Union[List[Any], str]] = None,
@@ -270,7 +262,7 @@ class EvalUtils(Evaluations):
 
         if results is None:
             results = []
-            evaluations = self.list_evaluations(self.app_id)
+            evaluations = self.list_evaluations(self.app_name)
             for evaluation in evaluations:
                 if (
                     eval_names
@@ -629,19 +621,19 @@ class EvalUtils(Evaluations):
         self,
         results: Optional[List[Any]] = None,
         eval_names: Optional[List[str]] = None,
-        app_id: Optional[str] = None,
+        app_name: Optional[str] = None,
     ) -> Dict[str, pd.DataFrame]:
         """Generates latency metrics DataFrames from results and traces.
 
         Args:
             results: An optional list of Eval Result List payload chunks.
             eval_names: Alternatively, an optional list of string Display Names / Names of Evals.
-            app_id: Optional override if retrieving Conversation traces dynamically.
+            app_name: Optional override if retrieving Conversation traces dynamically.
         """
         if not results:
-            if not getattr(self, "app_id", None) and not app_id:
+            if not getattr(self, "app_name", None) and not app_name:
                 raise ValueError(
-                    "app_id must be set to look up evaluations by name."
+                    "app_name must be set to look up evaluations by name."
                 )
             results = []
             for name in eval_names or []:
@@ -674,14 +666,14 @@ class EvalUtils(Evaluations):
                 if t.get("conversation"):
                     conv_ids.add(t.get("conversation"))
 
-        target_app = app_id or getattr(self, "app_id", None)
+        target_app = app_name or getattr(self, "app_name", None)
         traces = {}
         if target_app and conv_ids:
-            if target_app == getattr(self, "app_id", None):
+            if target_app == getattr(self, "app_name", None):
                 ch_getter = self.ch_client.get_conversation
             else:
                 ch_client = ConversationHistory(
-                    app_id=target_app, creds=self.creds
+                    app_name=target_app, creds=self.creds
                 )
                 ch_getter = ch_client.get_conversation
             traces = LatencyParser.fetch_conversation_traces(
@@ -708,7 +700,7 @@ class EvalUtils(Evaluations):
             # Get display name
             display_name = eval_name
             evals_map = getattr(self, "_get_or_load_evals_map", lambda x: {})(
-                getattr(self, "app_id", None)
+                getattr(self, "app_name", None)
             )
             if evals_map:
                 for lookup_name, full_path in evals_map.get(
@@ -889,7 +881,7 @@ class EvalUtils(Evaluations):
         if_exists: str = "append",
     ):
         """Exports a pandas DataFrame to a Google BigQuery table."""
-        target_project = project_id or self._get_project_id(self.app_id)
+        target_project = project_id or self._get_project_id(self.app_name)
         df.to_gbq(
             destination_table=dataset_table,
             project_id=target_project,
@@ -902,8 +894,7 @@ class EvalUtils(Evaluations):
         )
 
     def load_golden_eval_from_yaml(
-        self,
-        yaml_file_path: str,
+        self, yaml_file_path: str, auto_sideload: bool = False
     ) -> Optional[Dict[str, Any]]:
         """Parses a YAML file and creates a Golden eval input from it.
 
@@ -923,8 +914,7 @@ class EvalUtils(Evaluations):
         return evals[0] if evals else None
 
     def load_golden_evals_from_yaml(
-        self,
-        yaml_file_path: str,
+        self, yaml_file_path: str, auto_sideload: bool = False
     ) -> List[Dict[str, Any]]:
         """Parses a YAML file and returns a list of Golden eval inputs.
 
@@ -972,22 +962,26 @@ class EvalUtils(Evaluations):
                     params_injected = result["params_injected"]
 
                 # Combine common and conversation-specific expectations
-                expectations = dataset.common_expectations + conversation.expectations
+                expectations = (
+                    dataset.common_expectations + conversation.expectations
+                )
                 tags = conversation.tags
 
                 # Final processing of expectations (handles side-loading)
                 eval_expectations = self._process_conversation_expectations(
-                    expectations, base_dir=base_dir
+                    expectations, base_dir=base_dir, auto_sideload=auto_sideload
                 )
 
-                all_evals.append({
-                    "displayName": display_name,
-                    "tags": tags,
-                    "golden": {
-                        "turns": json_turns,
-                        "evaluationExpectations": eval_expectations,
-                    },
-                })
+                all_evals.append(
+                    {
+                        "displayName": display_name,
+                        "tags": tags,
+                        "golden": {
+                            "turns": json_turns,
+                            "evaluationExpectations": eval_expectations,
+                        },
+                    }
+                )
 
         # Handle Evaluation Resource or Direct Export format
         else:
@@ -1025,22 +1019,27 @@ class EvalUtils(Evaluations):
 
             # Final processing of expectations (handles side-loading)
             eval_expectations = self._process_conversation_expectations(
-                expectations, base_dir=base_dir
+                expectations, base_dir=base_dir, auto_sideload=auto_sideload
             )
 
-            all_evals.append({
-                "displayName": display_name,
-                "tags": tags,
-                "golden": {
-                    "turns": json_turns,
-                    "evaluationExpectations": eval_expectations,
-                },
-            })
+            all_evals.append(
+                {
+                    "displayName": display_name,
+                    "tags": tags,
+                    "golden": {
+                        "turns": json_turns,
+                        "evaluationExpectations": eval_expectations,
+                    },
+                }
+            )
 
         return all_evals
 
     def _process_conversation_expectations(
-        self, expectations: List[Any], base_dir: Optional[str] = None
+        self,
+        expectations: List[Any],
+        base_dir: Optional[str] = None,
+        auto_sideload: bool = False,
     ) -> List[str]:
         """Processes a list of conversation expectations, resolving prompt to resource names.
 
@@ -1049,12 +1048,34 @@ class EvalUtils(Evaluations):
         """
         processed_expectations = []
         for exp in expectations:
+            prompt_str = None
+            display_name = None
+
             if isinstance(exp, str):
+                prompt_str = exp
+            elif isinstance(exp, dict):
+                prompt_str = exp.get("prompt")
+                display_name = exp.get("displayName")
+
+                # Also handle exported YAML format
+                if not prompt_str and "llmCriteria" in exp:
+                    prompt_str = exp["llmCriteria"].get("prompt")
+
+                if not prompt_str and "llm_criteria" in exp:
+                    prompt_str = exp["llm_criteria"].get("prompt")
+
+            if prompt_str:
                 # Proactive side-loading: If it's a raw prompt and we have a base_dir,
                 # ensure it's saved to the local filesystem.
-                if base_dir and not exp.startswith("projects/"):
+                if (
+                    auto_sideload
+                    and base_dir
+                    and not prompt_str.startswith("projects/")
+                ):
                     try:
-                        exp_id = Common.sanitize_expectation_id(exp)
+                        exp_id = Common.sanitize_expectation_id(
+                            display_name or prompt_str
+                        )
                         eval_exp_dir = os.path.join(
                             base_dir, "evaluationExpectations"
                         )
@@ -1065,8 +1086,8 @@ class EvalUtils(Evaluations):
                         )
                         if not os.path.exists(exp_filename):
                             exp_content = {
-                                "displayName": exp_id,
-                                "llmCriteria": {"prompt": exp},
+                                "displayName": display_name or exp_id,
+                                "llmCriteria": {"prompt": prompt_str},
                             }
                             with open(exp_filename, "w", encoding="utf-8") as f:
                                 json.dump(exp_content, f, indent=2)
@@ -1080,18 +1101,22 @@ class EvalUtils(Evaluations):
                         )
 
                 # Find or create resource from prompt
+                kwargs = {"llm_prompt": prompt_str}
+                if display_name:
+                    kwargs["display_name"] = display_name
+
                 res_name = (
                     self.eval_client.find_or_create_evaluation_expectation(
-                        llm_prompt=exp
+                        **kwargs
                     )
                 )
                 processed_expectations.append(res_name)
             else:
-                # Handle non-string expectations by skipping or logging
+                # Handle non-string expectations by appending string representation
                 logger.warning("Skipping non-string expectation: %s", exp)
+                processed_expectations.append(str(exp))
+
         return processed_expectations
-
-
 
     def wait_for_run_and_get_results(
         self,
@@ -1123,20 +1148,20 @@ class EvalUtils(Evaluations):
     def create_and_run_evaluation_from_yaml(
         self,
         yaml_file_path: str,
-        app_id: Optional[str] = None,
+        app_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Loads, creates, and runs an evaluation from a YAML file.
 
         Args:
             yaml_file_path: Path to the YAML file.
-            app_id: Optional parent App ID. Defaults to self.app_id.
+            app_name: Optional parent App ID. Defaults to self.app_name.
 
         Returns:
             A dictionary containing the evaluation and the run response.
         """
-        app_id = app_id or self.app_id
-        if not app_id:
-            raise ValueError("app_id is required.")
+        app_name = app_name or self.app_name
+        if not app_name:
+            raise ValueError("app_name is required.")
 
         # 1. Load the evaluation from YAML
         evaluation_dict = self.load_golden_eval_from_yaml(yaml_file_path)
@@ -1146,14 +1171,14 @@ class EvalUtils(Evaluations):
         # 2. Create the evaluation
         # Note: Evaluations.create_evaluation handles dict to proto conversion
         created_evaluation = self.create_evaluation(
-            evaluation=evaluation_dict, app_id=app_id
+            evaluation=evaluation_dict, app_name=app_name
         )
         logger.info("Created evaluation: %s", created_evaluation.name)
 
         # 3. Run the evaluation
         # run_evaluation expects display names
         run_response = self.run_evaluation(
-            evaluations=[created_evaluation.display_name], app_id=app_id
+            evaluations=[created_evaluation.display_name], app_name=app_name
         )
         logger.info("Started evaluation run: %s", run_response.operation.name)
 

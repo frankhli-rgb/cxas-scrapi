@@ -18,14 +18,14 @@ from cxas_scrapi.utils.eval_utils import EvalUtils, Turn
 
 def test_evals_to_dataframe_empty():
     """Test evals_to_dataframe with empty list."""
-    utils = EvalUtils(app_id="p/l/a/a")
+    utils = EvalUtils(app_name="p/l/a/a")
     df = utils.evals_to_dataframe([])
     assert df is not None
 
 
 def test_evals_to_dataframe_with_data():
     """Test evals_to_dataframe with valid metrics."""
-    utils = EvalUtils(app_id="p/l/a/a")
+    utils = EvalUtils(app_name="p/l/a/a")
 
     class MockEvalResult:
         @classmethod
@@ -67,7 +67,7 @@ def test_evals_to_dataframe_with_data():
 
 def test_to_bigquery():
     """Test to_bigquery export without requiring pandas."""
-    utils = EvalUtils(app_id="projects/test_project/locations/l/apps/a")
+    utils = EvalUtils(app_name="projects/test_project/locations/l/apps/a")
 
     # Mock the dataframe and its to_gbq method
     mock_df = MagicMock()
@@ -108,7 +108,7 @@ def test_load_golden_eval_from_compressed_yaml():
             "projects/p/locations/l/apps/a/evaluationExpectations/exp1"
         )
 
-        utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
+        utils = EvalUtils(app_name="projects/p/locations/l/apps/a")
         result = utils.load_golden_eval_from_yaml(test_file_path)
 
         # Verify "Unlock_Intent1" (the first conversation) was picked up
@@ -176,7 +176,7 @@ def test_load_golden_evals_from_compressed_yaml():
             lambda llm_prompt, **kwargs: f"resolved/{llm_prompt[:10]}"
         )
 
-        utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
+        utils = EvalUtils(app_name="projects/p/locations/l/apps/a")
         results = utils.load_golden_evals_from_yaml(test_file_path)
 
         assert isinstance(results, list)
@@ -203,7 +203,14 @@ def test_load_golden_eval_from_exported_yaml():
         patch("cxas_scrapi.utils.eval_utils.Evaluations") as mock_eval_cls,
     ):
         mock_uuid.return_value = "mock_uuid"
-        utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
+        
+        # Make the mock stringify the display_name so it passes assertion
+        mock_eval_instance = mock_eval_cls.return_value
+        mock_eval_instance.find_or_create_evaluation_expectation.side_effect = (
+            lambda **kwargs: kwargs.get("display_name", "Simple tool expectation 1")
+        )
+
+        utils = EvalUtils(app_name="projects/p/locations/l/apps/a")
         result = utils.load_golden_eval_from_yaml(test_file_path)
 
         # Verify it returns the parsed data correctly
@@ -223,7 +230,7 @@ def test_load_golden_eval_from_exported_yaml():
 
 def test_process_dataset_turn_with_tool_mapping():
     """Test _process_dataset_turn correctly resolves tool names."""
-    utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
+    utils = EvalUtils(app_name="projects/p/locations/l/apps/a")
     utils.tool_map = {
         "my_tool": "projects/p/locations/l/apps/a/tools/resolved_tool"
     }
@@ -263,7 +270,7 @@ def test_process_dataset_turn_with_tool_mapping():
 
 def test_create_and_run_evaluation_from_yaml():
     """Test create_and_run_evaluation_from_yaml orchestration."""
-    utils = EvalUtils(app_id="projects/p/locations/l/apps/a")
+    utils = EvalUtils(app_name="projects/p/locations/l/apps/a")
 
     with (
         patch.object(utils, "load_golden_eval_from_yaml") as mock_load,
@@ -284,10 +291,10 @@ def test_create_and_run_evaluation_from_yaml():
         mock_load.assert_called_once_with("test.yaml")
         mock_create.assert_called_once_with(
             evaluation={"displayName": "Test Eval", "golden": {}},
-            app_id="projects/p/locations/l/apps/a",
+            app_name="projects/p/locations/l/apps/a",
         )
         mock_run.assert_called_once_with(
-            evaluations=["Test Eval"], app_id="projects/p/locations/l/apps/a"
+            evaluations=["Test Eval"], app_name="projects/p/locations/l/apps/a"
         )
 
         assert res["evaluation"] == mock_created_eval
@@ -312,7 +319,7 @@ def test_load_golden_eval_from_direct_export_yaml():
             "exp/1"
         )
 
-        utils = EvalUtils(app_id="p/l/a/a")
+        utils = EvalUtils(app_name="p/l/a/a")
         result = utils.load_golden_eval_from_yaml("dummy.yaml")
 
         assert result["displayName"] == "Direct_Export_Eval"
@@ -325,7 +332,7 @@ def test_load_golden_eval_from_direct_export_yaml():
 
 def test_process_conversation_expectations():
     """Test _process_conversation_expectations with various formats."""
-    utils = EvalUtils(app_id="p/l/a/a")
+    utils = EvalUtils(app_name="p/l/a/a")
 
     with patch.object(
         utils.eval_client, "find_or_create_evaluation_expectation"

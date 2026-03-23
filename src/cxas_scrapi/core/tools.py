@@ -95,9 +95,13 @@ class Tools(Apps):
                     if op_id:
                         tool_display_name = f"{display_name}_{op_id}"
                         if reverse:
-                            parsed_tools[tool_display_name] = f"{tool_name}/tools/{op_id}"
+                            parsed_tools[tool_display_name] = (
+                                f"{tool_name}/tools/{op_id}"
+                            )
                         else:
-                            parsed_tools[f"{tool_name}/tools/{op_id}"] = tool_display_name
+                            parsed_tools[f"{tool_name}/tools/{op_id}"] = (
+                                tool_display_name
+                            )
         except Exception as e:
             print(
                 f"[WARNING] Failed to parse OpenAPI schema for {display_name}: {e}"
@@ -151,9 +155,7 @@ class Tools(Apps):
                 final_variables = app_default_vars_cache
         return final_variables
 
-    def get_tools_map(
-        self, reverse: bool = False
-    ) -> Dict[str, str]:
+    def get_tools_map(self, reverse: bool = False) -> Dict[str, str]:
         """Creates a map of Tool and Toolset full names to display names.
 
         Args:
@@ -175,7 +177,9 @@ class Tools(Apps):
                         )
                         tools_dict.update(openapi_tools)
                 else:
-                    toolset_tools = self.retrieve_tools(tool.name.split("/")[-1])
+                    toolset_tools = self.retrieve_tools(
+                        tool.name.split("/")[-1]
+                    )
                     for toolset_tool in toolset_tools.tools:
                         if reverse:
                             tools_dict[toolset_tool.display_name] = (
@@ -370,14 +374,23 @@ class Tools(Apps):
 
     def retrieve_tools(self, toolset_id: str) -> Any:
         """Retrieves all tools in a toolset."""
-        request = types.RetrieveToolsRequest(toolset=f"{self.app_name}/toolsets/{toolset_id}")
+        request = types.RetrieveToolsRequest(
+            toolset=f"{self.app_name}/toolsets/{toolset_id}"
+        )
         return self.tool_client.retrieve_tools(request=request)
-    
+
     def retrieve_tool_schema(self, tool_name: str) -> Any:
         """Retrieves all tools in a toolset."""
-        if '/toolsets/' not in tool_name:
-            request = types.RetrieveToolSchemaRequest(parent=self.app_name, tool=tool_name)
+        if "/toolsets/" not in tool_name:
+            request = types.RetrieveToolSchemaRequest(
+                parent=self.app_name, tool=tool_name
+            )
             return self.tool_client.retrieve_tool_schema(request=request)
-        toolset_name, tool_id = tool_name.split('/tools/')
-        request = types.RetrieveToolSchemaRequest(parent=self.app_name, toolset_tool=types.ToolsetTool(toolset=toolset_name, tool_id=tool_id))
+        toolset_name, tool_id = tool_name.split("/tools/")
+        request = types.RetrieveToolSchemaRequest(
+            parent=self.app_name,
+            toolset_tool=types.ToolsetTool(
+                toolset=toolset_name, tool_id=tool_id
+            ),
+        )
         return self.tool_client.retrieve_tool_schema(request=request)

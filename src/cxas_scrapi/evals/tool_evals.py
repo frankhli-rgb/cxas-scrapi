@@ -54,8 +54,9 @@ SUMMARY_SCHEMA_COLUMNS = [
     "tester",
     "p50_latency_ms",
     "p90_latency_ms",
-    "p99_latency_ms"
+    "p99_latency_ms",
 ]
+
 
 class SummaryStats(NamedTuple):
     test_run_timestamp: str
@@ -103,11 +104,11 @@ class ToolEvals:
             creds: Optional Google Cloud credentials.
         """
         self.app_name = app_name
-        
+
         parts = self.app_name.split("/")
         self.project_id = parts[1] if len(parts) > 1 else ""
         self.location = parts[3] if len(parts) > 3 else "us"
-        
+
         self.creds = creds
         self.tools_client = Tools(app_name=self.app_name, creds=self.creds)
         self.var_client = Variables(app_name=self.app_name, creds=self.creds)
@@ -597,9 +598,7 @@ class ToolEvals:
 
         # Fetch app metadata and user info once per run
         app_client = Apps(
-            project_id=self.project_id,
-            location=self.location,
-            creds=self.creds
+            project_id=self.project_id, location=self.location, creds=self.creds
         )
         app = app_client.get_app(self.app_name.split("/")[-1])
         app_display_name = app.display_name if app else "Unknown App"
@@ -829,7 +828,9 @@ class ToolEvals:
                     "tool": res.get("tool"),
                     "status": res.get("status"),
                     "latency (ms)": res.get("latency (ms)", 0.0),
-                    "app_display_name": res.get("app_display_name", "Unknown App"),
+                    "app_display_name": res.get(
+                        "app_display_name", "Unknown App"
+                    ),
                     "tester": res.get("tester", "Unknown"),
                     "errors": error_str,
                 }
@@ -865,7 +866,7 @@ class ToolEvals:
         except Exception:
             p50 = p90 = p99 = 0.0
 
-        # Try to pull the first known app_display_name/tester from the DataFrame 
+        # Try to pull the first known app_display_name/tester from the DataFrame
         agent_name = "Unknown App"
         if "app_display_name" in df.columns and not df.empty:
             agent_name = df["app_display_name"].iloc[0]

@@ -30,7 +30,7 @@ class Versions(Apps):
         creds_dict: Dict[str, str] = None,
         creds: Any = None,
         scope: List[str] = None,
-        **kwargs
+        **kwargs,
     ):
         """Initializes the Versions client."""
         project_id = app_name.split("/")[1]
@@ -43,7 +43,7 @@ class Versions(Apps):
             creds_dict=creds_dict,
             creds=creds,
             scope=scope,
-            **kwargs
+            **kwargs,
         )
         self.resource_type = "versions"
         self.app_name = app_name
@@ -54,9 +54,7 @@ class Versions(Apps):
         response = self.client.list_app_versions(request=request)
         return list(response)
 
-    def get_versions_map(
-        self, reverse: bool = False
-    ) -> Dict[str, str]:
+    def get_versions_map(self, reverse: bool = False) -> Dict[str, str]:
         """Returns a map of version display names to full resource names.
 
         Args:
@@ -78,15 +76,21 @@ class Versions(Apps):
 
     def get_version(self, version_id: str) -> types.AppVersion:
         """Gets a specific version."""
-        request = types.GetAppVersionRequest(name=f"{self.app_name}/versions/{version_id}")
+        request = types.GetAppVersionRequest(
+            name=f"{self.app_name}/versions/{version_id}"
+        )
         return self.client.get_app_version(request=request)
 
     def delete_version(self, version_id: str) -> None:
         """Deletes a specific version."""
-        request = types.DeleteAppVersionRequest(name=f"{self.app_name}/versions/{version_id}")
+        request = types.DeleteAppVersionRequest(
+            name=f"{self.app_name}/versions/{version_id}"
+        )
         self.client.delete_app_version(request=request)
 
     def revert_version(self, version_id: str) -> Any:
         """Reverts (Restores) a specific version."""
-        request = types.RestoreAppVersionRequest(name=f"{self.app_name}/versions/{version_id}")
+        request = types.RestoreAppVersionRequest(
+            name=f"{self.app_name}/versions/{version_id}"
+        )
         return self.client.restore_app_version(request=request)

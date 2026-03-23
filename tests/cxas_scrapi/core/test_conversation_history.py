@@ -100,3 +100,29 @@ def test_delete_conversation(mock_client_cls, mock_req_cls):
     assert (
         called_request.name == "projects/p/locations/l/apps/a/conversations/c1"
     )
+
+@patch("cxas_scrapi.core.conversation_history.AgentServiceClient")
+@patch("cxas_scrapi.utils.latency_parser.LatencyParser.extract_trace_metrics")
+@patch("cxas_scrapi.utils.latency_parser.LatencyParser.fetch_conversation_traces")
+def test_get_latency_metrics_dfs_limit(
+    mock_fetch, mock_extract, mock_client_cls
+):
+    """Test get_latency_metrics_dfs with integer and string limits."""
+    conv_client = ConversationHistory(app_name="projects/p/locations/l/apps/a")
+    
+    # Create 5 mock conversations
+    mock_convs = []
+    for i in range(5):
+        m = MagicMock()
+        m.name = f"projects/p/locations/l/apps/a/conversations/c{i}"
+        mock_convs.append(m)
+
+    with patch.object(conv_client, "list_conversations", return_value=mock_convs):
+        # Test with limit as int 2
+        conv_client.get_latency_metrics_dfs(limit=2)
+        mock_fetch.assert_called_with(["c0", "c1"], conv_client.get_conversation)
+
+        # Test with limit as string "3"
+        conv_client.get_latency_metrics_dfs(limit="3")
+        mock_fetch.assert_called_with(["c0", "c1", "c2"], conv_client.get_conversation)
+
