@@ -74,6 +74,32 @@ def export_eval(args: argparse.Namespace) -> None:
         print(f"Failed to export evaluation: {e}")
         sys.exit(1)
 
+def push_eval(args: argparse.Namespace) -> None:
+    """Handles the 'push' command."""
+    print(f"Pushing evaluation(s) from {args.file} to App: {args.app_name}")
+
+    eval_client = Evaluations(app_name=args.app_name)
+    eval_utils = EvalUtils(app_name=args.app_name)
+
+    try:
+        evals = eval_utils.load_golden_evals_from_yaml(args.file)
+        if not evals:
+            print(f"No valid evaluations found in '{args.file}'.")
+            sys.exit(1)
+
+        print(f"Parsed {len(evals)} evaluation(s). Syncing...")
+        for eval_dict in evals:
+            res = eval_client.update_evaluation(
+                evaluation=eval_dict, app_name=args.app_name
+            )
+            print(f"Pushed: '{res.display_name}' ({res.name})")
+
+        print("\nPush complete.")
+
+    except Exception as e:
+        print(f"Failed to push evaluation(s): {e}")
+        sys.exit(1)
+
 
 def wait_for_evaluation_completion(
     eval_utils: EvalUtils,
@@ -217,8 +243,7 @@ def run_eval(args: argparse.Namespace) -> None:
     """Handles the 'run' command."""
 
     print(
-        f"Triggering evaluation: {args.evaluation_id} "
-        f"for App: {args.app_name}"
+        f"Triggering evaluation for App: {args.app_name}"
     )
     eval_client = Evaluations(app_name=args.app_name)
     eval_utils = EvalUtils(app_name=args.app_name)
@@ -240,7 +265,47 @@ def run_eval(args: argparse.Namespace) -> None:
             print(f"Fetching tests matching prefix: '{args.display_name_prefix}'...")
         elif args.tags:
             print(f"Fetching tests matching tags: {args.tags}...")
-        all_evals = eval_client.list_evaluations(app_id=args.app_id)
+        all_evals = eval_client.list_evaluations(app_name=args.app_name)
+
+        for eval_obj in all_evals:
+            match = False
+
+            if args.display_name_prefix and eval_obj.display_name.startswith(args.display_name_prefix):
+                match = True
+
+            # Assuming tags are accessible as a list/repeated field on the Evaluation object
+            if args.tags and hasattr(eval_obj, "tags"):
+                # intersection of CLI tags and agent tags
+                if any(t in eval_obj.tags for t in args.tags):
+                    match = True
+
+            if match:
+                evaluations_to_run.append(eval_obj.name)
+
+        if not evaluations_to_run:
+            print("No matching tests found for the given prefix or tags. Aborting run.")
+            sys.exit(0)
+
+        print(f"Found {len(evaluations_to_run)} matching test(s) to run.")
+
+    # Determine which evaluations to run
+    evaluations_to_run = []
+    if args.evaluation_id:
+        evaluations_to_run.append(args.evaluation_id)
+    else:
+        # Require prefix or tags if no specific ID is given
+        if not args.display_name_prefix and not args.tags:
+            print(
+                "Error: You must provide either --evaluation_id, "
+                "--display_name_prefix, or --tags to specify which tests to run."
+            )
+            sys.exit(1)
+
+        if args.display_name_prefix:
+            print(f"Fetching tests matching prefix: '{args.display_name_prefix}'...")
+        elif args.tags:
+            print(f"Fetching tests matching tags: {args.tags}...")
+        all_evals = eval_client.list_evaluations(app_name=args.app_name)
 
         for eval_obj in all_evals:
             match = False
@@ -274,7 +339,7 @@ def run_eval(args: argparse.Namespace) -> None:
 
         # Step 2: Trigger evaluation
         eval_client.run_evaluation(
-            evaluations=evaluations_to_run, app_name=args.app_name, expected_count=len(evaluations_to_run)
+            evaluations=evaluations_to_run, app_name=args.app_name
         )
         print("Evaluation triggered successfully based on CLI call.")
 
@@ -724,7 +789,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="Run local tool unit tests against the deployed agent.",
     )
     parser_test_tools.add_argument(
-        "--app_id",
+        "--app_name",
         required=True,
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
@@ -785,7 +850,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="Run local callback unit tests against the deployed agent.",
     )
     parser_test_single_callback.add_argument(
-        "--app_id",
+        "--app_name",
         required=True,
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
@@ -822,7 +887,7 @@ def get_parser() -> argparse.ArgumentParser:
         "export", help="Export an evaluation to YAML or JSON format."
     )
     parser_export.add_argument(
-        "--app_id",
+        "--app_name",
         required=True,
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
@@ -850,12 +915,28 @@ def get_parser() -> argparse.ArgumentParser:
 
     parser_export.set_defaults(func=export_eval)
 
+    # Parser for 'push'
+    parser_push_eval = subparsers.add_parser(
+        "push-eval", help="Push evaluation(s) from a YAML file to the app."
+    )
+    parser_push_eval.add_argument(
+        "--app_name",
+        required=True,
+        help="The CXAS App ID (projects/.../locations/.../apps/...).",
+    )
+    parser_push_eval.add_argument(
+        "--file",
+        required=True,
+        help="Path to the YAML file containing evaluation definitions.",
+    )
+    parser_push_eval.set_defaults(func=push_eval)
+
     # Parser for 'run'
     parser_run = subparsers.add_parser(
         "run", help="Run an evaluation and assert results."
     )
     parser_run.add_argument(
-        "--app_id",
+        "--app_name",
         required=True,
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
@@ -924,7 +1005,7 @@ def get_parser() -> argparse.ArgumentParser:
         "delete", help="Deletes a specified agent/app."
     )
     parser_delete.add_argument(
-        "--app_id",
+        "--app_name",
         help=(
             "The CXAS App ID (projects/.../locations/.../apps/...). "
             "Required if --display_name not provided."
@@ -934,7 +1015,7 @@ def get_parser() -> argparse.ArgumentParser:
         "--display_name",
         help=(
             "The Display Name of the app to delete. "
-            "Required if --app_id not provided."
+            "Required if --app_name not provided."
         ),
     )
     _add_project_location_args(parser_delete, required=False)
@@ -979,7 +1060,7 @@ def get_parser() -> argparse.ArgumentParser:
         "--to", help="Target App Resource Name or Display Name."
     )
     parser_push.add_argument(
-        "--app_id",
+        "--app_name",
         help="Target App ID to explicitly push to (v1beta API).",
     )
     parser_push.add_argument(
@@ -996,7 +1077,7 @@ def get_parser() -> argparse.ArgumentParser:
         "--description", help="Description for the new app."
     )
     parser_create.add_argument(
-        "--app_id", help="Optional specific app_id to use."
+        "--app_name", help="Optional specific app_name to use."
     )
     _add_project_location_args(parser_create)
     parser_create.set_defaults(func=app_create)

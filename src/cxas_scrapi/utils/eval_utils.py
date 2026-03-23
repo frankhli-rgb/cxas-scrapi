@@ -1061,8 +1061,20 @@ class EvalUtils(Evaluations):
                 }
             )
 
-        return all_evals
+        # Inject the file name as a tag
+        file_tag = os.path.splitext(os.path.basename(yaml_file_path))[0]
+        for eval_dict in all_evals:
+            tags = eval_dict.get("tags", [])
+            if not isinstance(tags, list):
+                if isinstance(tags, str):
+                    tags = [t.strip() for t in tags.split(",") if t.strip()]
+                else:
+                    tags = []
+            if file_tag not in tags:
+                tags.append(file_tag)
+            eval_dict["tags"] = tags
 
+        return all_evals
     def _process_conversation_expectations(
         self,
         expectations: List[Any],
