@@ -293,13 +293,13 @@ class EvalUtils(Evaluations):
 
             raw_status = res_dict.get("evaluation_status", 0)
             if isinstance(raw_status, int):
-                status_map = {0: "UNSPECIFIED", 1: "✅ PASSED", 2: "❌ FAILED"}
+                status_map = {0: "UNSPECIFIED", 1: "PASS", 2: "FAIL"}
                 status_str = status_map.get(raw_status, f"UNKNOWN_{raw_status}")
             else:
                 status_str = str(raw_status)
 
             golden = res_dict.get("golden_result", {})
-            metrics = golden.get("metrics", {}) if golden else {}
+            metrics = golden if golden else {}
 
             sem_score_raw = metrics.get("semantic_similarity_result", {}).get(
                 "score"
@@ -324,10 +324,19 @@ class EvalUtils(Evaluations):
                 else EvalUtils._map_outcome(tool_score_raw)
             )
 
+            exec_state_raw = res_dict.get("execution_state", 0)
+            if isinstance(exec_state_raw, int):
+                exec_state_map = {0: "UNSPECIFIED", 1: "RUNNING", 2: "COMPLETED", 3: "ERROR"}
+                exec_state_str = exec_state_map.get(exec_state_raw, f"UNKNOWN_{exec_state_raw}")
+            else:
+                exec_state_str = str(exec_state_raw)
+
             base_info = {
                 "display_name": display_name,
                 "eval_result_id": result_name,
                 "evaluation_status": status_str,
+                "execution_state": exec_state_str,
+                "error_message": res_dict.get("error_info", {}).get("error_message", "Unknown Agent Exception"),
                 "semantic_score": sem_score_str,
                 "tool_invocation_score": tool_score_str,
                 "create_time": res_dict.get("create_time", ""),
@@ -335,19 +344,22 @@ class EvalUtils(Evaluations):
             }
             run_summaries.append(base_info)
 
-            expectation_list = metrics.get("expectation_results", [])
+            expectation_list = metrics.get("expectation_results", []) or metrics.get("evaluation_expectation_results", [])
             for exp_item in expectation_list:
+                is_new_format = "prompt" in exp_item
+                not_met_count = 1 if is_new_format and exp_item.get("outcome") == 2 else exp_item.get("not_met_count", 0)
+                met_count = 1 if is_new_format and exp_item.get("outcome") == 1 else exp_item.get("met_count", 0)
+
                 row = {
                     "display_name": display_name,
                     "eval_result_id": result_name,
                     "record_type": "summary_expectation",
-                    "expectation": str(exp_item.get("expectation", "")),
-                    "met_count": exp_item.get("met_count", 0),
-                    "not_met_count": exp_item.get("not_met_count", 0),
+                    "expectation": str(exp_item.get("prompt", exp_item.get("expectation", ""))),
+                    "met_count": met_count,
+                    "not_met_count": not_met_count,
                     "met_percentage": exp_item.get("met_percentage", 0.0),
-                    "not_met_percentage": exp_item.get(
-                        "not_met_percentage", 0.0
-                    ),
+                    "not_met_percentage": exp_item.get("not_met_percentage", 0.0),
+                    "explanation": str(exp_item.get("explanation", "")),
                 }
                 expectations.append(row)
 
@@ -431,8 +443,24 @@ class EvalUtils(Evaluations):
 
         # Failures
         failures = []
+        for run_sum in run_summaries:
+            if run_sum.get("execution_state") in ("ERROR", "ERRORED") or run_sum.get("evaluation_status") in ("ERROR", "ERRORED"):
+                raw_err = run_sum.get("error_message", "Unknown Agent Exception")
+                failures.append(
+                    {
+                        "display_name": run_sum.get("display_name", "Unknown"),
+                        "eval_result_id": run_sum.get("eval_result_id", ""),
+                        "turn_index": None,
+                        "failure_type": "System Engine Error",
+                        "expected": "Run evaluation to completion",
+                        "actual": f"Error: {raw_err}",
+                        "score": None,
+                    }
+                )
         for exp in expectations:
             if exp.get("not_met_count", 0) > 0:
+                explanation = exp.get("explanation", "")
+                actual_text = f"(Not Met) {explanation}" if explanation else "(Not Met)"
                 failures.append(
                     {
                         "display_name": exp["display_name"],
@@ -440,7 +468,7 @@ class EvalUtils(Evaluations):
                         "turn_index": None,
                         "failure_type": "Expectation",
                         "expected": str(exp.get("expectation", "")),
-                        "actual": "(Not Met)",
+                        "actual": actual_text,
                         "score": None,
                     }
                 )

@@ -79,10 +79,11 @@ def wait_for_evaluation_completion(
     eval_utils: EvalUtils,
     old_result_ids: List[str],
     app_name: str,
+    expected_count: int = 1,
     timeout_seconds: int = 600,
 ) -> Dict[str, pd.DataFrame]:
-    """Waits for a new evaluation result to appear."""
-    print("Waiting for evaluation to complete...")
+    """Waits for all new evaluation results to appear."""
+    print(f"Waiting for {expected_count} evaluation(s) to complete...")
     start_time = time.time()
     while time.time() - start_time < timeout_seconds:
         # Fetch current evaluation results
@@ -97,18 +98,25 @@ def wait_for_evaluation_completion(
             current_result_ids = set(df_current["eval_result_id"].unique())
             new_ids = current_result_ids - old_result_ids
 
-            if new_ids:
-                # Assuming one new run at a time for simplicity
-                new_run_id = list(new_ids)[0]
-                print(f"Evaluation completed. Result ID: {new_run_id}")
+            if new_ids and len(new_ids) >= expected_count:
+                # Wait for ALL new runs to complete
+                all_completed = True
+                completed_results = []
+                for run_id in new_ids:
+                    df_new = df_current[df_current["eval_result_id"] == run_id]
+                    exec_state = df_new["execution_state"].iloc[0] if not df_new.empty and "execution_state" in df_new.columns else "COMPLETED"
 
-                filtered_dict = {}
-                for k, v in df_dict.items():
-                    if not v.empty and "eval_result_id" in v.columns:
-                        filtered_dict[k] = v[v["eval_result_id"] == new_run_id]
-                    else:
-                        filtered_dict[k] = v
-                return filtered_dict
+                    if exec_state not in ("COMPLETED", "ERROR"):
+                        all_completed = False
+                        break
+
+                    # Fetch trace
+                    raw = eval_utils.eval_client.get_evaluation_result(run_id)
+                    completed_results.append(raw)
+
+                if all_completed:
+                    print(f"All {len(new_ids)} evaluations completed.")
+                    return eval_utils.evals_to_dataframe(results=completed_results)
 
         except Exception as e:
             print(f"Error checking evaluation status: {e}")
@@ -133,12 +141,27 @@ def filter_metrics_and_assess(
     # Standard assessment: check standard status first
     # This might encompass semantic and hallucination metrics
 
-    overall_status = (
-        df_new_run["evaluation_status"].iloc[0]
-        if not df_new_run.empty
-        else "UNKNOWN"
-    )
+    num_passed = 0
+    num_failed = 0
+    num_error = 0
+    if not df_new_run.empty:
+        for _, row in df_new_run.iterrows():
+            eval_stat = str(row.get("evaluation_status", "")).upper()
+            exec_stat = str(row.get("execution_state", "")).upper()
+
+            if exec_stat in ("ERROR", "ERRORED") or eval_stat in ("ERROR", "ERRORED"):
+                num_error += 1
+            elif eval_stat in ("PASS", "PASSED", "✅ PASSED"):
+                num_passed += 1
+            else:
+                num_failed += 1
+
+    overall_status = "PASS" if num_failed == 0 and num_error == 0 and num_passed > 0 else "FAIL" if (num_failed > 0 or num_error > 0) else "UNKNOWN"
+
     print(f"\n--- Evaluation Status: {overall_status} ---")
+    print(f"Passed: {num_passed}")
+    print(f"Failed: {num_failed}")
+    print(f"Errored: {num_error}")
 
     if filter_auto_metrics:
         print(
@@ -184,7 +207,7 @@ def filter_metrics_and_assess(
 
     else:
         # Strict overall pass/fail based on the server constraints
-        if overall_status != "PASSED":
+        if overall_status != "PASS":
             passed = False
 
     return passed
@@ -200,6 +223,46 @@ def run_eval(args: argparse.Namespace) -> None:
     eval_client = Evaluations(app_name=args.app_name)
     eval_utils = EvalUtils(app_name=args.app_name)
 
+    # Determine which evaluations to run
+    evaluations_to_run = []
+    if args.evaluation_id:
+        evaluations_to_run.append(args.evaluation_id)
+    else:
+        # Require prefix or tags if no specific ID is given
+        if not args.display_name_prefix and not args.tags:
+            print(
+                "Error: You must provide either --evaluation_id, "
+                "--display_name_prefix, or --tags to specify which tests to run."
+            )
+            sys.exit(1)
+
+        if args.display_name_prefix:
+            print(f"Fetching tests matching prefix: '{args.display_name_prefix}'...")
+        elif args.tags:
+            print(f"Fetching tests matching tags: {args.tags}...")
+        all_evals = eval_client.list_evaluations(app_id=args.app_id)
+
+        for eval_obj in all_evals:
+            match = False
+
+            if args.display_name_prefix and eval_obj.display_name.startswith(args.display_name_prefix):
+                match = True
+
+            # Assuming tags are accessible as a list/repeated field on the Evaluation object
+            if args.tags and hasattr(eval_obj, "tags"):
+                # intersection of CLI tags and agent tags
+                if any(t in eval_obj.tags for t in args.tags):
+                    match = True
+
+            if match:
+                evaluations_to_run.append(eval_obj.name)
+
+        if not evaluations_to_run:
+            print("No matching tests found for the given prefix or tags. Aborting run.")
+            sys.exit(0)
+
+        print(f"Found {len(evaluations_to_run)} matching test(s) to run.")
+
     try:
         # Step 1: Capture existing evaluation runs to diff against later
         df_initial = eval_utils.evals_to_dataframe().get(
@@ -211,14 +274,14 @@ def run_eval(args: argparse.Namespace) -> None:
 
         # Step 2: Trigger evaluation
         eval_client.run_evaluation(
-            evaluations=[args.evaluation_id], app_name=args.app_name
+            evaluations=evaluations_to_run, app_name=args.app_name, expected_count=len(evaluations_to_run)
         )
         print("Evaluation triggered successfully based on CLI call.")
 
         # Step 3: Wait and backoff on pending evaluations.
         if args.wait:
             df_new_run = wait_for_evaluation_completion(
-                eval_utils, old_result_ids, args.app_name
+                eval_utils, old_result_ids, args.app_name, expected_count=len(evaluations_to_run)
             )
             pass_status = filter_metrics_and_assess(
                 df_new_run, args.filter_auto_metrics
@@ -228,6 +291,34 @@ def run_eval(args: argparse.Namespace) -> None:
                 print("\nFINAL RESULT: PASS")
                 sys.exit(0)
             else:
+                df_failures = df_new_run.get("failures", pd.DataFrame())
+                if not df_failures.empty:
+                    print("\n--- Failure Details ---")
+                    grouped = df_failures.groupby("display_name", sort=False)
+                    for disp, group_df in grouped:
+                        is_err = any(row.get('failure_type') == 'System Engine Error' for _, row in group_df.iterrows())
+                        title_str = "Errored" if is_err else "Failed"
+                        print(f"\n{disp} {title_str}")
+
+                        sys_errors = group_df[group_df['failure_type'] == 'System Engine Error']
+                        normal_fails = group_df[group_df['failure_type'] != 'System Engine Error']
+
+                        for _, row in sys_errors.iterrows():
+                            print(f"- {row.get('actual')}\n")
+
+                        for _, row in normal_fails.iterrows():
+                            idx = row.get("turn_index")
+                            tba = f" (Turn {idx})" if pd.notnull(idx) else ""
+
+                            print(f"- Type    : {row.get('failure_type')}{tba}")
+                            print(f"- Expected: {row.get('expected')}")
+                            print(f"- Actual  : {row.get('actual')}")
+
+                            score = row.get('score')
+                            if pd.notnull(score):
+                                print(f"- Score   : {score}")
+                            print()
+
                 print("\nFINAL RESULT: FAIL")
                 sys.exit(1)
 
@@ -770,11 +861,22 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_run.add_argument(
         "--evaluation_id",
-        required=True,
+        required=False,
         help=(
             "The evaluation resource name "
             "(projects/.../locations/.../apps/.../evaluations/...)."
         ),
+    )
+    parser_run.add_argument(
+        "--display_name_prefix",
+        required=False,
+        help="Run all tests whose display name starts with this string.",
+    )
+    parser_run.add_argument(
+        "--tags",
+        nargs="+",
+        default=[],
+        help="Space-separated list of tags. Runs tests containing any of these tags.",
     )
     parser_run.add_argument(
         "--wait",

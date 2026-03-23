@@ -297,6 +297,11 @@ class Evaluations(Common):
         response = self.client.list_evaluation_results(request=request)
         return list(response)
 
+    def get_evaluation_result(self, evaluation_result_id: str) -> types.EvaluationResult:
+        """Fetches the FULL payload for a single evaluation result."""
+        request = types.GetEvaluationResultRequest(name=evaluation_result_id)
+        return self.client.get_evaluation_result(request=request)
+
     def get_evaluation_run(self, evaluation_run_id: str) -> types.EvaluationRun:
         """Gets details of the specified evaluation run by its full resource name.
 
@@ -698,6 +703,8 @@ class Evaluations(Common):
 
                 if resource_name:
                     resolved_names.add(resource_name)
+                elif display_name.startswith("projects/") and "/evaluations/" in display_name:
+                    resolved_names.add(display_name)
                 else:
                     raise ValueError(
                         f"Evaluation display name not found: '{display_name}'"
