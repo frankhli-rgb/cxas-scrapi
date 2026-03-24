@@ -73,8 +73,21 @@ class Evaluations(Common):
         parsed = Common.parse_textproto(text)
         return Evaluations.eval_dict_to_yaml(parsed)
 
+    @property
+    def tools_map(self) -> Dict[str, str]:
+        """Lazily fetches and caches the tools map for resolving empty tool display names."""
+        if getattr(self, "_tools_map", None) is None:
+            try:
+                self._tools_map = Tools(self.app_name).get_tools_map()
+            except Exception as e:
+                print(f"Warning: Failed to fetch tools map for resolution: {e}")
+                self._tools_map = {}
+        return self._tools_map
+
     @staticmethod
-    def eval_dict_to_yaml(eval_dict):
+    def eval_dict_to_yaml(
+        eval_dict, tools_map: Optional[Dict[str, str]] = None
+    ):
         """Parses a CXAS Evaluation dictionary into the target FDE YAML format."""
         golden = eval_dict.get("golden", {})
         turns = golden.get("turns", [])
@@ -155,9 +168,13 @@ class Evaluations(Common):
                         tc = exp["tool_call"]
                         args = tc.get("args", {})
                         unwrapped_args = Common.unwrap_struct(args)
-                        display_name = tc.get(
-                            "display_name", tc.get("tool", "")
-                        )
+                        display_name = tc.get("display_name", "")
+
+                        if not display_name and tools_map:
+                            display_name = tools_map.get(tc.get("tool", ""), "")
+
+                        if not display_name:
+                            display_name = tc.get("tool", "")
 
                         if "tool_calls" not in current_turn:
                             current_turn["tool_calls"] = []
@@ -173,9 +190,14 @@ class Evaluations(Common):
                         tr = exp["tool_response"]
                         res = tr.get("response", {})
                         unwrapped_res = Common.unwrap_struct(res)
-                        tool_name = id_to_tool.get(
-                            tr.get("id", ""), tr.get("tool", "")
-                        )
+                        tool_name = id_to_tool.get(tr.get("id", ""), "")
+
+                        if not tool_name and tools_map:
+                            tool_name = tools_map.get(tr.get("tool", ""), "")
+
+                        if not tool_name:
+                            tool_name = tr.get("tool", "")
+
                         conversation_entry["mocks"].append(
                             {"tool": tool_name, "response": unwrapped_res}
                         )
@@ -501,7 +523,7 @@ class Evaluations(Common):
         # Convert the protobuf object to a python dictionary
         eval_dict = type(eval_obj).to_dict(eval_obj)
 
-        out_dict = self.eval_dict_to_yaml(eval_dict)
+        out_dict = self.eval_dict_to_yaml(eval_dict, tools_map=self.tools_map)
 
         # Resolve expectation resource names to LLM prompts and optionally sideload
         for conv in out_dict.get("conversations", []):
