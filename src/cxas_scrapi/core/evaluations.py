@@ -691,6 +691,7 @@ class Evaluations(Common):
         evaluations: Optional[Union[str, List[str]]] = None,
         eval_type: Optional[str] = None,
         app_name: Optional[str] = None,
+        modality: str = "text",
     ) -> Any:
         """Runs an evaluation on the specified app.
 
@@ -699,6 +700,7 @@ class Evaluations(Common):
             eval_type: Run a specific type of evaluation. Must be one of:
                       'goldens', 'scenarios', or 'all'.
             app_name: Parent App ID. Defaults to self.app_name.
+            modality: "text" (default) or "audio".
         """
         app_name = app_name or self.app_name
         if not app_name:
@@ -755,6 +757,9 @@ class Evaluations(Common):
         request = types.RunEvaluationRequest(
             app=app_name, evaluations=list(resolved_names)
         )
+
+        if modality.lower() == "audio":
+            request.config.evaluation_channel = types.EvaluationConfig.EvaluationChannel.AUDIO
 
         return self.client.run_evaluation(request=request)
 

@@ -949,6 +949,12 @@ def get_parser() -> argparse.ArgumentParser:
         ),
     )
     parser_run.add_argument(
+        "--modality",
+        choices=["text", "audio"],
+        default="text",
+        help="Evaluation execution modality (text or audio). Defaults to text.",
+    )
+    parser_run.add_argument(
         "--display_name_prefix",
         required=False,
         help="Run all tests whose display name starts with this string.",
