@@ -224,6 +224,7 @@ class SimulationEvals(Apps):
         model: str = _DEFAULT_GEMINI_MODEL,
         session_id: str = str(uuid.uuid4()),
         console_logging: bool = True,
+        modality: str = "text",
         **kwargs,
     ) -> LLMUserConversation:
         """Runs the simulated conversation loop.
@@ -254,7 +255,7 @@ class SimulationEvals(Apps):
             for attempt in range(max_retries):
                 try:
                     response = self.sessions_client.run(
-                        session_id=session_id, text=user_utterance
+                        session_id=session_id, text=user_utterance, modality=modality
                     )
                     break
                 except Exception as e:
@@ -274,7 +275,24 @@ class SimulationEvals(Apps):
             agent_text = ""
             session_ended = False
             for output in response.outputs:
-                if hasattr(output, "text") and output.text:
+                diagnostic_info = getattr(output, "diagnostic_info", None)
+                has_diag_text = False
+
+                if diagnostic_info and hasattr(diagnostic_info, "messages"):
+                    for message in diagnostic_info.messages:
+                        role = getattr(message, "role", "").lower()
+                        if role != "user":
+                            for chunk in getattr(message, "chunks", []):
+                                chunk_type = (
+                                    chunk._pb.WhichOneof("data")
+                                    if hasattr(chunk, "_pb")
+                                    else None
+                                )
+                                if chunk_type == "text" and chunk.text:
+                                    agent_text += chunk.text + " "
+                                    has_diag_text = True
+
+                if not has_diag_text and hasattr(output, "text") and output.text:
                     agent_text += output.text + " "
 
                 tool_calls_msg = getattr(output, "tool_calls", None)
