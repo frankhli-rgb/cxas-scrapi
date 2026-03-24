@@ -43,6 +43,7 @@ from cxas_scrapi.cli.app import (
     apps_get,
     app_delete,
 )
+from cxas_scrapi.cli.insights_cli import populate_insights_parser
 
 logger = logging.getLogger(__name__)
 
@@ -1118,6 +1119,14 @@ def get_parser() -> argparse.ArgumentParser:
     )
     _add_project_location_args(parser_apps_get, required=False)
     parser_apps_get.set_defaults(func=apps_get)
+
+    # Subparsers for 'insights'
+    parser_insights = subparsers.add_parser(
+        "insights",
+        help="Perform high-level CXAS Insights and Quality AI operations.",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    populate_insights_parser(parser_insights)
 
     return parser
 

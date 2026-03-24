@@ -67,6 +67,7 @@ setup(
         "google-cloud-texttospeech",
         "websocket-client",
         "certifi",
+        "json5",
     ],
     entry_points={
         'console_scripts': [

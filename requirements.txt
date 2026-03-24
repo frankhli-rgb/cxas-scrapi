@@ -22,3 +22,4 @@ google-cloud-ces
 google-cloud-texttospeech
 websocket-client
 certifi
+json5
