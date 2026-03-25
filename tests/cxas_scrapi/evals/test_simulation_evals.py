@@ -176,11 +176,71 @@ def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
     )
 
     # Assertions
-    mock_sessions.run.assert_any_call(session_id="123", text="Hi")
+    mock_sessions.run.assert_any_call(session_id="123", text="Hi", modality="text")
     mock_sessions.run.assert_any_call(
-        session_id="123", text="I want to book a flight"
+        session_id="123", text="I want to book a flight", modality="text"
     )
     mock_eval_conv.next_user_utterance.assert_any_call("Where to?")
     mock_eval_conv.next_user_utterance.assert_any_call("Flight booked.")
     assert result_conv == mock_eval_conv
     assert mock_sessions.run.call_count == 2
+
+@patch("cxas_scrapi.evals.simulation_evals.Sessions")
+@patch("cxas_scrapi.evals.simulation_evals.LLMUserConversation")
+def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
+    mock_sessions = mock_sessions_class.return_value
+    mock_eval_conv = mock_llm_conv_class.return_value
+
+    mock_eval_conv.next_user_utterance.side_effect = [
+        "I want to book a flight",
+        "",
+    ]
+    mock_eval_conv.steps_progress = []
+
+    # Mock Response 1 (Diagnostic Info only, simulating audio response text capture)
+    mock_response_1 = MagicMock()
+    mock_output_1 = MagicMock()
+    mock_output_1.text = "" # Empty high-level text
+
+    mock_msg_1 = MagicMock()
+    mock_msg_1.role = "model"
+    mock_chunk_1 = MagicMock()
+    mock_chunk_1._pb.WhichOneof.return_value = "text"
+    mock_chunk_1.text = "Where to?"
+    mock_msg_1.chunks = [mock_chunk_1]
+
+    mock_diag_1 = MagicMock()
+    mock_diag_1.messages = [mock_msg_1]
+    mock_output_1.diagnostic_info = mock_diag_1
+    mock_response_1.outputs = [mock_output_1]
+
+    # Mock Response 2 (High-level text)
+    mock_response_2 = MagicMock()
+    mock_output_2 = MagicMock()
+    mock_output_2.text = "Flight booked."
+    mock_output_2.diagnostic_info = None
+    mock_response_2.outputs = [mock_output_2]
+
+    mock_sessions.run.side_effect = [mock_response_1, mock_response_2]
+
+    app_name = "projects/test/locations/us/apps/123-abc"
+    with patch("cxas_scrapi.evals.simulation_evals.genai.Client"):
+        with patch("cxas_scrapi.core.apps.AgentServiceClient"):
+            simulator = SimulationEvals(app_name=app_name)
+
+    test_case = {"steps": []}
+    result_conv = simulator.simulate_conversation(
+        test_case=test_case, initial_utterance="Hi", session_id="123", console_logging=False, modality="audio"
+    )
+
+    mock_sessions.run.assert_any_call(session_id="123", text="Hi", modality="audio")
+    mock_sessions.run.assert_any_call(
+        session_id="123", text="I want to book a flight", modality="audio"
+    )
+
+    # Verify text was extracted from Diagnostic Info
+    # Note: text += chunk.text + " " so it should assert "Where to? "
+    mock_eval_conv.next_user_utterance.assert_any_call("Where to?")
+    mock_eval_conv.next_user_utterance.assert_any_call("Flight booked.")
+    assert mock_sessions.run.call_count == 2
+
