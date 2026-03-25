@@ -1,5 +1,19 @@
 """Manages loading and saving of Scorecard templates from/to JSON/YAML files."""
 
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from collections.abc import Collection, Iterable
 import json
 import os
@@ -100,7 +114,7 @@ def save_scorecard_template(
         q_dict_full = dict(question)
 
         if fields_to_export:
-            # Use whitelist filtering
+            # Use allowlist filtering
             q_dict = {}
             for field_path in fields_to_export:
                 val = _get_nested_field(q_dict_full, field_path)
