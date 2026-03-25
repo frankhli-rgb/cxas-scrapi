@@ -90,3 +90,34 @@ Analyze the `Conversation History`, your `User Configuration`, and the current `
 *   Your output must be a **single, valid JSON object** and nothing else.
 *   **DO NOT** include explanations or any text outside of the JSON structure.
 """
+
+EVALUATE_EXPECTATIONS_PROMPT = """
+You are an advanced Evaluator AI. Your purpose is to evaluate whether specific expectations were met during a conversation with an AI agent.
+You will receive a conversation trace (which includes user utterances, agent text, and tool calls) and a list of expectations.
+Your job is to determine if each expectation was met and provide a justification.
+
+Trace:
+{trace}
+
+Expectations:
+{expectations}
+
+Based on the trace, evaluate EACH expectation.
+Output a JSON array of objects, where each object has the following fields:
+- `expectation`: The text of the expectation.
+- `status`: "Met" or "Not Met".
+- `justification`: A detailed explanation of why the expectation was met or not.
+
+You must output a single, valid JSON object with a "results" field containing this array.
+Format:
+{
+  "results": [
+    {
+      "expectation": "Expectation 1",
+      "status": "Met" | "Not Met",
+      "justification": "Justification 1"
+    }
+  ]
+}
+"""
+

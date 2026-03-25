@@ -53,6 +53,36 @@ class StepProgress(pydantic.BaseModel):
     justification: str = ""
 
 
+class ExpectationResult(pydantic.BaseModel):
+    expectation: str
+    status: str = "Not Met"
+    justification: str = ""
+
+
+class ExpectationOutput(pydantic.BaseModel):
+    results: List[ExpectationResult] = []
+
+
+class SimulationReport:
+    """A report containing both Goals and Expectations DataFrames."""
+
+    def __init__(self, goals_df: pd.DataFrame, expectations_df: Optional[pd.DataFrame] = None):
+        self.goals_df = goals_df
+        self.expectations_df = expectations_df
+
+    def __str__(self):
+        res = "--- Goal Progress ---\n" + self.goals_df.to_string()
+        if self.expectations_df is not None:
+            res += "\n\n--- Expectations ---\n" + self.expectations_df.to_string()
+        return res
+
+    def _repr_html_(self):
+        html = "<h3>Goal Progress</h3>" + self.goals_df._repr_html_()
+        if self.expectations_df is not None:
+            html += "<h3>Expectations</h3>" + self.expectations_df._repr_html_()
+        return html
+
+
 _FIRST_UTTERANCE = "Hi"
 _MAX_TURNS = 30
 _DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
@@ -121,6 +151,8 @@ class LLMUserConversation(Conversation):
                     justification="",
                 )
             )
+        self.expectations = test_case.get("expectations", [])
+        self.expectation_results: List[ExpectationResult] = []
 
     def _next_user_utterance(self) -> str:
         """Generates the next user utterance based on the conversation history.
@@ -193,7 +225,22 @@ class LLMUserConversation(Conversation):
                     "justification": prog.justification,
                 }
             )
-        return pd.DataFrame(records)
+        goals_df = pd.DataFrame(records)
+
+        expectations_df = None
+        if self.expectation_results:
+            exp_records = []
+            for res in self.expectation_results:
+                exp_records.append(
+                    {
+                        "expectation": res.expectation,
+                        "status": res.status,
+                        "justification": res.justification,
+                    }
+                )
+            expectations_df = pd.DataFrame(exp_records)
+
+        return SimulationReport(goals_df, expectations_df)
 
 
 class SimulationEvals(Apps):
@@ -249,9 +296,13 @@ class SimulationEvals(Apps):
         eval_conv._add_user_utterance(user_utterance)
         eval_conv.current_turn += 1
 
+        detailed_trace = []
+        detailed_trace.append(f"User: {user_utterance}")
+
         while user_utterance:
             # Send utterance to the CES Agent with exponential backoff for transient 500s
             max_retries = 3
+            response = None
             for attempt in range(max_retries):
                 try:
                     response = self.sessions_client.run(
@@ -269,6 +320,9 @@ class SimulationEvals(Apps):
                         )
                     time.sleep(2**attempt)
 
+            if not response:
+                break
+
             # Execute rich HTML trace rendering if logging is enabled
             if console_logging:
                 self.sessions_client.parse_result(response)
@@ -276,30 +330,12 @@ class SimulationEvals(Apps):
             # Extract text response and check for end_session tool calls
             agent_text = ""
             session_ended = False
+            trace_chunks = []
+
             for output in response.outputs:
-                diagnostic_info = getattr(output, "diagnostic_info", None)
-                has_diag_text = False
-
-                if diagnostic_info and hasattr(diagnostic_info, "messages"):
-                    for message in diagnostic_info.messages:
-                        role = getattr(message, "role", "").lower()
-                        if role != "user":
-                            for chunk in getattr(message, "chunks", []):
-                                chunk_type = (
-                                    chunk._pb.WhichOneof("data")
-                                    if hasattr(chunk, "_pb")
-                                    else None
-                                )
-                                if chunk_type == "text" and chunk.text:
-                                    agent_text += chunk.text + " "
-                                    has_diag_text = True
-
-                if (
-                    not has_diag_text
-                    and hasattr(output, "text")
-                    and output.text
-                ):
+                if hasattr(output, "text") and output.text:
                     agent_text += output.text + " "
+                    trace_chunks.append(f"Agent Text: {output.text}")
 
                 tool_calls_msg = getattr(output, "tool_calls", None)
                 if tool_calls_msg and hasattr(tool_calls_msg, "tool_calls"):
@@ -307,6 +343,8 @@ class SimulationEvals(Apps):
                         tool_name = getattr(tc, "tool", "") or getattr(
                             tc, "display_name", ""
                         )
+                        expanded_args = Sessions._expand_pb_struct(tc.args)
+                        trace_chunks.append(f"Tool Call (Output): {tool_name} with args {expanded_args}")
                         if "end_session" in tool_name:
                             session_ended = True
 
@@ -325,10 +363,21 @@ class SimulationEvals(Apps):
                                 tool_name = getattr(tc, "tool", "") or getattr(
                                     tc, "display_name", ""
                                 )
+                                expanded_args = Sessions._expand_pb_struct(tc.args)
+                                trace_chunks.append(f"Tool Call: {tool_name} with args {expanded_args}")
                                 if "end_session" in tool_name:
                                     session_ended = True
+                            elif chunk_type == "tool_response":
+                                tr = chunk.tool_response
+                                tool_name = tr.tool or tr.display_name
+                                expanded_response = Sessions._expand_pb_struct(tr.response)
+                                trace_chunks.append(f"Tool Response: {tool_name} with result {expanded_response}")
+                            elif chunk_type == "text":
+                                agent_text += chunk.text + " "
+                                trace_chunks.append(f"Agent Text (Diag): {chunk.text}")
 
             agent_text = agent_text.strip()
+            detailed_trace.append("\n".join(trace_chunks))
 
             if session_ended:
                 if console_logging:
@@ -339,6 +388,8 @@ class SimulationEvals(Apps):
 
             # Get the next simulated user utterance based on the agent's response
             user_utterance = eval_conv.next_user_utterance(agent_text)
+            if user_utterance:
+                detailed_trace.append(f"User: {user_utterance}")
 
         if console_logging:
             print("\n--- Conversation Complete ---")
@@ -349,5 +400,32 @@ class SimulationEvals(Apps):
                 )
                 if step_prog.justification:
                     print(f"  Justification: {step_prog.justification}")
+
+        # Evaluate Expectations
+        if eval_conv.expectations and isinstance(eval_conv.expectations, list):
+            if console_logging:
+                print("\nEvaluating Expectations...")
+            full_trace_str = "\n\n".join(detailed_trace)
+            prompt = llm_user_prompts.EVALUATE_EXPECTATIONS_PROMPT.replace(
+                "{trace}", full_trace_str
+            )
+            prompt = prompt.replace(
+                "{expectations}", json.dumps(eval_conv.expectations, indent=2)
+            )
+
+            try:
+                response = self.genai_client.models.generate_content(
+                    contents=prompt,
+                    model=model,
+                    config=genai.types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=ExpectationOutput,
+                    ),
+                )
+                output: ExpectationOutput = response.parsed
+                eval_conv.expectation_results = output.results
+            except Exception as e:
+                if console_logging:
+                    print(f"Error evaluating expectations: {e}")
 
         return eval_conv
