@@ -58,7 +58,9 @@ class Evaluations(Common):
 
         # Initialize SDK Client
         self.client = EvaluationServiceClient(
-            credentials=self.creds, client_options=self.client_options
+            credentials=self.creds,
+            client_options=self.client_options,
+            client_info=self.client_info,
         )
         self.resource_type = "evaluations"
         self.evals_map: Dict[str, Dict[str, str]] = {}
@@ -972,7 +974,9 @@ class Evaluations(Common):
             raise ValueError("app_name is required.")
 
         agent_client = AgentServiceClient(
-            credentials=self.creds, client_options=self.client_options
+            credentials=self.creds,
+            client_options=self.client_options,
+            client_info=self.client_info,
         )
 
         request = types.GetAppRequest(name=app_name)

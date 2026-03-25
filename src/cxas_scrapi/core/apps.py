@@ -48,7 +48,9 @@ class Apps(Common):
 
         self.client_options = self._get_client_options(self.parent)
         self.client = AgentServiceClient(
-            credentials=self.creds, client_options=self.client_options
+            credentials=self.creds,
+            client_options=self.client_options,
+            client_info=self.client_info,
         )
 
     def list_apps(self) -> List[types.App]:

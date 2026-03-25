@@ -48,7 +48,9 @@ class ConversationHistory(Common):
         self.app_name = app_name
         self.client_options = self._get_client_options(self.app_name)
         self.client = AgentServiceClient(
-            credentials=self.creds, client_options=self.client_options
+            credentials=self.creds,
+            client_options=self.client_options,
+            client_info=self.client_info,
         )
 
     @staticmethod

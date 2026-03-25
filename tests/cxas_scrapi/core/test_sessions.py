@@ -341,3 +341,13 @@ def test_bidi_session_handler_send_inputs(mock_sleep):
     # First send should be config
     first_call_arg = handler.ws_app.send.call_args_list[0][0][0]
     assert isinstance(first_call_arg, str)
+
+
+@patch("cxas_scrapi.core.sessions.SessionServiceClient")
+def test_create_session_id(mock_client_cls):
+    sessions = Sessions(app_name="projects/p/locations/l/apps/a")
+    sess_id = sessions.create_session_id()
+    assert sess_id is not None
+    assert "/" not in sess_id
+
+

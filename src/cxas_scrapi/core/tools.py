@@ -58,10 +58,14 @@ class Tools(Apps):
         self.app_id = app_name.split("/")[-1]
         self.resource_type = "tools"
         self.client = AgentServiceClient(
-            credentials=self.creds, client_options=self.client_options
+            credentials=self.creds,
+            client_options=self.client_options,
+            client_info=self.client_info,
         )
         self.tool_client = ToolServiceClient(
-            credentials=self.creds, client_options=self.client_options
+            credentials=self.creds,
+            client_options=self.client_options,
+            client_info=self.client_info,
         )
         self.var_client = Variables(
             app_name=app_name,

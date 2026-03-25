@@ -22,6 +22,8 @@ from typing import Dict, List, Optional, Any
 from google.auth import default
 from google.oauth2 import service_account
 from google.auth.transport.requests import Request
+from google.api_core.gapic_v1.client_info import ClientInfo
+import importlib.metadata
 from proto.marshal.collections import maps, repeated
 
 # Define global scopes used for CX Agent Studio Requests
@@ -94,6 +96,13 @@ class Common:
         else:
             self.project_id = None
             self.location = None
+
+        try:
+            sdk_version = importlib.metadata.version("cxas-scrapi")
+        except importlib.metadata.PackageNotFoundError:
+            sdk_version = "unknown"
+        
+        self.client_info = ClientInfo(user_agent=f"cxas-scrapi/{sdk_version}")
 
     @staticmethod
     def empty_to_dict(v: Any) -> Any:

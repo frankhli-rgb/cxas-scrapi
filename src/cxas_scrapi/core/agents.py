@@ -54,7 +54,9 @@ class Agents(Apps):
         self.app_name = app_name
         self.resource_type = "agents"
         self.client = AgentServiceClient(
-            credentials=self.creds, client_options=self.client_options
+            credentials=self.creds,
+            client_options=self.client_options,
+            client_info=self.client_info,
         )
 
     def list_agents(self) -> List[types.Agent]:

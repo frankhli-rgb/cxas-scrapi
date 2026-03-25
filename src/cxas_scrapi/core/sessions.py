@@ -325,12 +325,18 @@ class Sessions(Common):
 
         # Initialize Sessions Client
         self.client = SessionServiceClient(
-            credentials=self.creds, client_options=self.client_options
+            credentials=self.creds,
+            client_options=self.client_options,
+            client_info=self.client_info,
         )
 
         self.app_name = app_name
         self.deployment_id = deployment_id
         self.version_id = version_id
+
+    def create_session_id(self) -> str:
+        """Create a unique uuid4 string to use as the session ID."""
+        return str(uuid.uuid4())
 
     @staticmethod
     def get_file_data(file_path: str) -> Dict[str, Any]:
@@ -534,7 +540,27 @@ class Sessions(Common):
         turn_count: Optional[int] = None,
         modality: Modality | str = Modality.TEXT,
     ):
-        """Sends inputs to a Conversational Agents Session and returns the response."""
+        """Sends inputs to a Conversational Agents Session and returns the response.
+
+        Args:
+            session_id: Unique UUID string or identifying string (e.g. 'test1') for the session.
+            text: Text input from the user. Can give a single string or list of strings.
+            event: Name of a system event to trigger (e.g. 'WELCOME').
+            event_vars: Key-value map of variables to inject alongside the event.
+            blob: Raw binary content (image, pdf, etc.) for multimodal inputs.
+            blob_mime_type: Mime type for the blob (defaults to 'application/octet-stream').
+            variables: Key-value state maps to inject for the session turn.
+            tool_responses: Pre-computed tool run outputs if mocking tool execution.
+            audio: Raw audio bytes to send as user input.
+            audio_config: Custom turn-specific audio configurations.
+            input_audio_config: Custom gRPC properties for input audio (defaults to 16kHz linear PCM).
+            output_audio_config: Custom gRPC properties for output audio (defaults to 16kHz linear PCM).
+            deployment_id: Overrides the default deployment ID setting for this turn run.
+            version_id: Overrides the default app version setting for this turn run.
+            historical_contexts: An existing conversation ID (string) or raw list of dictionaries to pre-set past history.
+            turn_count: Truncates historical context limits when pulling from a saved conversation ID.
+            modality: Running via text (synced) or audio (asynchronous bidirectional streaming). Defaults to Modality.TEXT.
+        """
 
         if isinstance(modality, str):
             try:
@@ -576,7 +602,9 @@ class Sessions(Common):
         if historical_contexts:
             parsed_contexts = []
             if isinstance(historical_contexts, str):
-                ch = ConversationHistory(app_id=self.app_id, creds=self.creds)
+                ch = ConversationHistory(
+                    app_name=self.app_name, creds=self.creds
+                )
                 conv = ch.get_conversation(historical_contexts)
                 d = type(conv).to_dict(conv)
                 if "turns" in d and d["turns"]:
