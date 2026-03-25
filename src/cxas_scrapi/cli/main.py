@@ -660,6 +660,10 @@ def local_test(args: argparse.Namespace) -> None:
         display_name,
     ]
 
+    env_file = getattr(args, "env_file", None)
+    if env_file:
+        inner_cmd.extend(["--env_file", env_file])
+
     docker_cmd.extend(inner_cmd)
 
     print(f"Executing: {' '.join(docker_cmd)}")
@@ -1004,6 +1008,10 @@ def get_parser() -> argparse.ArgumentParser:
             "(e.g. [CI] PR-123). Overwrites existing."
         ),
     )
+    parser_ci_test.add_argument(
+        "--env_file",
+        help="Path to a specific environment JSON file to include as environment.json.",
+    )
     _add_project_location_args(parser_ci_test)
     parser_ci_test.set_defaults(func=ci_test)
 
@@ -1042,6 +1050,10 @@ def get_parser() -> argparse.ArgumentParser:
         default=".",
         help="Path to the agent directory. Defaults to current directory.",
     )
+    parser_local_test.add_argument(
+        "--env_file",
+        help="Path to a specific environment JSON file to include as environment.json.",
+    )
     _add_project_location_args(parser_local_test)
     parser_local_test.set_defaults(func=local_test)
 
@@ -1065,6 +1077,10 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_push.add_argument(
         "--to", help="Target App Resource Name or Display Name."
+    )
+    parser_push.add_argument(
+        "--env_file",
+        help="Path to a specific environment JSON file to include as environment.json.",
     )
     parser_push.add_argument(
         "--app_name",
