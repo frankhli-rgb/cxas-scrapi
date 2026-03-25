@@ -21,6 +21,7 @@ from cxas_scrapi.evals.simulation_evals import LLMUserConversation
 from cxas_scrapi.evals.simulation_evals import Step
 from cxas_scrapi.evals.simulation_evals import StepProgress
 from cxas_scrapi.evals.simulation_evals import StepStatus
+from cxas_scrapi.evals.simulation_evals import SimulationEvals
 
 
 def test_llm_user_conversation():
@@ -147,9 +148,6 @@ def test_llm_user_conversation_max_turns():
     mock_genai_client.models.generate_content.assert_not_called()
     assert llm_conv.steps_progress[0].status == StepStatus.NOT_STARTED
 
-
-from cxas_scrapi.evals.simulation_evals import SimulationEvals
-
 @patch("cxas_scrapi.evals.simulation_evals.Sessions")
 @patch("cxas_scrapi.evals.simulation_evals.LLMUserConversation")
 def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
@@ -165,13 +163,17 @@ def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
 
     # Setup mock agent responses
     mock_response_1 = MagicMock()
-    mock_response_1.session.name = "projects/test/locations/us/apps/123-abc/sessions/123"
+    mock_response_1.session.name = (
+        "projects/test/locations/us/apps/123-abc/sessions/123"
+    )
     mock_output_1 = MagicMock()
     mock_output_1.text = "Where to?"
     mock_response_1.outputs = [mock_output_1]
 
     mock_response_2 = MagicMock()
-    mock_response_2.session.name = "projects/test/locations/us/apps/123-abc/sessions/123"
+    mock_response_2.session.name = (
+        "projects/test/locations/us/apps/123-abc/sessions/123"
+    )
     mock_output_2 = MagicMock()
     mock_output_2.text = "Flight booked."
     mock_response_2.outputs = [mock_output_2]
@@ -186,11 +188,16 @@ def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
     # Run the simulation
     test_case = {"steps": []}
     result_conv = simulator.simulate_conversation(
-        test_case=test_case, initial_utterance="Hi", session_id="123", console_logging=False
+        test_case=test_case,
+        initial_utterance="Hi",
+        session_id="123",
+        console_logging=False,
     )
 
     # Assertions
-    mock_sessions.run.assert_any_call(session_id="123", text="Hi", modality="text")
+    mock_sessions.run.assert_any_call(
+        session_id="123", text="Hi", modality="text"
+    )
     mock_sessions.run.assert_any_call(
         session_id="123", text="I want to book a flight", modality="text"
     )
@@ -211,7 +218,8 @@ def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
     ]
     mock_eval_conv.steps_progress = []
 
-    # Mock Response 1 (Diagnostic Info only, simulating audio response text capture)
+    # Mock Response 1 (Diagnostic Info only, simulating audio response
+    # text capture)
     mock_response_1 = MagicMock()
     mock_output_1 = MagicMock()
     mock_output_1.text = "" # Empty high-level text
@@ -244,12 +252,20 @@ def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
 
     test_case = {"steps": []}
     result_conv = simulator.simulate_conversation(
-        test_case=test_case, initial_utterance="Hi", session_id="123", console_logging=False, modality="audio"
+        test_case=test_case,
+        initial_utterance="Hi",
+        session_id="123",
+        console_logging=False,
+        modality="audio",
     )
 
-    mock_sessions.run.assert_any_call(session_id="123", text="Hi", modality="audio")
     mock_sessions.run.assert_any_call(
-        session_id="123", text="I want to book a flight", modality="audio"
+        session_id="123", text="Hi", modality="audio"
+    )
+    mock_sessions.run.assert_any_call(
+        session_id="123",
+        text="I want to book a flight",
+        modality="audio",
     )
 
     # Verify text was extracted from Diagnostic Info
@@ -257,4 +273,113 @@ def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
     mock_eval_conv.next_user_utterance.assert_any_call("Where to?")
     mock_eval_conv.next_user_utterance.assert_any_call("Flight booked.")
     assert mock_sessions.run.call_count == 2
+
+def test_parse_agent_response_standard():
+    mock_response = MagicMock()
+    mock_output = MagicMock()
+    mock_output.text = "Hello there"
+
+    # Mock tool calls
+    mock_tc = MagicMock()
+    mock_tc.tool = "some_tool"
+    mock_tc.args = {"arg": "val"}
+    mock_output.tool_calls.tool_calls = [mock_tc]
+
+    mock_response.outputs = [mock_output]
+
+    app_name = "projects/test/locations/us/apps/123-abc"
+    with patch("cxas_scrapi.evals.simulation_evals.genai.Client"):
+        with patch("cxas_scrapi.core.apps.AgentServiceClient"):
+            simulator = SimulationEvals(app_name=app_name)
+
+    with patch(
+        "cxas_scrapi.evals.simulation_evals.Sessions._expand_pb_struct",
+        return_value={"arg": "val"},
+    ):
+        agent_text, trace_chunks, session_ended = (
+            simulator._parse_agent_response(mock_response)
+        )
+
+    assert agent_text == "Hello there"
+    assert any("Tool Call (Output): some_tool" in c for c in trace_chunks)
+    assert not session_ended
+
+def test_parse_agent_response_diagnostic():
+    mock_response = MagicMock()
+    mock_output = MagicMock()
+    mock_output.text = ""
+
+    mock_msg = MagicMock()
+    mock_msg.role = "model"
+    mock_chunk = MagicMock()
+    mock_chunk._pb.WhichOneof.return_value = "text"
+    mock_chunk.text = "Hello from diag"
+    mock_msg.chunks = [mock_chunk]
+
+    mock_diag = MagicMock()
+    mock_diag.messages = [mock_msg]
+    mock_output.diagnostic_info = mock_diag
+    mock_response.outputs = [mock_output]
+
+    app_name = "projects/test/locations/us/apps/123-abc"
+    with patch("cxas_scrapi.evals.simulation_evals.genai.Client"):
+        with patch("cxas_scrapi.core.apps.AgentServiceClient"):
+            simulator = SimulationEvals(app_name=app_name)
+
+    agent_text, trace_chunks, session_ended = (
+        simulator._parse_agent_response(mock_response)
+    )
+
+    assert agent_text == "Hello from diag"
+    assert any("Agent Text (Diag): Hello from diag" in c for c in trace_chunks)
+    assert not session_ended
+
+def test_evaluate_expectations():
+    app_name = "projects/test/locations/us/apps/123-abc"
+    with patch(
+        "cxas_scrapi.evals.simulation_evals.genai.Client"
+    ) as mock_genai_client_class:
+        mock_genai_client = mock_genai_client_class.return_value
+        with patch("cxas_scrapi.core.apps.AgentServiceClient"):
+            simulator = SimulationEvals(app_name=app_name)
+
+    # Setup mock output for Gemini
+    mock_output = MagicMock()
+    from cxas_scrapi.evals.simulation_evals import (
+        ExpectationResult, ExpectationStatus
+    )
+    mock_output.results = [
+        ExpectationResult(
+            expectation="Exp 1",
+            status=ExpectationStatus.MET,
+            justification="Just 1",
+        )
+    ]
+    mock_genai_client.models.generate_content.return_value.parsed = mock_output
+
+    eval_conv = MagicMock()
+    eval_conv.expectations = ["Exp 1"]
+
+    simulator._evaluate_expectations(eval_conv, ["Trace"], "model", False)
+
+    assert eval_conv.expectation_results == mock_output.results
+
+def test_simulation_report_rendering():
+    import pandas as pd
+    from cxas_scrapi.evals.simulation_evals import SimulationReport
+
+    goals_df = pd.DataFrame([{"goal": "Goal 1", "status": "Met"}])
+    expectations_df = pd.DataFrame([{"expectation": "Exp 1", "status": "Met"}])
+
+    report = SimulationReport(goals_df, expectations_df)
+
+    # Test __str__
+    str_report = str(report)
+    assert "Goal Progress" in str_report
+    assert "Expectations" in str_report
+
+    # Test _repr_html_
+    html_report = report._repr_html_()
+    assert "<h3>Goal Progress</h3>" in html_report
+    assert "<h3>Expectations</h3>" in html_report
 

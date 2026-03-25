@@ -14,13 +14,10 @@
 
 """Eval conversation classes for CXAS Scrapi."""
 
-import logging
 import time
 from typing import Dict, List, Optional, Any
 
 import json
-import re
-import warnings
 import uuid
 
 from google import genai
@@ -31,6 +28,10 @@ import pandas as pd
 from cxas_scrapi.prompts import llm_user_prompts
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.sessions import Sessions
+
+_FIRST_UTTERANCE = "Hi"
+_MAX_TURNS = 30
+_DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
 
 
 class Step(pydantic.BaseModel):
@@ -53,9 +54,14 @@ class StepProgress(pydantic.BaseModel):
     justification: str = ""
 
 
+class ExpectationStatus(str, enum.Enum):
+    MET = "Met"
+    NOT_MET = "Not Met"
+
+
 class ExpectationResult(pydantic.BaseModel):
     expectation: str
-    status: str = "Not Met"
+    status: ExpectationStatus = ExpectationStatus.NOT_MET
     justification: str = ""
 
 
@@ -66,14 +72,21 @@ class ExpectationOutput(pydantic.BaseModel):
 class SimulationReport:
     """A report containing both Goals and Expectations DataFrames."""
 
-    def __init__(self, goals_df: pd.DataFrame, expectations_df: Optional[pd.DataFrame] = None):
+    def __init__(
+        self,
+        goals_df: pd.DataFrame,
+        expectations_df: Optional[pd.DataFrame] = None,
+    ):
         self.goals_df = goals_df
         self.expectations_df = expectations_df
 
     def __str__(self):
         res = "--- Goal Progress ---\n" + self.goals_df.to_string()
         if self.expectations_df is not None:
-            res += "\n\n--- Expectations ---\n" + self.expectations_df.to_string()
+            res += (
+                "\n\n--- Expectations ---\n"
+                + self.expectations_df.to_string()
+            )
         return res
 
     def _repr_html_(self):
@@ -81,11 +94,6 @@ class SimulationReport:
         if self.expectations_df is not None:
             html += "<h3>Expectations</h3>" + self.expectations_df._repr_html_()
         return html
-
-
-_FIRST_UTTERANCE = "Hi"
-_MAX_TURNS = 30
-_DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
 
 
 class Conversation:
@@ -158,11 +166,13 @@ class LLMUserConversation(Conversation):
         """Generates the next user utterance based on the conversation history.
 
         This method uses an LLM to determine the next utterance, considering the
-        current turn, maximum turns, and the completion status of the defined steps.
+        current turn, maximum turns, and the completion status of the
+        defined steps.
 
         Returns:
           The generated next user utterance as a string. Returns an empty string
-          if the conversation has reached the maximum number of turns or all steps
+          if the conversation has reached the maximum number of turns or
+          all steps
           are completed.
         """
         if self.current_turn == 0:
@@ -214,7 +224,10 @@ class LLMUserConversation(Conversation):
         return next_user_utterance
 
     def generate_report(self) -> Any:
-        """Generates a pandas DataFrame report of the conversation step progress."""
+        """
+        Generates a pandas DataFrame report of the conversation step
+        progress.
+        """
         records = []
         for prog in self.steps_progress:
             records.append(
@@ -234,7 +247,7 @@ class LLMUserConversation(Conversation):
                 exp_records.append(
                     {
                         "expectation": res.expectation,
-                        "status": res.status,
+                        "status": res.status.value,
                         "justification": res.justification,
                     }
                 )
@@ -244,7 +257,11 @@ class LLMUserConversation(Conversation):
 
 
 class SimulationEvals(Apps):
-    """Wrapper class to simulate entire multi-turn conversations with a CXAS Agent."""
+    """Wrapper class to simulate entire multi-turn conversations with a
+    CXAS Agent."""
+
+    max_retries: int = 3
+    retry_delay_base: int = 2
 
     def __init__(self, app_name: str, **kwargs):
         self.app_name = app_name
@@ -253,7 +270,8 @@ class SimulationEvals(Apps):
         super().__init__(project_id=project_id, location=location, **kwargs)
         self.sessions_client = Sessions(app_name, **kwargs)
 
-        # Vertex AI requires a specific region (e.g. global), whereas CXAS Apps use 'us' or 'eu'
+        # Vertex AI requires a specific region (e.g. global), whereas CXAS
+        # Apps use 'us' or 'eu'
         location_map = {"us": "global", "global": "global", "eu": "global"}
         vertex_location = location_map.get(location, location)
 
@@ -264,144 +282,99 @@ class SimulationEvals(Apps):
             credentials=self.creds,
         )
 
-    def simulate_conversation(
-        self,
-        test_case: Dict[str, Any],
-        initial_utterance: str = _FIRST_UTTERANCE,
-        model: str = _DEFAULT_GEMINI_MODEL,
-        session_id: str = str(uuid.uuid4()),
-        console_logging: bool = True,
-        modality: str = "text",
-        **kwargs,
-    ) -> LLMUserConversation:
-        """Runs the simulated conversation loop.
+    def _parse_agent_response(
+        self, response: Any
+    ) -> tuple[str, list[str], bool]:
+        """Parses the agent response to extract text and trace information.
 
-        Args:
-            test_case: The test case dictionary defining evaluation steps.
-            initial_utterance: The starting user string (default "Hi").
-            model: The Gemini model used for evaluating turns.
-            console_logging: Whether to print interaction transcript to the console.
+        Returns:
+            A tuple of (agent_text, trace_chunks, session_ended)
         """
-        eval_conv = LLMUserConversation(
-            genai_client=self.genai_client,
-            genai_model=model,
-            test_case=test_case,
-        )
+        agent_text = ""
+        session_ended = False
+        trace_chunks = []
 
-        if console_logging:
-            print("Starting simulated conversation...")
+        for output in response.outputs:
+            if hasattr(output, "text") and output.text:
+                agent_text += output.text + " "
+                trace_chunks.append(f"Agent Text: {output.text}")
 
-        # Initialize the first turn manually
-        user_utterance = initial_utterance
-        eval_conv._add_user_utterance(user_utterance)
-        eval_conv.current_turn += 1
-
-        detailed_trace = []
-        detailed_trace.append(f"User: {user_utterance}")
-
-        while user_utterance:
-            # Send utterance to the CES Agent with exponential backoff for transient 500s
-            max_retries = 3
-            response = None
-            for attempt in range(max_retries):
-                try:
-                    response = self.sessions_client.run(
-                        session_id=session_id,
-                        text=user_utterance,
-                        modality=modality,
+            tool_calls_msg = getattr(output, "tool_calls", None)
+            if tool_calls_msg and hasattr(tool_calls_msg, "tool_calls"):
+                for tc in tool_calls_msg.tool_calls:
+                    tool_name = getattr(tc, "tool", "") or getattr(
+                        tc, "display_name", ""
                     )
-                    break
-                except Exception as e:
-                    if attempt == max_retries - 1:
-                        raise e
-                    if console_logging:
-                        print(
-                            f"Warning: CXAS Agent request failed ({e}). Retrying in {2**attempt}s..."
+                    expanded_args = Sessions._expand_pb_struct(tc.args)
+                    trace_chunks.append(
+                        f"Tool Call (Output): {tool_name} "
+                        f"with args {expanded_args}"
+                    )
+                    if "end_session" in tool_name:
+                        session_ended = True
+
+            diagnostic_info = getattr(output, "diagnostic_info", None)
+            if diagnostic_info and hasattr(diagnostic_info, "messages"):
+                for message in diagnostic_info.messages:
+                    for chunk in getattr(message, "chunks", []):
+                        add_text, ended = self._process_diagnostic_chunk(
+                            chunk, trace_chunks
                         )
-                    time.sleep(2**attempt)
-
-            if not response:
-                break
-
-            # Execute rich HTML trace rendering if logging is enabled
-            if console_logging:
-                self.sessions_client.parse_result(response)
-
-            # Extract text response and check for end_session tool calls
-            agent_text = ""
-            session_ended = False
-            trace_chunks = []
-
-            for output in response.outputs:
-                if hasattr(output, "text") and output.text:
-                    agent_text += output.text + " "
-                    trace_chunks.append(f"Agent Text: {output.text}")
-
-                tool_calls_msg = getattr(output, "tool_calls", None)
-                if tool_calls_msg and hasattr(tool_calls_msg, "tool_calls"):
-                    for tc in tool_calls_msg.tool_calls:
-                        tool_name = getattr(tc, "tool", "") or getattr(
-                            tc, "display_name", ""
-                        )
-                        expanded_args = Sessions._expand_pb_struct(tc.args)
-                        trace_chunks.append(f"Tool Call (Output): {tool_name} with args {expanded_args}")
-                        if "end_session" in tool_name:
+                        agent_text += add_text
+                        if ended:
                             session_ended = True
 
-                # Also check diagnostic_info for internal agent tools like end_session
-                diagnostic_info = getattr(output, "diagnostic_info", None)
-                if diagnostic_info and hasattr(diagnostic_info, "messages"):
-                    for message in diagnostic_info.messages:
-                        for chunk in getattr(message, "chunks", []):
-                            chunk_type = (
-                                chunk._pb.WhichOneof("data")
-                                if hasattr(chunk, "_pb")
-                                else None
-                            )
-                            if chunk_type == "tool_call":
-                                tc = chunk.tool_call
-                                tool_name = getattr(tc, "tool", "") or getattr(
-                                    tc, "display_name", ""
-                                )
-                                expanded_args = Sessions._expand_pb_struct(tc.args)
-                                trace_chunks.append(f"Tool Call: {tool_name} with args {expanded_args}")
-                                if "end_session" in tool_name:
-                                    session_ended = True
-                            elif chunk_type == "tool_response":
-                                tr = chunk.tool_response
-                                tool_name = tr.tool or tr.display_name
-                                expanded_response = Sessions._expand_pb_struct(tr.response)
-                                trace_chunks.append(f"Tool Response: {tool_name} with result {expanded_response}")
-                            elif chunk_type == "text":
-                                agent_text += chunk.text + " "
-                                trace_chunks.append(f"Agent Text (Diag): {chunk.text}")
+        return agent_text.strip(), trace_chunks, session_ended
 
-            agent_text = agent_text.strip()
-            detailed_trace.append("\n".join(trace_chunks))
+    def _process_diagnostic_chunk(
+        self, chunk: Any, trace_chunks: list[str]
+    ) -> tuple[str, bool]:
+        """Processes a single diagnostic chunk and updates trace_chunks."""
+        agent_text_add = ""
+        session_ended = False
 
-            if session_ended:
-                if console_logging:
-                    print(
-                        "\nSession has been closed by the Agent via end_session tool."
-                    )
-                break
+        chunk_type = (
+            chunk._pb.WhichOneof("data")
+            if hasattr(chunk, "_pb")
+            else None
+        )
+        if chunk_type == "tool_call":
+            tc = chunk.tool_call
+            tool_name = getattr(tc, "tool", "") or getattr(
+                tc, "display_name", ""
+            )
+            expanded_args = Sessions._expand_pb_struct(tc.args)
+            trace_chunks.append(
+                f"Tool Call: {tool_name} with args "
+                f"{expanded_args}"
+            )
+            if "end_session" in tool_name:
+                session_ended = True
+        elif chunk_type == "tool_response":
+            tr = chunk.tool_response
+            tool_name = tr.tool or tr.display_name
+            expanded_response = Sessions._expand_pb_struct(tr.response)
+            trace_chunks.append(
+                f"Tool Response: {tool_name} with result "
+                f"{expanded_response}"
+            )
+        elif chunk_type == "text":
+            agent_text_add = chunk.text + " "
+            trace_chunks.append(f"Agent Text (Diag): {chunk.text}")
 
-            # Get the next simulated user utterance based on the agent's response
-            user_utterance = eval_conv.next_user_utterance(agent_text)
-            if user_utterance:
-                detailed_trace.append(f"User: {user_utterance}")
+        return agent_text_add, session_ended
 
-        if console_logging:
-            print("\n--- Conversation Complete ---")
-            print("Final Step Progress:")
-            for step_prog in eval_conv.steps_progress:
-                print(
-                    f"- Goal: {step_prog.step.goal} | Status: {step_prog.status.value}"
-                )
-                if step_prog.justification:
-                    print(f"  Justification: {step_prog.justification}")
+    def _evaluate_expectations(
+        self,
+        eval_conv: LLMUserConversation,
+        detailed_trace: list[str],
+        model: str,
+        console_logging: bool,
+    ) -> None:
+        """Evaluates expectations against the conversation trace.
 
-        # Evaluate Expectations
+        Modifies `eval_conv.expectation_results` in place.
+        """
         if eval_conv.expectations and isinstance(eval_conv.expectations, list):
             if console_logging:
                 print("\nEvaluating Expectations...")
@@ -427,5 +400,103 @@ class SimulationEvals(Apps):
             except Exception as e:
                 if console_logging:
                     print(f"Error evaluating expectations: {e}")
+
+
+    def simulate_conversation(
+        self,
+        test_case: Dict[str, Any],
+        initial_utterance: str = _FIRST_UTTERANCE,
+        model: str = _DEFAULT_GEMINI_MODEL,
+        session_id: str = str(uuid.uuid4()),
+        console_logging: bool = True,
+        modality: str = "text",
+    ) -> LLMUserConversation:
+        """Runs the simulated conversation loop.
+
+        Args:
+            test_case: The test case dictionary defining evaluation steps.
+            initial_utterance: The starting user string (default "Hi").
+            model: The Gemini model used for evaluating turns.
+            console_logging: Whether to print interaction transcript to
+                the console.
+        """
+        eval_conv = LLMUserConversation(
+            genai_client=self.genai_client,
+            genai_model=model,
+            test_case=test_case,
+        )
+
+        if console_logging:
+            print("Starting simulated conversation...")
+
+        # Initialize the first turn manually
+        user_utterance = initial_utterance
+        eval_conv._add_user_utterance(user_utterance)
+        eval_conv.current_turn += 1
+
+        detailed_trace = []
+        detailed_trace.append(f"User: {user_utterance}")
+
+        while user_utterance:
+            # Send utterance to the CES Agent with exponential backoff for
+            # transient 500s
+            for attempt in range(self.max_retries):
+                try:
+                    response = self.sessions_client.run(
+                        session_id=session_id,
+                        text=user_utterance,
+                        modality=modality,
+                    )
+                    break
+                except Exception as e:
+                    if attempt == self.max_retries - 1:
+                        raise e
+                    if console_logging:
+                        print(
+                            "Warning: CXAS Agent request failed "
+                            f"({e}). Retrying in "
+                            f"{self.retry_delay_base**attempt}s..."
+                        )
+                    time.sleep(self.retry_delay_base**attempt)
+
+            if not response:
+                break
+
+            if console_logging:
+                self.sessions_client.parse_result(response)
+
+            agent_text, trace_chunks, session_ended = (
+                self._parse_agent_response(response)
+            )
+            detailed_trace.append("\n".join(trace_chunks))
+
+            if session_ended:
+                if console_logging:
+                    print(
+                        "\nSession has been closed by the Agent via "
+                        "end_session tool."
+                    )
+                break
+
+            # Get the next simulated user utterance based on the agent's
+            # response
+            user_utterance = eval_conv.next_user_utterance(agent_text)
+            if user_utterance:
+                detailed_trace.append(f"User: {user_utterance}")
+
+        if console_logging:
+            print("\n--- Conversation Complete ---")
+            print("Final Step Progress:")
+            for step_prog in eval_conv.steps_progress:
+                print(
+                    f"- Goal: {step_prog.step.goal} | "
+                    f"Status: {step_prog.status.value}"
+                )
+                if step_prog.justification:
+                    print(f"  Justification: {step_prog.justification}")
+
+        self._evaluate_expectations(
+            eval_conv, detailed_trace, model, console_logging
+        )
 
         return eval_conv
