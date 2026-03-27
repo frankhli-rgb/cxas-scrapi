@@ -255,7 +255,9 @@ class SimulationEvals(Apps):
             for attempt in range(max_retries):
                 try:
                     response = self.sessions_client.run(
-                        session_id=session_id, text=user_utterance, modality=modality
+                        session_id=session_id,
+                        text=user_utterance,
+                        modality=modality,
                     )
                     break
                 except Exception as e:
@@ -292,7 +294,11 @@ class SimulationEvals(Apps):
                                     agent_text += chunk.text + " "
                                     has_diag_text = True
 
-                if not has_diag_text and hasattr(output, "text") and output.text:
+                if (
+                    not has_diag_text
+                    and hasattr(output, "text")
+                    and output.text
+                ):
                     agent_text += output.text + " "
 
                 tool_calls_msg = getattr(output, "tool_calls", None)

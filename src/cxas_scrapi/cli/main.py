@@ -75,6 +75,7 @@ def export_eval(args: argparse.Namespace) -> None:
         print(f"Failed to export evaluation: {e}")
         sys.exit(1)
 
+
 def push_eval(args: argparse.Namespace) -> None:
     """Handles the 'push' command."""
     print(f"Pushing evaluation(s) from {args.file} to App: {args.app_name}")
@@ -131,7 +132,12 @@ def wait_for_evaluation_completion(
                 completed_results = []
                 for run_id in new_ids:
                     df_new = df_current[df_current["eval_result_id"] == run_id]
-                    exec_state = df_new["execution_state"].iloc[0] if not df_new.empty and "execution_state" in df_new.columns else "COMPLETED"
+                    exec_state = (
+                        df_new["execution_state"].iloc[0]
+                        if not df_new.empty
+                        and "execution_state" in df_new.columns
+                        else "COMPLETED"
+                    )
 
                     if exec_state not in ("COMPLETED", "ERROR"):
                         all_completed = False
@@ -143,7 +149,9 @@ def wait_for_evaluation_completion(
 
                 if all_completed:
                     print(f"All {len(new_ids)} evaluations completed.")
-                    return eval_utils.evals_to_dataframe(results=completed_results)
+                    return eval_utils.evals_to_dataframe(
+                        results=completed_results
+                    )
 
         except Exception as e:
             print(f"Error checking evaluation status: {e}")
@@ -176,14 +184,21 @@ def filter_metrics_and_assess(
             eval_stat = str(row.get("evaluation_status", "")).upper()
             exec_stat = str(row.get("execution_state", "")).upper()
 
-            if exec_stat in ("ERROR", "ERRORED") or eval_stat in ("ERROR", "ERRORED"):
+            if exec_stat in ("ERROR", "ERRORED") or eval_stat in (
+                "ERROR",
+                "ERRORED",
+            ):
                 num_error += 1
             elif eval_stat in ("PASS", "PASSED", "✅ PASSED"):
                 num_passed += 1
             else:
                 num_failed += 1
 
-    overall_status = "PASS" if num_failed == 0 and num_error == 0 and num_passed > 0 else "FAIL" if (num_failed > 0 or num_error > 0) else "UNKNOWN"
+    overall_status = (
+        "PASS"
+        if num_failed == 0 and num_error == 0 and num_passed > 0
+        else "FAIL" if (num_failed > 0 or num_error > 0) else "UNKNOWN"
+    )
 
     print(f"\n--- Evaluation Status: {overall_status} ---")
     print(f"Passed: {num_passed}")
@@ -243,9 +258,7 @@ def filter_metrics_and_assess(
 def run_eval(args: argparse.Namespace) -> None:
     """Handles the 'run' command."""
 
-    print(
-        f"Triggering evaluation for App: {args.app_name}"
-    )
+    print(f"Triggering evaluation for App: {args.app_name}")
     eval_client = Evaluations(app_name=args.app_name)
     eval_utils = EvalUtils(app_name=args.app_name)
 
@@ -263,7 +276,9 @@ def run_eval(args: argparse.Namespace) -> None:
             sys.exit(1)
 
         if args.display_name_prefix:
-            print(f"Fetching tests matching prefix: '{args.display_name_prefix}'...")
+            print(
+                f"Fetching tests matching prefix: '{args.display_name_prefix}'..."
+            )
         elif args.tags:
             print(f"Fetching tests matching tags: {args.tags}...")
         all_evals = eval_client.list_evaluations(app_name=args.app_name)
@@ -271,7 +286,9 @@ def run_eval(args: argparse.Namespace) -> None:
         for eval_obj in all_evals:
             match = False
 
-            if args.display_name_prefix and eval_obj.display_name.startswith(args.display_name_prefix):
+            if args.display_name_prefix and eval_obj.display_name.startswith(
+                args.display_name_prefix
+            ):
                 match = True
 
             # Assuming tags are accessible as a list/repeated field on the Evaluation object
@@ -284,7 +301,9 @@ def run_eval(args: argparse.Namespace) -> None:
                 evaluations_to_run.append(eval_obj.name)
 
         if not evaluations_to_run:
-            print("No matching tests found for the given prefix or tags. Aborting run.")
+            print(
+                "No matching tests found for the given prefix or tags. Aborting run."
+            )
             sys.exit(0)
 
         print(f"Found {len(evaluations_to_run)} matching test(s) to run.")
@@ -303,7 +322,9 @@ def run_eval(args: argparse.Namespace) -> None:
             sys.exit(1)
 
         if args.display_name_prefix:
-            print(f"Fetching tests matching prefix: '{args.display_name_prefix}'...")
+            print(
+                f"Fetching tests matching prefix: '{args.display_name_prefix}'..."
+            )
         elif args.tags:
             print(f"Fetching tests matching tags: {args.tags}...")
         all_evals = eval_client.list_evaluations(app_name=args.app_name)
@@ -311,7 +332,9 @@ def run_eval(args: argparse.Namespace) -> None:
         for eval_obj in all_evals:
             match = False
 
-            if args.display_name_prefix and eval_obj.display_name.startswith(args.display_name_prefix):
+            if args.display_name_prefix and eval_obj.display_name.startswith(
+                args.display_name_prefix
+            ):
                 match = True
 
             # Assuming tags are accessible as a list/repeated field on the Evaluation object
@@ -324,7 +347,9 @@ def run_eval(args: argparse.Namespace) -> None:
                 evaluations_to_run.append(eval_obj.name)
 
         if not evaluations_to_run:
-            print("No matching tests found for the given prefix or tags. Aborting run.")
+            print(
+                "No matching tests found for the given prefix or tags. Aborting run."
+            )
             sys.exit(0)
 
         print(f"Found {len(evaluations_to_run)} matching test(s) to run.")
@@ -347,7 +372,10 @@ def run_eval(args: argparse.Namespace) -> None:
         # Step 3: Wait and backoff on pending evaluations.
         if args.wait:
             df_new_run = wait_for_evaluation_completion(
-                eval_utils, old_result_ids, args.app_name, expected_count=len(evaluations_to_run)
+                eval_utils,
+                old_result_ids,
+                args.app_name,
+                expected_count=len(evaluations_to_run),
             )
             pass_status = filter_metrics_and_assess(
                 df_new_run, args.filter_auto_metrics
@@ -362,12 +390,19 @@ def run_eval(args: argparse.Namespace) -> None:
                     print("\n--- Failure Details ---")
                     grouped = df_failures.groupby("display_name", sort=False)
                     for disp, group_df in grouped:
-                        is_err = any(row.get('failure_type') == 'System Engine Error' for _, row in group_df.iterrows())
+                        is_err = any(
+                            row.get("failure_type") == "System Engine Error"
+                            for _, row in group_df.iterrows()
+                        )
                         title_str = "Errored" if is_err else "Failed"
                         print(f"\n{disp} {title_str}")
 
-                        sys_errors = group_df[group_df['failure_type'] == 'System Engine Error']
-                        normal_fails = group_df[group_df['failure_type'] != 'System Engine Error']
+                        sys_errors = group_df[
+                            group_df["failure_type"] == "System Engine Error"
+                        ]
+                        normal_fails = group_df[
+                            group_df["failure_type"] != "System Engine Error"
+                        ]
 
                         for _, row in sys_errors.iterrows():
                             print(f"- {row.get('actual')}\n")
@@ -380,7 +415,7 @@ def run_eval(args: argparse.Namespace) -> None:
                             print(f"- Expected: {row.get('expected')}")
                             print(f"- Actual  : {row.get('actual')}")
 
-                            score = row.get('score')
+                            score = row.get("score")
                             if pd.notnull(score):
                                 print(f"- Score   : {score}")
                             print()

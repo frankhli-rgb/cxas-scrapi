@@ -101,7 +101,7 @@ class Common:
             sdk_version = importlib.metadata.version("cxas-scrapi")
         except importlib.metadata.PackageNotFoundError:
             sdk_version = "unknown"
-        
+
         self.client_info = ClientInfo(user_agent=f"cxas-scrapi/{sdk_version}")
 
     @staticmethod

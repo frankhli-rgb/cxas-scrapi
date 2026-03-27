@@ -84,11 +84,9 @@ class Agents(Apps):
                     agents_dict[name] = display_name
         return agents_dict
 
-    def get_agent(self, agent_id: str) -> types.Agent:
-        """Gets a specific agent."""
-        request = types.GetAgentRequest(
-            name=f"{self.app_name}/agents/{agent_id}"
-        )
+    def get_agent(self, agent_name: str) -> types.Agent:
+        """Gets a specific agent by its full resource name."""
+        request = types.GetAgentRequest(name=agent_name)
         return self.client.get_agent(request=request)
 
     def create_agent(
@@ -201,14 +199,14 @@ class Agents(Apps):
         )
         return self.client.create_agent(request=request)
 
-    def update_agent(self, agent_id: str, **kwargs: Any) -> types.Agent:
+    def update_agent(self, agent_name: str, **kwargs: Any) -> types.Agent:
         """Updates specific fields using PATCH behavior."""
         if not kwargs:
-            return self.get_agent(agent_id)
+            return self.get_agent(agent_name)
 
         # Construct Agent object with only updated fields (for the body)
         agent_data = kwargs.copy()
-        agent_data["name"] = f"{self.app_name}/agents/{agent_id}"
+        agent_data["name"] = agent_name
 
         # Update Mask
         paths = list(kwargs.keys())
@@ -217,9 +215,7 @@ class Agents(Apps):
         request = types.UpdateAgentRequest(agent=agent_data, update_mask=mask)
         return self.client.update_agent(request=request)
 
-    def delete_agent(self, agent_id: str):
+    def delete_agent(self, agent_name: str):
         """Deletes an agent."""
-        request = types.DeleteAgentRequest(
-            name=f"{self.app_name}/agents/{agent_id}"
-        )
+        request = types.DeleteAgentRequest(name=agent_name)
         self.client.delete_agent(request=request)

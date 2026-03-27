@@ -51,21 +51,19 @@ def test_evals_to_dataframe_with_data():
         "name": "eval/123",
         "evaluation_status": "PASS",
         "golden_result": {
-            "metrics": {
-                "semantic_similarity_result": {"score": 5},
-                "overall_tool_invocation_result": {
-                    "tool_invocation_score": 1.0
-                },
-                "expectation_results": [
-                    {
-                        "expectation": "Agent should pass",
-                        "met_count": 0,
-                        "not_met_count": 1,
-                        "met_percentage": 0.0,
-                        "not_met_percentage": 100.0,
-                    }
-                ],
-            }
+            "semantic_similarity_result": {"score": 5},
+            "overall_tool_invocation_result": {
+                "tool_invocation_score": 1.0
+            },
+            "expectation_results": [
+                {
+                    "expectation": "Agent should pass",
+                    "met_count": 0,
+                    "not_met_count": 1,
+                    "met_percentage": 0.0,
+                    "not_met_percentage": 100.0,
+                }
+            ],
         },
     }
 
@@ -127,7 +125,7 @@ def test_load_golden_eval_from_compressed_yaml():
 
         # Verify "Unlock_Intent1" (the first conversation) was picked up
         assert result["displayName"] == "Unlock_Intent1"
-        assert result["tags"] == ["direct", "p0"]
+        assert result["tags"] == ["direct", "p0", "compressed_example"]
 
         # Verify turns
         turns = result["golden"]["turns"]

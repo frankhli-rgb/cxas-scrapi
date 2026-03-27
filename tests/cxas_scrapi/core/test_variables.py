@@ -26,7 +26,7 @@ def test_list_variables(mock_get_app):
     v = Variables("projects/p/locations/l/apps/A")
     res = v.list_variables()
     assert res == ["var1", "var2"]
-    mock_get_app.assert_called_once_with("A")
+    mock_get_app.assert_called_once_with("projects/p/locations/l/apps/A")
 
 
 @patch("cxas_scrapi.core.variables.Variables.get_app")

@@ -155,9 +155,13 @@ def app_push(args: argparse.Namespace) -> Optional[str]:
         if os.path.exists(env_file):
             dst_path = os.path.join(inner_dir, "environment.json")
             shutil.copy2(env_file, dst_path)
-            print(f"Included custom environment file from {env_file} as environment.json")
+            print(
+                f"Included custom environment file from {env_file} as environment.json"
+            )
         else:
-            print(f"Warning: Custom environment file '{env_file}' not found. Skipping.")
+            print(
+                f"Warning: Custom environment file '{env_file}' not found. Skipping."
+            )
 
     # Zip the filtered agent directory
     temp_zip = tempfile.mktemp(suffix=".zip")

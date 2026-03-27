@@ -108,7 +108,7 @@ class Variables(Apps):
 
     def list_variables(self) -> List[Any]:
         """Lists variables within a specific app."""
-        app = self.get_app(self.app_id)
+        app = self.get_app(self.app_name)
         return list(app.variable_declarations)
 
     def get_variable(self, variable_name: str) -> Optional[Any]:
@@ -129,7 +129,7 @@ class Variables(Apps):
     ) -> None:
         """Creates a new variable within a specified app."""
         self._check_schema_type(variable_type)
-        app = self.get_app(self.app_id)
+        app = self.get_app(self.app_name)
         vars_list = list(app.variable_declarations)
 
         for var in vars_list:
@@ -143,7 +143,7 @@ class Variables(Apps):
         )
 
         vars_list.append(new_var)
-        self.update_app(self.app_id, variable_declarations=vars_list)
+        self.update_app(self.app_name, variable_declarations=vars_list)
         logging.info(f"Variable '{variable_name}' created successfully.")
 
     def update_variable(
@@ -157,7 +157,7 @@ class Variables(Apps):
         Acceptable types: STRING, INTEGER, NUMBER, BOOLEAN, ARRAY, OBJECT
         """
         self._check_schema_type(variable_type)
-        app = self.get_app(self.app_id)
+        app = self.get_app(self.app_name)
         vars_list = list(app.variable_declarations)
 
         updated = False
@@ -181,19 +181,19 @@ class Variables(Apps):
             )
             vars_list.append(new_var)
 
-        self.update_app(self.app_id, variable_declarations=vars_list)
+        self.update_app(self.app_name, variable_declarations=vars_list)
         logging.info(f"Variable '{variable_name}' set successfully.")
 
     def delete_variable(self, variable_name: str) -> None:
         """Deletes a specific variable within a specified app."""
-        app = self.get_app(self.app_id)
+        app = self.get_app(self.app_name)
         vars_list = list(app.variable_declarations)
 
         original_len = len(vars_list)
         vars_list = [v for v in vars_list if v.name != variable_name]
 
         if len(vars_list) < original_len:
-            self.update_app(self.app_id, variable_declarations=vars_list)
+            self.update_app(self.app_name, variable_declarations=vars_list)
             logging.info(f"Variable '{variable_name}' deleted successfully.")
         else:
             logging.warning(f"Variable '{variable_name}' not found.")

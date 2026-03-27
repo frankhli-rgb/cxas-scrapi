@@ -93,14 +93,14 @@ def test_import_app_validation(mock_client_cls):
     apps_client = Apps(project_id="mock-project", location="us", creds=MagicMock())
     
     # Test valid source (using app_content) for import_app
-    apps_client.import_app(app_id="test", app_content=b"dummycontent")
+    apps_client.import_app(app_name="projects/mock-project/locations/us/apps/test", app_content=b"dummycontent")
     
     # Test valid source (using gcs_uri) for import_as_new_app
     apps_client.import_as_new_app(display_name="test", gcs_uri="gs://bucket/app.zip")
     
     # Test invalid: providing multiple sources (import_app)
     with pytest.raises(ValueError, match="Exactly one of"):
-        apps_client.import_app(app_id="test", app_content=b"content", gcs_uri="gs://foo/bar")
+        apps_client.import_app(app_name="projects/mock-project/locations/us/apps/test", app_content=b"content", gcs_uri="gs://foo/bar")
         
     # Test invalid: providing no sources (import_as_new_app)
     with pytest.raises(ValueError, match="Exactly one of"):
@@ -113,7 +113,7 @@ def test_import_app_local_file(mock_client_cls, mock_import_app_req, mock_open):
     apps_client = Apps(project_id="mock-project", location="us", creds=MagicMock())
     mock_open.return_value.__enter__.return_value.read.return_value = b"local_file_content"
     
-    apps_client.import_app(app_id="test", local_path="/fake/path/app.zip")
+    apps_client.import_app(app_name="projects/mock-project/locations/us/apps/test", local_path="/fake/path/app.zip")
     mock_open.assert_called_once_with("/fake/path/app.zip", "rb")
     
     # Assert that ImportAppRequest was instantiated with the correct arguments
@@ -129,13 +129,13 @@ def test_import_app_conflict_strategy(mock_strategy_enum, mock_client_cls, mock_
     apps_client = Apps(project_id="mock-project", location="us", creds=MagicMock())
     
     # Test valid strategy definition
-    apps_client.import_app(app_id="test", app_content=b"content", conflict_strategy="REPLACE")
+    apps_client.import_app(app_name="projects/mock-project/locations/us/apps/test", app_content=b"content", conflict_strategy="REPLACE")
     kwargs = mock_import_app_req.call_args[1]
     assert "import_options" in kwargs
     
     # Test invalid strategy
     with pytest.raises(ValueError, match="must be either 'REPLACE' or 'OVERWRITE'"):
-        apps_client.import_app(app_id="test", app_content=b"content", conflict_strategy="INVALID")
+        apps_client.import_app(app_name="projects/mock-project/locations/us/apps/test", app_content=b"content", conflict_strategy="INVALID")
 
 @patch("cxas_scrapi.core.apps.types.ImportAppRequest")
 @patch("cxas_scrapi.core.apps.AgentServiceClient")
@@ -143,7 +143,7 @@ def test_import_app_backward_compatibility(mock_client_cls, mock_import_app_req)
     apps_client = Apps(project_id="mock-project", location="us", creds=MagicMock())
     
     with patch("cxas_scrapi.core.apps.types.ImportAppRequest.ImportOptions") as mock_import_options:
-        apps_client.import_app(app_id="target-id", app_content=b"content")
+        apps_client.import_app(app_name="projects/mock-project/locations/us/apps/target-id", app_content=b"content")
         
         kwargs = mock_import_app_req.call_args[1]
         assert kwargs.get("app_id") == "target-id"
@@ -171,7 +171,7 @@ def test_export_app_standard(mock_client_cls, mock_export_app_req):
     mock_operation = MagicMock()
     apps_client.client.export_app.return_value = mock_operation
     
-    result = apps_client.export_app(app_id="test-app", gcs_uri="gs://bucket/path")
+    result = apps_client.export_app(app_name="projects/mock-project/locations/us/apps/test-app", gcs_uri="gs://bucket/path")
     
     kwargs = mock_export_app_req.call_args[1]
     assert kwargs.get("name") == "projects/mock-project/locations/us/apps/test-app"
@@ -189,7 +189,7 @@ def test_export_app_local_path(mock_client_cls, mock_export_app_req, mock_open):
     mock_operation.result.return_value = mock_response
     apps_client.client.export_app.return_value = mock_operation
     
-    result = apps_client.export_app(app_id="test-app", local_path="/fake/path.zip")
+    result = apps_client.export_app(app_name="projects/mock-project/locations/us/apps/test-app", local_path="/fake/path.zip")
     
     kwargs = mock_export_app_req.call_args[1]
     assert kwargs.get("name") == "projects/mock-project/locations/us/apps/test-app"
@@ -204,5 +204,5 @@ def test_export_app_validation(mock_client_cls):
     apps_client = Apps(project_id="mock-project", location="us", creds=MagicMock())
     
     with pytest.raises(ValueError, match="Only one of 'gcs_uri' or 'local_path' can be provided"):
-        apps_client.export_app(app_id="test-app", gcs_uri="gs://bucket/path", local_path="/fake/path.zip")
+        apps_client.export_app(app_name="projects/mock-project/locations/us/apps/test-app", gcs_uri="gs://bucket/path", local_path="/fake/path.zip")
 

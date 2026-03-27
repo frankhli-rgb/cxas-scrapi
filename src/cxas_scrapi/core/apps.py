@@ -78,9 +78,9 @@ class Apps(Common):
                     apps_dict[name] = display_name
         return apps_dict
 
-    def get_app(self, app_id: str) -> types.App:
-        """Gets a specific app by its short app ID."""
-        request = types.GetAppRequest(name=f"{self.parent}/apps/{app_id}")
+    def get_app(self, app_name: str) -> types.App:
+        """Gets a specific app by its full resource name."""
+        request = types.GetAppRequest(name=app_name)
         return self.client.get_app(request=request)
 
     def get_app_by_display_name(self, display_name: str) -> Optional[types.App]:
@@ -141,9 +141,9 @@ class Apps(Common):
         operation = self.client.create_app(request=request)
         return operation.result()
 
-    def update_app(self, app_id: str, **kwargs) -> types.App:
+    def update_app(self, app_name: str, **kwargs) -> types.App:
         """Updates specific fields of an existing App."""
-        app = types.App(name=f"{self.parent}/apps/{app_id}")
+        app = types.App(name=app_name)
         mask_paths = []
 
         for key, value in kwargs.items():
@@ -155,14 +155,14 @@ class Apps(Common):
         )
         return self.client.update_app(request=request)
 
-    def delete_app(self, app_id: str, force: bool = False) -> None:
+    def delete_app(self, app_name: str, force: bool = False) -> None:
         """Deletes a specific app."""
-        request = types.DeleteAppRequest(name=f"{self.parent}/apps/{app_id}")
+        request = types.DeleteAppRequest(name=app_name)
         self.client.delete_app(request=request)
 
     def export_app(
         self,
-        app_id: str,
+        app_name: str,
         gcs_uri: str = None,
         local_path: str = None,
         export_format: str = "JSON",
@@ -171,7 +171,7 @@ class Apps(Common):
         """Exports the specified app.
 
         Args:
-            app_id: The short app ID of the app to export.
+            app_name: The full resource name of the app to export.
             gcs_uri: Optional. The Google Cloud Storage URI to export to.
             local_path: Optional. Local file path to write the exported zip archive.
             export_format: The format to export the app in ('JSON' or 'YAML').
@@ -183,7 +183,7 @@ class Apps(Common):
             )
 
         request = types.ExportAppRequest(
-            name=f"{self.parent}/apps/{app_id}",
+            name=app_name,
             gcs_uri=gcs_uri if gcs_uri else None,
             export_format=export_format,
         )
@@ -207,6 +207,9 @@ class Apps(Common):
         local_path: str = None,
     ) -> Any:
         """Imports an app as a brand new app.
+
+        The ZIP archive should contain a single top-level wrapper directory
+        (e.g., `App_Name/app.json`, `App_Name/agents/`).
 
         Args:
             display_name: The display name for the new app.
@@ -245,16 +248,20 @@ class Apps(Common):
 
     def import_app(
         self,
-        app_id: str,
+        app_name: str,
         app_content: bytes = None,
         gcs_uri: str = None,
         local_path: str = None,
         conflict_strategy: str = None,
     ) -> Any:
+        # Wait for long-running operation to complete.
         """Imports an app, overwriting an existing one.
 
+        The ZIP archive should contain a single top-level wrapper directory
+        (e.g., `App_Name/app.json`, `App_Name/agents/`).
+
         Args:
-            app_id: Target App ID to explicitly overwrite.
+            app_name: Target App full resource name to explicitly overwrite.
             app_content: Optional. The raw bytes of the zip archive of the app.
             gcs_uri: Optional. The Google Cloud Storage URI to export to.
             local_path: Optional. The local path to the zip archive of the app.
@@ -273,9 +280,13 @@ class Apps(Common):
                 "Exactly one of 'app_content', 'gcs_uri', or 'local_path' must be provided."
             )
 
+        # Extract the short ID if a full resource name is provided
+        # format is: projects/{project_id}/locations/{location}/apps/{app_id}
+        app_id_extracted = app_name.split("/")[-1] if "/" in app_name else app_name
+
         request_kwargs = {
             "parent": self.parent,
-            "app_id": app_id,
+            "app_id": app_id_extracted,
         }
 
         if local_path:

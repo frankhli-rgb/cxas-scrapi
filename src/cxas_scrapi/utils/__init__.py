@@ -21,7 +21,6 @@ from cxas_scrapi.evals.tool_evals import ToolEvals
 from cxas_scrapi.evals.guardrail_evals import GuardrailEvals
 from cxas_scrapi.evals.simulation_evals import SimulationEvals
 
-
 __all__ = [
     "SecretManagerUtils",
     "ChangelogUtils",

@@ -600,7 +600,7 @@ class ToolEvals:
         app_client = Apps(
             project_id=self.project_id, location=self.location, creds=self.creds
         )
-        app = app_client.get_app(self.app_name.split("/")[-1])
+        app = app_client.get_app(self.app_name)
         app_display_name = app.display_name if app else "Unknown App"
         tester_email = getattr(self.creds, "service_account_email", "Unknown")
 
@@ -768,7 +768,12 @@ class ToolEvals:
             expected_returns = []
             # Try to build template args based on schema
             try:
-                tool_obj = self.tools_client.get_tool(tool_id)
+                actual_tool_id = tool_id
+                if "toolsets/" in tool_id and "/tools/" in tool_id:
+                    # For tools inside a toolset, we need the toolset object to get the schema
+                    actual_tool_id, _ = tool_id.split("/tools/")
+                
+                tool_obj = self.tools_client.get_tool(actual_tool_id)
                 tool_dict = (
                     type(tool_obj).to_dict(tool_obj)
                     if not isinstance(tool_obj, dict)

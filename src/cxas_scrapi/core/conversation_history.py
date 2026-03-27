@@ -226,10 +226,13 @@ class ConversationHistory(Common):
         )
 
     def get_conversation(self, conversation_id: str) -> types.Conversation:
-        """Gets a specific conversation by its ID."""
-        request = types.GetConversationRequest(
-            name=f"{self.app_name}/conversations/{conversation_id}"
-        )
+        """Gets a specific conversation by its ID or full resource name."""
+        if conversation_id.startswith("projects/"):
+            name = conversation_id
+        else:
+            name = f"{self.app_name}/conversations/{conversation_id}"
+        
+        request = types.GetConversationRequest(name=name)
         return self.client.get_conversation(request=request)
 
     def delete_conversation(self, conversation_id: str) -> None:

@@ -173,7 +173,7 @@ class GuardrailEvals:
                 location=self._get_location(self.app_name),
                 **self.kwargs,
             )
-            app_obj = apps_client.get_app(self.app_name.split("/")[-1])
+            app_obj = apps_client.get_app(self.app_name)
             app_display_name = app_obj.display_name
 
             # Default to the app model setting
@@ -256,10 +256,10 @@ class GuardrailEvals:
                 )
                 latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
-                outputs = getattr(res, "outputs", [])
+                outputs = getattr(res, "outputs", []) or []
                 agent_response_text = self.get_agent_text_from_outputs(outputs)
 
-                for output in outputs:
+                for output in outputs:  # pylint: disable=not-an-iterable
                     diagnostic_info = getattr(output, "diagnostic_info", None)
                     if diagnostic_info and hasattr(
                         diagnostic_info, "root_span"

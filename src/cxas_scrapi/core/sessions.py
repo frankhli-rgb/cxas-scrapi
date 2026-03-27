@@ -32,7 +32,6 @@ import certifi
 from google.protobuf import json_format
 from enum import Enum
 
-
 logger = logging.getLogger(__name__)
 
 
