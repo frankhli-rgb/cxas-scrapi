@@ -563,7 +563,7 @@ def ci_test(args: argparse.Namespace) -> None:
         if os.path.exists(test_file):
             print(f"\\n--- Running Tool Tests on {temp_app_name} ---")
             cmd = [
-                "cxas-eval",
+                "cxas",
                 "test-tools",
                 "--app_name",
                 temp_app_name,
@@ -592,7 +592,7 @@ def ci_test(args: argparse.Namespace) -> None:
             )
             for eval_id in all_eval_ids:
                 cmd = [
-                    "cxas-eval",
+                    "cxas",
                     "run",
                     "--app_name",
                     temp_app_name,

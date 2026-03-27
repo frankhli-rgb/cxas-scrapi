@@ -155,7 +155,7 @@ jobs:
 
       - name: Deploy to CX Agent Studio
         run: |
-          cxas-eval push --agent_dir {github_context_path} \\
+          cxas push --agent_dir {github_context_path} \\
                          --project_id ${{{{ env.PROJECT_ID }}}} \\
                          --location ${{{{ env.LOCATION }}}} \\
                          --app_id ${{{{ env.APP_ID }}}} \\
@@ -209,7 +209,7 @@ jobs:
 
       - name: Run Cleanup
         run: |
-          cxas-eval delete --display_name "[CI] PR-${{{{ github.event.pull_request.number }}}} {agent_name}" \\
+          cxas delete --display_name "[CI] PR-${{{{ github.event.pull_request.number }}}} {agent_name}" \\
                    --project_id ${{{{ env.PROJECT_ID }}}} \\
                    --location ${{{{ env.LOCATION }}}}
 """
@@ -244,7 +244,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 COPY . .
 
 # Set the entrypoint to cxas-scrapi
-ENTRYPOINT ["cxas-eval"]
+ENTRYPOINT ["cxas"]
 """
 
 
@@ -746,7 +746,7 @@ docker run --rm \
             hook_content = f"""#!/bin/sh
 # CXAS SCRAPI Auto-generated Hook
 echo "Running local tests before push..."
-cxas-eval local-test --agent_dir "{agent_dir}" --project_id "{project_id}" --location "{location}"
+cxas local-test --agent_dir "{agent_dir}" --project_id "{project_id}" --location "{location}"
 """
             with open(hook_path, "w") as f:
                 f.write(hook_content)
