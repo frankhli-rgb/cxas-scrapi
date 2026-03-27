@@ -50,6 +50,7 @@ def test_evals_to_dataframe_with_data():
     res.res_dict = {
         "name": "eval/123",
         "evaluation_status": "PASS",
+        "evaluation_run": "eval_run/123",
         "golden_result": {
             "semantic_similarity_result": {"score": 5},
             "overall_tool_invocation_result": {
@@ -75,6 +76,13 @@ def test_evals_to_dataframe_with_data():
 
     assert len(df_dict["failures"]) == 1
     assert df_dict["failures"].iloc[0]["expected"] == "Agent should pass"
+
+    assert len(df_dict["metadata"]) == 1
+    assert df_dict["metadata"].iloc[0]["evaluation_run"] == "eval_run/123"
+    assert df_dict["metadata"].iloc[0]["expected"] == "Agent should pass"
+    assert df_dict["metadata"].iloc[0]["outcome"] == "FAIL"
+    assert df_dict["metadata"].iloc[0]["score"] == "0 / 1"
+    
 
 
 def test_to_bigquery():

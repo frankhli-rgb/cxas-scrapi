@@ -340,6 +340,7 @@ class EvalUtils(Evaluations):
 
             base_info = {
                 "display_name": display_name,
+                "evaluation_run": res_dict.get("evaluation_run", ""),
                 "eval_result_id": result_name,
                 "evaluation_status": status_str,
                 "execution_state": exec_state_str,
@@ -372,6 +373,8 @@ class EvalUtils(Evaluations):
                 row = {
                     "display_name": display_name,
                     "eval_result_id": result_name,
+                    "evaluation_run": base_info.get("evaluation_run"),
+                    "evaluation_status": base_info.get("evaluation_status"),
                     "record_type": "summary_expectation",
                     "expectation": str(
                         exp_item.get("prompt", exp_item.get("expectation", ""))
@@ -394,6 +397,8 @@ class EvalUtils(Evaluations):
                     row = {
                         "display_name": display_name,
                         "eval_result_id": result_name,
+                        "evaluation_run": base_info.get("evaluation_run"),
+                        "evaluation_status": base_info.get("evaluation_status"),
                         "turn_index": i + 1,
                     }
                     lat = turn.get("turn_latency", {})
@@ -423,9 +428,10 @@ class EvalUtils(Evaluations):
                         else None
                     )
 
-                    row["tool_invocation_score"] = EvalUtils._map_outcome(
-                        turn.get("tool_invocation_score")
-                    )
+                    tool_score = turn.get("tool_invocation_score")
+                    if not tool_score:
+                        tool_score = turn.get("overall_tool_invocation_result", {}).get("tool_invocation_score")
+                    row["tool_invocation_score"] = EvalUtils._map_outcome(tool_score)
 
                     outcomes = turn.get("expectation_outcome", [])
                     row["expectation_outcomes"] = json.dumps(outcomes)
@@ -485,6 +491,10 @@ class EvalUtils(Evaluations):
                         "score": None,
                     }
                 )
+
+        # Metadata
+        all_metadata = []
+
         for exp in expectations:
             if exp.get("not_met_count", 0) > 0:
                 explanation = exp.get("explanation", "")
@@ -502,6 +512,23 @@ class EvalUtils(Evaluations):
                         "score": None,
                     }
                 )
+            if exp.get("record_type") == "summary_expectation":
+                not_met = exp.get("not_met_count", 0)
+                met = exp.get("met_count", 0)
+                outcome_str = "PASS" if not_met == 0 else "FAIL"
+
+                all_metadata.append({
+                    "display_name": exp["display_name"],
+                    "evaluation_run": exp.get("evaluation_run"),
+                    "eval_result_id": exp["eval_result_id"],
+                    "evaluation_status": exp.get("evaluation_status"),
+                    "turn_index": None,
+                    "type": "Custom Expectation",
+                    "expected": exp["expectation"],
+                    "actual": exp["explanation"],
+                    "outcome": outcome_str,
+                    "score": f"{met} / {met + not_met}",
+                })
 
         for turn in turns:
             outcomes_str = turn.get("expectation_outcomes", "[]")
@@ -529,6 +556,9 @@ class EvalUtils(Evaluations):
                         e_dict["tool_call"].get("id", "tool_call"),
                     )
                     f_type = "Tool Call"
+                elif "tool_response" in e_dict:
+                    e_text = e_dict["tool_response"].get("display_name", "tool_response")
+                    f_type = "Tool Response"
                 elif "agent_transfer" in e_dict:
                     e_text = e_dict["agent_transfer"].get(
                         "display_name",
@@ -548,6 +578,11 @@ class EvalUtils(Evaluations):
                         "display_name",
                         outcome_obj["observed_tool_call"].get("id", ""),
                     )
+                elif "observed_tool_response" in outcome_obj:
+                    a_text = outcome_obj["observed_tool_response"].get(
+                        "display_name",
+                        outcome_obj["observed_tool_response"].get("id", ""),
+                    )
                 elif "observed_agent_transfer" in outcome_obj:
                     a_text = outcome_obj["observed_agent_transfer"].get(
                         "display_name",
@@ -563,36 +598,45 @@ class EvalUtils(Evaluations):
 
             # Process individual explicit expectation failures
             for outcome_obj in outcomes:
+                e, a, f = _get_exp_act(outcome_obj)
+                if f == "Tool Response":
+                    continue
                 raw_outcome = outcome_obj.get("outcome")
-                if (
-                    raw_outcome == 2
-                    or EvalUtils._map_outcome(raw_outcome) == "FAIL"
-                ):
-                    e, a, f = _get_exp_act(outcome_obj)
-                    score_val = None
+                outcome_str = EvalUtils._map_outcome(raw_outcome)
+
+                score_val = None
+                if f == "Semantic Similarity":
+                    raw_score = turn.get("semantic_score")
+                    if isinstance(raw_score, (int, float)):
+                        s_val = int(raw_score) if raw_score == int(raw_score) else raw_score
+                        score_val = f"{s_val} / 4.0"
+                    else:
+                        score_val = str(raw_score) if raw_score is not None else None
+                elif f == "Tool Call":
+                    raw_score = turn.get("tool_invocation_score")
+                    if isinstance(raw_score, (int, float)):
+                        score_val = f"{int(raw_score * 100)}%"
+                    else:
+                        score_val = EvalUtils._map_outcome(raw_score)
+
+                all_metadata.append({
+                    "display_name": turn["display_name"],
+                    "eval_result_id": turn["eval_result_id"],
+                    "evaluation_run": turn.get("evaluation_run"),
+                    "evaluation_status": turn.get("evaluation_status"),
+                    "turn_index": turn["turn_index"],
+                    "type": f,
+                    "expected": e,
+                    "actual": a,
+                    "outcome": outcome_str,
+                    "score": score_val,
+                })
+
+                if raw_outcome == 2 or outcome_str == "FAIL":
                     if f == "Semantic Similarity":
-                        raw_score = turn.get("semantic_score")
-                        if isinstance(raw_score, (int, float)):
-                            s_val = (
-                                int(raw_score)
-                                if raw_score == int(raw_score)
-                                else raw_score
-                            )
-                            score_val = f"{s_val} / 4.0"
-                        else:
-                            score_val = (
-                                str(raw_score)
-                                if raw_score is not None
-                                else None
-                            )
                         sem_handled = True
                     elif f == "Tool Call":
                         raw_score = turn.get("tool_invocation_score")
-                        if isinstance(raw_score, (int, float)):
-                            score_val = f"{int(raw_score * 100)}%"
-                        else:
-                            score_val = EvalUtils._map_outcome(raw_score)
-
                         if EvalUtils._map_outcome(raw_score) == "FAIL":
                             tool_handled = True
 
@@ -669,10 +713,13 @@ class EvalUtils(Evaluations):
 
         df_traces = pd.DataFrame(turns)
 
+        df_metadata = pd.DataFrame(all_metadata)
+
         return {
             "summary": df_summary,
             "failures": df_failures,
             "trace": df_traces,
+            "metadata": df_metadata,
         }
 
     def get_latency_metrics_dfs(
