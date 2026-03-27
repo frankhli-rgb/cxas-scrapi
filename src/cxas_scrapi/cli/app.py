@@ -94,7 +94,7 @@ def app_pull(args: argparse.Namespace) -> None:
     try:
         # Export the app
         print("Exporting app from CXAS...")
-        lro = apps_client.export_app(app_id=app_id)
+        lro = apps_client.export_app(app_name=app_id)
         response = lro.result()
 
         # Determine the target directory
@@ -195,20 +195,21 @@ def app_push(args: argparse.Namespace) -> Optional[str]:
         # In v1beta, setting the app resource name and conflict strategy allows
         # overwriting an app explicitly. Not all SDK versions support app_id
         # natively in import.
-        import_kwargs = {
-            "app_content": app_content,
-            "display_name": display_name,
-        }
-
-        # Add app_id to import kwargs if it's there
         target_app_id = getattr(args, "app_id", None) or app_id
+
         if target_app_id:
             # Extract UUID if full resource name provided.
             if "apps/" in target_app_id:
                 target_app_id = target_app_id.split("apps/")[-1]
-            import_kwargs["app_id"] = target_app_id
-
-        result = apps_client.import_app(**import_kwargs)
+            result = apps_client.import_app(
+                app_name=target_app_id,
+                app_content=app_content
+            )
+        else:
+            result = apps_client.import_as_new_app(
+                display_name=display_name,
+                app_content=app_content
+            )
         return _handle_import_result(
             result, "pushed to" if target_app else "pushed"
         )
@@ -227,7 +228,7 @@ def app_create(args: argparse.Namespace) -> None:
     apps_client = Apps(project_id=args.project_id, location=args.location)
     try:
         app = apps_client.create_app(
-            app_id=args.app_id,
+            app_id=getattr(args, "app_name", None),
             display_name=args.name,
             description=args.description,
         )
@@ -240,11 +241,13 @@ def app_create(args: argparse.Namespace) -> None:
 def app_delete(args: argparse.Namespace) -> None:
     """Handles the 'delete' command."""
 
-    if args.app_id:
-        print(f"Deleting App: {args.app_id}")
-        project_id = Common._get_project_id(args.app_id)
-        location = Common._get_location(args.app_id)
-        app_id = args.app_id
+    app_name_arg = getattr(args, "app_name", None)
+
+    if app_name_arg:
+        print(f"Deleting App: {app_name_arg}")
+        project_id = Common._get_project_id(app_name_arg)
+        location = Common._get_location(app_name_arg)
+        app_id = app_name_arg
     elif args.display_name and args.project_id and args.location:
         print(f"Deleting App by Display Name: {args.display_name}")
         project_id = args.project_id
@@ -252,7 +255,7 @@ def app_delete(args: argparse.Namespace) -> None:
         app_id = None
     else:
         print(
-            "Error: Must provide either --app_id OR "
+            "Error: Must provide either --app_name OR "
             "(--display_name, --project_id, --location)"
         )
         sys.exit(1)
@@ -277,7 +280,7 @@ def app_delete(args: argparse.Namespace) -> None:
                 )
                 return
 
-        apps_client.delete_app(app_id=app_id, force=args.force)
+        apps_client.delete_app(app_name=app_id, force=args.force)
         print(f"Successfully deleted {app_id}")
     except Exception as e:
         print(f"Failed to delete app: {e}")
@@ -293,11 +296,11 @@ def app_branch(args: argparse.Namespace) -> None:
 
     try:
         print("Pulling source app...")
-        lro = apps_client.export_app(app_id=app_id)
+        lro = apps_client.export_app(app_name=app_id)
         response = lro.result()
 
         # Import exported content directly into new app.
-        result = apps_client.import_app(
+        result = apps_client.import_as_new_app(
             app_content=response.app_content,
             display_name=args.new_name,
         )
