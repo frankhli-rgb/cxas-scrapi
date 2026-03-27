@@ -189,6 +189,10 @@ class EvalUtils(Evaluations):
         for tool_call in turn.tool_calls:
             action = tool_call.action
 
+            if not action:
+                logger.warning("Skipping empty action in tool call.")
+                continue
+
             if action == "transfer_to_agent" and (
                 tool_call.args.get("agent") or tool_call.agent
             ):
@@ -1267,12 +1271,16 @@ class EvalUtils(Evaluations):
         self,
         yaml_file_path: str,
         app_name: Optional[str] = None,
+        modality: str = "text",
+        run_count: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Loads, creates, and runs an evaluation from a YAML file.
 
         Args:
             yaml_file_path: Path to the YAML file.
             app_name: Optional parent App ID. Defaults to self.app_name.
+            modality: "text" (default) or "audio".
+            run_count: Number of times to run the evaluation. Default is 1 per golden, 5 per scenario.
 
         Returns:
             A dictionary containing the evaluation and the run response.
@@ -1286,21 +1294,34 @@ class EvalUtils(Evaluations):
         if not evaluation_dict:
             raise ValueError(f"Failed to load evaluation from {yaml_file_path}")
 
-        # 2. Create the evaluation
-        # Note: Evaluations.create_evaluation handles dict to proto conversion
-        created_evaluation = self.create_evaluation(
-            evaluation=evaluation_dict, app_name=app_name
-        )
-        logger.info("Created evaluation: %s", created_evaluation.name)
+        display_name = evaluation_dict.get("displayName")
+        if not display_name:
+             raise ValueError("YAML evaluation missing displayName")
 
-        # 3. Run the evaluation
-        # run_evaluation expects display names
+        # 2. Check if it already exists
+        evals_map = self._get_or_load_evals_map(app_name)
+        existing_resource_name = evals_map.get("goldens", {}).get(display_name) or evals_map.get("scenarios", {}).get(display_name)
+
+        if existing_resource_name:
+            logger.info("Found existing evaluation '%s' (%s), reusing it.", display_name, existing_resource_name)
+            # Update evaluation
+            evaluation_dict["name"] = existing_resource_name
+            evaluation_obj = self.update_evaluation(evaluation_dict)
+        else:
+            logger.info("Evaluation '%s' not found, creating it.", display_name)
+            evaluation_obj = self.create_evaluation(
+                evaluation=evaluation_dict, app_name=app_name
+            )
+            logger.info("Created evaluation: %s", evaluation_obj.name)
+
+        # Run the evaluation using the resource name
         run_response = self.run_evaluation(
-            evaluations=[created_evaluation.display_name], app_name=app_name
+            evaluations=[evaluation_obj.name], app_name=app_name, modality=modality, run_count=run_count,
         )
+
         logger.info("Started evaluation run: %s", run_response.operation.name)
 
         return {
-            "evaluation": created_evaluation,
+            "evaluation": evaluation_obj,
             "run": run_response,
         }

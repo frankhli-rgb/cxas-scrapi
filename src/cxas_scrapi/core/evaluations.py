@@ -696,6 +696,7 @@ class Evaluations(Common):
         eval_type: Optional[str] = None,
         app_name: Optional[str] = None,
         modality: str = "text",
+        run_count: Optional[int] = None,
     ) -> Any:
         """Runs an evaluation on the specified app.
 
@@ -705,6 +706,7 @@ class Evaluations(Common):
                       'goldens', 'scenarios', or 'all'.
             app_name: Parent App ID. Defaults to self.app_name.
             modality: "text" (default) or "audio".
+            run_count: Number of times to run the evaluation. Default is 1 per golden, 5 per scenario.
         """
         app_name = app_name or self.app_name
         if not app_name:
@@ -764,6 +766,9 @@ class Evaluations(Common):
         request = types.RunEvaluationRequest(
             app=app_name, evaluations=list(resolved_names)
         )
+
+        if run_count:
+            request.run_count = run_count
 
         if modality.lower() == "audio":
             request.config.evaluation_channel = (

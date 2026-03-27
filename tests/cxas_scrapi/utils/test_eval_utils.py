@@ -314,7 +314,10 @@ def test_create_and_run_evaluation_from_yaml():
             app_name="projects/p/locations/l/apps/a",
         )
         mock_run.assert_called_once_with(
-            evaluations=["Test Eval"], app_name="projects/p/locations/l/apps/a"
+            evaluations=["projects/p/locations/l/apps/a/evaluations/e1"],
+            app_name="projects/p/locations/l/apps/a",
+            modality="text",
+            run_count=None,
         )
 
         assert res["evaluation"] == mock_created_eval
