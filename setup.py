@@ -71,7 +71,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'cxas-eval=cxas_scrapi.cli.main:main',
+            'cxas=cxas_scrapi.cli.main:main',
         ],
     },
 )
