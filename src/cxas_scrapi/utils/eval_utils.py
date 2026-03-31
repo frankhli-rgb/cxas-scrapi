@@ -14,39 +14,26 @@
 
 """Utility functions for processing and exporting CXAS Evaluation Results."""
 
-from typing import Annotated, Any, Dict, List, Optional, NamedTuple, Union
-import datetime
+from typing import Any, Dict, List, Optional, Union
 import time
 import enum
+import pydantic
 import json
 import os
 import logging
 import uuid
+from google import genai
 
 from cxas_scrapi.core.common import Common
+from cxas_scrapi.prompts import llm_user_prompts
 
 import pandas as pd
 import yaml
-from google.protobuf.json_format import MessageToDict
-from jsonpath_ng import parse
-from proto.marshal.collections import maps, repeated
-from pydantic import (
-    AliasChoices,
-    AliasPath,
-    BaseModel,
-    BeforeValidator,
-    ConfigDict,
-    Field,
-    TypeAdapter,
-)
+from pydantic import BaseModel
 
-from tqdm import tqdm
-
-from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.agents import Agents
 from cxas_scrapi.core.conversation_history import ConversationHistory
 from cxas_scrapi.core.evaluations import Evaluations
-from cxas_scrapi.core.sessions import Sessions
 from cxas_scrapi.core.tools import Tools
 from cxas_scrapi.core.variables import Variables
 from cxas_scrapi.utils.latency_parser import LatencyParser
@@ -434,8 +421,12 @@ class EvalUtils(Evaluations):
 
                     tool_score = turn.get("tool_invocation_score")
                     if not tool_score:
-                        tool_score = turn.get("overall_tool_invocation_result", {}).get("tool_invocation_score")
-                    row["tool_invocation_score"] = EvalUtils._map_outcome(tool_score)
+                        tool_score = turn.get(
+                            "overall_tool_invocation_result", {}
+                        ).get("tool_invocation_score")
+                    row["tool_invocation_score"] = EvalUtils._map_outcome(
+                        tool_score
+                    )
 
                     outcomes = turn.get("expectation_outcome", [])
                     row["expectation_outcomes"] = json.dumps(outcomes)
@@ -561,7 +552,9 @@ class EvalUtils(Evaluations):
                     )
                     f_type = "Tool Call"
                 elif "tool_response" in e_dict:
-                    e_text = e_dict["tool_response"].get("display_name", "tool_response")
+                    e_text = e_dict["tool_response"].get(
+                        "display_name", "tool_response"
+                    )
                     f_type = "Tool Response"
                 elif "agent_transfer" in e_dict:
                     e_text = e_dict["agent_transfer"].get(
@@ -612,10 +605,16 @@ class EvalUtils(Evaluations):
                 if f == "Semantic Similarity":
                     raw_score = turn.get("semantic_score")
                     if isinstance(raw_score, (int, float)):
-                        s_val = int(raw_score) if raw_score == int(raw_score) else raw_score
+                        s_val = (
+                            int(raw_score)
+                            if raw_score == int(raw_score)
+                            else raw_score
+                        )
                         score_val = f"{s_val} / 4.0"
                     else:
-                        score_val = str(raw_score) if raw_score is not None else None
+                        score_val = (
+                            str(raw_score) if raw_score is not None else None
+                        )
                 elif f == "Tool Call":
                     raw_score = turn.get("tool_invocation_score")
                     if isinstance(raw_score, (int, float)):
@@ -736,8 +735,10 @@ class EvalUtils(Evaluations):
 
         Args:
             results: An optional list of Eval Result List payload chunks.
-            eval_names: Alternatively, an optional list of string Display Names / Names of Evals.
-            app_name: Optional override if retrieving Conversation traces dynamically.
+            eval_names: Alternatively, an optional list of string Display
+                Names / Names of Evals.
+            app_name: Optional override if retrieving Conversation traces
+                dynamically.
         """
         if not results:
             if not getattr(self, "app_name", None) and not app_name:
@@ -922,34 +923,36 @@ class EvalUtils(Evaluations):
             gr_agg = _aggregate(run_guardrail_latencies)
             cb_agg = _aggregate(run_callback_latencies)
 
-            p50_90_99_turn = (
-                f"{t_agg['p50']} ms | {t_agg['p90']} ms | {t_agg['p99']} ms"
+            t_p50, t_p90, t_p99 = t_agg["p50"], t_agg["p90"], t_agg["p99"]
+            llm_p50, llm_p90, llm_p99 = (
+                llm_agg["p50"],
+                llm_agg["p90"],
+                llm_agg["p99"],
             )
-            p50_90_99_llm = f"{llm_agg['p50']} ms | {llm_agg['p90']} ms | {llm_agg['p99']} ms"
-            p50_90_99_tc = (
-                f"{tc_agg['p50']} ms | {tc_agg['p90']} ms | {tc_agg['p99']} ms"
-            )
-            p50_90_99_gr = (
-                f"{gr_agg['p50']} ms | {gr_agg['p90']} ms | {gr_agg['p99']} ms"
-            )
-            p50_90_99_cb = (
-                f"{cb_agg['p50']} ms | {cb_agg['p90']} ms | {cb_agg['p99']} ms"
-            )
+            tc_p50, tc_p90, tc_p99 = tc_agg["p50"], tc_agg["p90"], tc_agg["p99"]
+            gr_p50, gr_p90, gr_p99 = gr_agg["p50"], gr_agg["p90"], gr_agg["p99"]
+            cb_p50, cb_p90, cb_p99 = cb_agg["p50"], cb_agg["p90"], cb_agg["p99"]
+
+            p50_90_99_turn = f"{t_p50} ms | {t_p90} ms | {t_p99} ms"
+            p50_90_99_llm = f"{llm_p50} ms | {llm_p90} ms | {llm_p99} ms"
+            p50_90_99_tc = f"{tc_p50} ms | {tc_p90} ms | {tc_p99} ms"
+            p50_90_99_gr = f"{gr_p50} ms | {gr_p90} ms | {gr_p99} ms"
+            p50_90_99_cb = f"{cb_p50} ms | {cb_p90} ms | {cb_p99} ms"
 
             eval_summary_agg.append(
                 {
                     "display_name": display_name,
                     "eval_result_id": eval_result_id,
                     "evaluation_type": "Golden" if golden else "Scenario",
-                    "Average (Turn)": f"{t_agg['Average']} ms",
+                    "Average (Turn)": f"""{t_agg["Average"]} ms""",
                     "p50 | p90 | p99 (Turn)": p50_90_99_turn,
-                    "Average (LLM)": f"{llm_agg['Average']} ms",
+                    "Average (LLM)": f"""{llm_agg["Average"]} ms""",
                     "p50 | p90 | p99 (LLM)": p50_90_99_llm,
-                    "Average (Tool Call)": f"{tc_agg['Average']} ms",
+                    "Average (Tool Call)": f"""{tc_agg["Average"]} ms""",
                     "p50 | p90 | p99 (Tool Call)": p50_90_99_tc,
-                    "Average (Guardrail)": f"{gr_agg['Average']} ms",
+                    "Average (Guardrail)": f"""{gr_agg["Average"]} ms""",
                     "p50 | p90 | p99 (Guardrail)": p50_90_99_gr,
-                    "Average (Callback)": f"{cb_agg['Average']} ms",
+                    "Average (Callback)": f"""{cb_agg["Average"]} ms""",
                     "p50 | p90 | p99 (Callback)": p50_90_99_cb,
                 }
             )
@@ -1034,7 +1037,8 @@ class EvalUtils(Evaluations):
             yaml_file_path: Path to the YAML file to be parsed.
 
         Returns:
-            A list of dictionaries matching the Golden Evaluation proto structure.
+            A list of dictionaries matching the Golden Evaluation proto
+                structure.
         """
         try:
             with open(yaml_file_path, "r", encoding="utf-8") as f:
@@ -1163,7 +1167,8 @@ class EvalUtils(Evaluations):
         base_dir: Optional[str] = None,
         auto_sideload: bool = False,
     ) -> List[str]:
-        """Processes a list of conversation expectations, resolving prompt to resource names.
+        """Processes a list of conversation expectations, resolving prompt
+        to resource names.
 
         If a string expectation matches a local 'evaluationExpectations/*.json'
         file, it resolves the prompt from that file first.
@@ -1187,7 +1192,8 @@ class EvalUtils(Evaluations):
                     prompt_str = exp["llm_criteria"].get("prompt")
 
             if prompt_str:
-                # Proactive side-loading: If it's a raw prompt and we have a base_dir,
+                # Proactive side-loading: If it's a raw prompt and we have a
+                # base_dir,
                 # ensure it's saved to the local filesystem.
                 if (
                     auto_sideload
@@ -1234,7 +1240,8 @@ class EvalUtils(Evaluations):
                 )
                 processed_expectations.append(res_name)
             else:
-                # Handle non-string expectations by appending string representation
+                # Handle non-string expectations by appending string
+                # representation
                 logger.warning("Skipping non-string expectation: %s", exp)
                 processed_expectations.append(str(exp))
 
@@ -1280,7 +1287,8 @@ class EvalUtils(Evaluations):
             yaml_file_path: Path to the YAML file.
             app_name: Optional parent App ID. Defaults to self.app_name.
             modality: "text" (default) or "audio".
-            run_count: Number of times to run the evaluation. Default is 1 per golden, 5 per scenario.
+            run_count: Number of times to run the evaluation. Default is 1
+                per golden, 5 per scenario.
 
         Returns:
             A dictionary containing the evaluation and the run response.
@@ -1296,14 +1304,20 @@ class EvalUtils(Evaluations):
 
         display_name = evaluation_dict.get("displayName")
         if not display_name:
-             raise ValueError("YAML evaluation missing displayName")
+            raise ValueError("YAML evaluation missing displayName")
 
         # 2. Check if it already exists
         evals_map = self._get_or_load_evals_map(app_name)
-        existing_resource_name = evals_map.get("goldens", {}).get(display_name) or evals_map.get("scenarios", {}).get(display_name)
+        existing_resource_name = evals_map.get(
+            "goldens", {}
+        ).get(display_name) or evals_map.get("scenarios", {}).get(display_name)
 
         if existing_resource_name:
-            logger.info("Found existing evaluation '%s' (%s), reusing it.", display_name, existing_resource_name)
+            logger.info(
+                "Found existing evaluation '%s' (%s), reusing it.",
+                display_name,
+                existing_resource_name,
+            )
             # Update evaluation
             evaluation_dict["name"] = existing_resource_name
             evaluation_obj = self.update_evaluation(evaluation_dict)
@@ -1316,7 +1330,10 @@ class EvalUtils(Evaluations):
 
         # Run the evaluation using the resource name
         run_response = self.run_evaluation(
-            evaluations=[evaluation_obj.name], app_name=app_name, modality=modality, run_count=run_count,
+            evaluations=[evaluation_obj.name],
+            app_name=app_name,
+            modality=modality,
+            run_count=run_count,
         )
 
         logger.info("Started evaluation run: %s", run_response.operation.name)
@@ -1325,3 +1342,64 @@ class EvalUtils(Evaluations):
             "evaluation": evaluation_obj,
             "run": run_response,
         }
+
+
+class ExpectationStatus(str, enum.Enum):
+    MET = "Met"
+    NOT_MET = "Not Met"
+
+
+class ExpectationResult(pydantic.BaseModel):
+    expectation: str
+    status: ExpectationStatus = ExpectationStatus.NOT_MET
+    justification: str = ""
+
+
+class ExpectationOutput(pydantic.BaseModel):
+    results: List[ExpectationResult] = []
+
+
+def evaluate_expectations(
+    genai_client: Any,
+    model_name: str,
+    trace: List[str],
+    expectations: List[str],
+) -> List[ExpectationResult]:
+    """Evaluates expectations against the conversation trace using an LLM.
+
+    Args:
+        genai_client: The GenAI client instance.
+        model_name: The Gemini model name to use.
+        trace: A list of strings representing the conversation trace.
+        expectations: A list of strings representing the expectations.
+
+    Returns:
+        A list of ExpectationResult objects.
+    """
+
+    full_trace_str = "\n\n".join(trace)
+    prompt = llm_user_prompts.EVALUATE_EXPECTATIONS_PROMPT.replace(
+        "{trace}", full_trace_str
+    )
+    prompt = prompt.replace(
+        "{expectations}", json.dumps(expectations, indent=2)
+    )
+
+    try:
+        response = genai_client.models.generate_content(
+            contents=prompt,
+            model=model_name,
+            config=genai.types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ExpectationOutput,
+            ),
+        )
+        output: ExpectationOutput = response.parsed
+        return output.results
+    except Exception as e:
+
+        logging.getLogger(__name__).error(
+            f"Error evaluating expectations: {e}"
+        )
+        return []
+

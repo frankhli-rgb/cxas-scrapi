@@ -18,14 +18,19 @@
 from typing import Any, Dict, List, Optional
 import os
 import yaml
+from google import genai
+from google.protobuf.json_format import MessageToDict
 import logging
 import pandas as pd
 import enum
+import json
+import uuid
 
 from pydantic import BaseModel, Field, TypeAdapter
 
 from cxas_scrapi.core.sessions import Sessions
 from cxas_scrapi.core.variables import Variables
+from cxas_scrapi.utils.eval_utils import evaluate_expectations, ExpectationStatus
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +62,7 @@ class TurnStep(BaseModel):
     event: Optional[str] = None
     variables: Dict[str, Any] = Field(default_factory=dict)
     config: Dict[str, Any] = Field(default_factory=dict)
-    expectations: List[TurnExpectation] = Field(default_factory=list)
+    expectations: list[TurnExpectation | str] = Field(default_factory=list)
 
 
 class TurnTestCase(BaseModel):
@@ -71,8 +76,7 @@ class TurnTestCase(BaseModel):
     historical_contexts: Optional[List[Dict[str, Any]] | str] = None
     turn_count: Optional[int] = None
     config: Dict[str, Any] = Field(default_factory=dict)
-    config: Dict[str, Any] = Field(default_factory=dict)
-    expectations: List[TurnExpectation] = Field(default_factory=list)
+    expectations: list[TurnExpectation | str] = Field(default_factory=list)
     turns: Optional[List[TurnStep]] = None
 
 
@@ -92,6 +96,17 @@ class TurnEvals:
             app_name=self.app_name, creds=self.creds
         )
         self.var_client = Variables(app_name=self.app_name, creds=self.creds)
+
+        # Initialize GenAI Client
+        project_id = app_name.split("/")[1]
+        vertex_location = "global"
+
+        self.genai_client = genai.Client(
+            vertexai=True,
+            project=project_id,
+            location=vertex_location,
+            credentials=self.creds,
+        )
 
     def load_turn_test_cases_from_file(
         self, test_file_path: str
@@ -156,9 +171,9 @@ class TurnEvals:
 
     def _check_dict_subset(self, subset: dict, superset: dict) -> bool:
         """Checks if all key-value pairs in subset exist exactly in superset.
-        Supports {} as a wildcard meaning 'the key must exist, but values do not matter'.
+        Supports {} as a wildcard meaning 'the key must exist, but values do
+        not matter'.
         """
-        import json
 
         for k, v in subset.items():
             if k not in superset:
@@ -169,7 +184,8 @@ class TurnEvals:
 
             super_val = superset[k]
 
-            # If expected is a dict but actual is a JSON string, try to parse the actual
+            # If expected is a dict but actual is a JSON string, try to parse
+            # the actual
             if isinstance(v, dict) and isinstance(super_val, str):
                 try:
                     super_val = json.loads(super_val)
@@ -210,14 +226,8 @@ class TurnEvals:
                 child, called_tools, tool_inputs, tool_outputs
             )
 
-    def validate_turn_test(self, test_case: Any, turn_response: Any):
-        """Validates the turn response against defined expectations."""
-        errors = []
-        expected_vals = []
-        actual_vals = []
-
-        # Extract meaningful data from turn_response protobuf/dict
-        from google.protobuf.json_format import MessageToDict
+    def _extract_signals(self, turn_response: Any) -> Dict[str, Any]:
+        """Extracts text, tools, and transfers from a turn response."""
 
         try:
             resp_dict = MessageToDict(turn_response._pb)
@@ -241,6 +251,15 @@ class TurnEvals:
         if not outputs and "text" in resp_dict:
             full_text = str(resp_dict["text"])
 
+            # Fallback for toolCalls in simple dicts
+            tcs_msg = resp_dict.get("toolCalls", {})
+            for tc in tcs_msg.get("toolCalls", []):
+                tool_name = tc.get("displayName", tc.get("tool", ""))
+                if tool_name and tool_name not in called_tools:
+                    called_tools.append(tool_name)
+                if tool_name not in tool_inputs:
+                    tool_inputs[tool_name] = tc.get("args", {})
+
         def add_snippet(snippet: str):
             nonlocal full_text
             snippet = str(snippet).strip()
@@ -252,7 +271,8 @@ class TurnEvals:
                 full_text += snippet
 
         for out in outputs:
-            # only collect the raw output text for this turn, avoiding trace history
+            # only collect the raw output text for this turn, avoiding trace
+            # history
             if "text" in out:
                 add_snippet(out["text"])
 
@@ -313,91 +333,193 @@ class TurnEvals:
                     if tool_name not in tool_inputs:
                         tool_inputs[tool_name] = tc.get("args", {})
 
+        return {
+            "full_text": full_text,
+            "called_tools": called_tools,
+            "tool_inputs": tool_inputs,
+            "tool_outputs": tool_outputs,
+            "target_agent": target_agent,
+        }
+
+    def validate_turn_test(self, test_case: Any, turn_response: Any):
+        """Validates the turn response against defined expectations."""
+
+        signals = self._extract_signals(turn_response)
+        full_text = signals["full_text"]
+        called_tools = signals["called_tools"]
+        tool_inputs = signals["tool_inputs"]
+        tool_outputs = signals["tool_outputs"]
+        target_agent = signals["target_agent"]
+
+        results = []
+        llm_expectations = []
         for exp in test_case.expectations:
+            if isinstance(exp, str):
+                llm_expectations.append(exp)
+                continue
+
             op = exp.type
             expected = exp.value
 
-            expected_vals.append(str(expected))
+            # Rule-based evaluation
+            status = "SUCCESS"
+            justification = ""
+            actual = ""
 
             if op == TurnOperator.EQUALS:
-                actual_vals.append(full_text.strip())
-                if full_text.strip() != str(expected).strip():
-                    errors.append(
-                        f"EQUALS failed: Expected '{expected}', Got '{full_text.strip()}'"
+                actual = full_text.strip()
+                if actual != str(expected).strip():
+                    status = "FAILURE"
+                    justification = (
+                        f"EQUALS failed: Expected '{expected}', Got '{actual}'"
                     )
             elif op == TurnOperator.CONTAINS:
-                actual_vals.append(full_text.strip())
-                if str(expected) not in full_text:
-                    errors.append(
-                        f"CONTAINS failed: '{expected}' not found in '{full_text.strip()}'"
+                actual = full_text.strip()
+                if str(expected) not in actual:
+                    status = "FAILURE"
+                    justification = (
+                        f"CONTAINS failed: '{expected}' not found in '{actual}'"
                     )
             elif op == TurnOperator.TOOL_CALLED:
-                actual_vals.append(str(called_tools))
+                actual = str(called_tools)
                 found = any(
                     expected == t or t.endswith(expected) for t in called_tools
                 )
                 if not found:
-                    errors.append(
-                        f"TOOL_CALLED failed: Expected tool '{expected}' was not called. Tools called: {called_tools}"
+                    status = "FAILURE"
+                    justification = (
+                        f"TOOL_CALLED failed: Expected tool '{expected}' was "
+                        f"not called. Tools called: {called_tools}"
                     )
             elif op == TurnOperator.NO_TOOLS_CALLED:
-                actual_vals.append(str(called_tools))
+                actual = str(called_tools)
                 if called_tools:
-                    errors.append(
-                        f"NO_TOOLS_CALLED failed: Tools were called: {called_tools}"
+                    status = "FAILURE"
+                    justification = (
+                        f"NO_TOOLS_CALLED failed: Tools were called: "
+                        f"{called_tools}"
                     )
             elif op == TurnOperator.AGENT_TRANSFER:
-                actual_vals.append(target_agent)
-                if target_agent != expected and not target_agent.endswith(
-                    expected
-                ):
-                    errors.append(
-                        f"AGENT_TRANSFER failed: Expected transfer to '{expected}', actually transferred to '{target_agent}'"
+                actual = target_agent
+                if actual != expected and not actual.endswith(expected):
+                    status = "FAILURE"
+                    justification = (
+                        f"AGENT_TRANSFER failed: Expected transfer to "
+                        f"'{expected}', actually transferred to '{actual}'"
                     )
             elif op == TurnOperator.TOOL_INPUT:
-                actual_vals.append(str(tool_inputs))
+                actual = str(tool_inputs)
                 if not isinstance(expected, dict):
-                    errors.append(
-                        f"TOOL_INPUT failed: expectation value must be a dictionary."
+                    status = "FAILURE"
+                    justification = (
+                        f"TOOL_INPUT failed: expectation value must be a "
+                        f"dictionary."
                     )
-                    continue
-                # 1) Try matching against the top-level tool_inputs container
-                if self._check_dict_subset(expected, tool_inputs):
-                    continue
-
-                # 2) Fallback to checking nested argument dicts for any tool
-                match_found = False
-                for t_name, t_args in tool_inputs.items():
-                    if self._check_dict_subset(expected, t_args):
-                        match_found = True
-                        break
-                if not match_found:
-                    errors.append(
-                        f"TOOL_INPUT failed: No tool call contained matching arguments {expected}. Actual tool inputs: {tool_inputs}"
-                    )
+                else:
+                    # 1) Try matching against the top-level tool_inputs
+                    # container
+                    if self._check_dict_subset(expected, tool_inputs):
+                        pass
+                    else:
+                        # 2) Fallback to checking nested argument dicts for
+                        # any tool
+                        match_found = False
+                        for t_name, t_args in tool_inputs.items():
+                            if self._check_dict_subset(expected, t_args):
+                                match_found = True
+                                break
+                        if not match_found:
+                            status = "FAILURE"
+                            justification = (
+                                f"TOOL_INPUT failed: No tool call contained "
+                                f"matching arguments {expected}. Actual tool "
+                                f"inputs: {tool_inputs}"
+                            )
             elif op == TurnOperator.TOOL_OUTPUT:
-                actual_vals.append(str(tool_outputs))
+                actual = str(tool_outputs)
                 if not isinstance(expected, dict):
-                    errors.append(
-                        f"TOOL_OUTPUT failed: expectation value must be a dictionary."
+                    status = "FAILURE"
+                    justification = (
+                        f"TOOL_OUTPUT failed: expectation value must be a "
+                        f"dictionary."
                     )
-                    continue
-                # 1) Try matching against the top-level tool_outputs container
-                if self._check_dict_subset(expected, tool_outputs):
-                    continue
+                else:
+                    # 1) Try matching against the top-level tool_outputs
+                    # container
+                    if self._check_dict_subset(expected, tool_outputs):
+                        pass
+                    else:
+                        # 2) Fallback to checking nested response dicts for
+                        # any tool
+                        match_found = False
+                        for t_name, t_resp in tool_outputs.items():
+                            if self._check_dict_subset(expected, t_resp):
+                                match_found = True
+                                break
+                        if not match_found:
+                            status = "FAILURE"
+                            justification = (
+                                f"TOOL_OUTPUT failed: No tool response "
+                                f"contained matching outputs {expected}. "
+                                f"Actual tool outputs: {tool_outputs}"
+                            )
 
-                # 2) Fallback to checking nested response dicts for any tool
-                match_found = False
-                for t_name, t_resp in tool_outputs.items():
-                    if self._check_dict_subset(expected, t_resp):
-                        match_found = True
-                        break
-                if not match_found:
-                    errors.append(
-                        f"TOOL_OUTPUT failed: No tool response contained matching outputs {expected}. Actual tool outputs: {tool_outputs}"
-                    )
+            results.append(
+                {
+                    "expectation": f"{op.name}: {expected}",
+                    "status": status,
+                    "expected": str(expected),
+                    "actual": actual,
+                    "justification": justification,
+                }
+            )
 
-        return errors, expected_vals, actual_vals
+        if llm_expectations:
+            # Build trace
+            trace_chunks = []
+            user_input = getattr(test_case, "user", "") or getattr(
+                test_case, "event", ""
+            )
+            trace_chunks.append(f"User: {user_input}")
+            trace_chunks.append(f"Agent Text: {full_text.strip()}")
+            for tool in called_tools:
+                trace_chunks.append(
+                    f"Tool Call: {tool} with args {tool_inputs.get(tool, {})}"
+                )
+                trace_chunks.append(
+                    f"Tool Response: {tool} with result "
+                    f"{tool_outputs.get(tool, {})}"
+                )
+            if target_agent:
+                trace_chunks.append(f"Agent Transfer: {target_agent}")
+
+            model_name = test_case.config.get(
+                "gemini_model", "gemini-3.1-flash-lite-preview"
+            )
+
+            llm_results = evaluate_expectations(
+                genai_client=self.genai_client,
+                model_name=model_name,
+                trace=trace_chunks,
+                expectations=llm_expectations
+            )
+
+            for r in llm_results:
+                results.append(
+                    {
+                        "expectation": r.expectation,
+                        "status": (
+                            "SUCCESS"
+                            if r.status == ExpectationStatus.MET
+                            else "FAILURE"
+                        ),
+                        "expected": "",
+                        "actual": "",
+                        "justification": r.justification,
+                    }
+                )
+
+        return results
 
     def run_turn_tests(
         self,
@@ -405,8 +527,8 @@ class TurnEvals:
         debug: bool = False,
         session_id_prefix: str = "turn_eval_",
     ) -> pd.DataFrame:
-        """Runs a list of single-turn tests. Every test runs in a brand new session."""
-        import uuid
+        """Runs a list of single-turn tests. Every test runs in a brand new
+        session."""
 
         results = []
 
@@ -419,6 +541,7 @@ class TurnEvals:
             try:
                 if case.turns:
                     # Multi-turn sequence
+                    full_conversation_trace = []
                     for step in case.turns:
                         if debug:
                             input_str = (
@@ -427,7 +550,8 @@ class TurnEvals:
                                 else f"<event>{step.event}</event>"
                             )
                             print(
-                                f"[DEBUG] Step: {step.turn} | Input: {input_str}"
+                                f"[DEBUG] Step: {step.turn} | Input: "
+                                f"{input_str}"
                             )
                             print(f"[DEBUG] Session ID: {test_session_id}")
                             print(f"[DEBUG] Variables: {step.variables}")
@@ -445,46 +569,153 @@ class TurnEvals:
                             **merged_config,
                         )
 
-                        errors, expected_vals, actual_vals = (
-                            self.validate_turn_test(step, turn_response)
+                        # Extract trace for this turn
+                        signals = self._extract_signals(turn_response)
+                        user_input = getattr(step, "user", "") or getattr(
+                            step, "event", ""
+                        )
+                        full_conversation_trace.append(f"User: {user_input}")
+                        full_conversation_trace.append(
+                            f"Agent Text: {signals["full_text"].strip()}"
+                        )
+                        for tool in signals["called_tools"]:
+                            full_conversation_trace.append(
+                                f"Tool Call: {tool} with args "
+                                f"{signals["tool_inputs"].get(tool, {})}"
+                            )
+                            full_conversation_trace.append(
+                                f"Tool Response: {tool} with result "
+                                f"{signals["tool_outputs"].get(tool, {})}"
+                            )
+                        if signals["target_agent"]:
+                            full_conversation_trace.append(
+                                f"Agent Transfer: {signals["target_agent"]}"
+                            )
+
+                        eval_results = self.validate_turn_test(
+                            step, turn_response
                         )
 
                         status = "SUCCESS"
-                        if errors:
+                        if any(r["status"] == "FAILURE" for r in eval_results):
                             status = "FAILURE"
 
                         print(f"{status}: {case.name} - {step.turn}")
-                        if errors:
-                            for err in errors:
-                                print(f"  - {err}")
+                        for r in eval_results:
+                            if r["status"] == "FAILURE":
+                                print(f"  - {r["justification"]}")
 
-                        results.append(
-                            {
-                                "test_name": case.name,
-                                "turn": step.turn,
-                                "user": step.user or f"Event: {step.event}",
-                                "status": status,
-                                "errors": "; ".join(errors) if errors else "",
-                                "expected": (
-                                    "\n".join(expected_vals)
-                                    if expected_vals
-                                    else ""
-                                ),
-                                "actual": (
-                                    "\n".join(actual_vals)
-                                    if actual_vals
-                                    else ""
-                                ),
-                                "session_id": test_session_id,
-                            }
-                        )
+                        if not eval_results:
+                            results.append(
+                                {
+                                    "test_name": case.name,
+                                    "turn": step.turn,
+                                    "user": step.user or f"Event: {step.event}",
+                                    "status": "SUCCESS",
+                                    "errors": "",
+                                    "expected": "",
+                                    "actual": "",
+                                    "session_id": test_session_id,
+                                    "llm_results": "",
+                                }
+                            )
+                        else:
+                            for r in eval_results:
+                                results.append(
+                                    {
+                                        "test_name": case.name,
+                                        "turn": step.turn,
+                                        "user": (
+                                            step.user
+                                            or f"Event: {step.event}"
+                                        ),
+                                        "status": r["status"],
+                                        "errors": (
+                                            r["justification"]
+                                            if r["status"] == "FAILURE"
+                                            else ""
+                                        ),
+                                        "expected": r["expected"],
+                                        "actual": r["actual"],
+                                        "session_id": test_session_id,
+                                        "llm_results": (
+                                            f"{r["expectation"]}: "
+                                            f"{r["status"]} "
+                                            f"({r["justification"]})"
+                                            if not r["expected"]
+                                            else ""
+                                        ),
+                                    }
+                                )
 
-                        if errors:
+                        if status == "FAILURE":
                             print(
-                                f"Aborting multi-turn sequence '{case.name}' due to failure at '{step.turn}'."
+                                f"Aborting multi-turn sequence '{case.name}' "
+                                f"due to failure at '{step.turn}'."
                             )
                             break
                         print("-" * 30)
+
+                    # Conversation-level expectations
+                    if case.expectations:
+                        llm_expectations = [
+                            exp
+                            for exp in case.expectations
+                            if isinstance(exp, str)
+                        ]
+                        if llm_expectations:
+                            print(
+                                f"Evaluating conversation-level expectations "
+                                f"for: {case.name}"
+                            )
+
+                            model_name = case.config.get(
+                                "gemini_model", "gemini-3.1-flash-lite-preview"
+                            )
+
+                            llm_results = evaluate_expectations(
+                                genai_client=self.genai_client,
+                                model_name=model_name,
+                                trace=full_conversation_trace,
+                                expectations=llm_expectations
+                            )
+
+                            for r in llm_results:
+                                results.append(
+                                    {
+                                        "test_name": case.name,
+                                        "turn": "CONVERSATION",
+                                        "user": "",
+                                        "status": (
+                                            "SUCCESS"
+                                            if r.status == ExpectationStatus.MET
+                                            else "FAILURE"
+                                        ),
+                                        "errors": (
+                                            r.justification
+                                            if r.status != ExpectationStatus.MET
+                                            else ""
+                                        ),
+                                        "expected": "",
+                                        "actual": "",
+                                        "session_id": test_session_id,
+                                        "llm_results": (
+                                            f"{r.expectation}: {r.status} "
+                                            f"({r.justification})"
+                                        ),
+                                    }
+                                )
+                                status_str = (
+                                    "SUCCESS"
+                                    if r.status == ExpectationStatus.MET
+                                    else "FAILURE"
+                                )
+                                print(
+                                    f"{status_str}: Conversation-level - "
+                                    f"{r.expectation}"
+                                )
+                                if r.status != ExpectationStatus.MET:
+                                    print(f"  - {r.justification}")
                 else:
                     # 2. Run the single turn
                     if debug:
@@ -516,37 +747,55 @@ class TurnEvals:
                     )
 
                     # 3. Validate expectations
-                    errors, expected_vals, actual_vals = (
-                        self.validate_turn_test(case, turn_response)
-                    )
+                    eval_results = self.validate_turn_test(case, turn_response)
 
                     status = "SUCCESS"
-                    if errors:
+                    if any(r["status"] == "FAILURE" for r in eval_results):
                         status = "FAILURE"
 
                     print(f"{status}: {case.name}")
-                    if errors:
-                        for err in errors:
-                            print(f"  - {err}")
+                    for r in eval_results:
+                        if r["status"] == "FAILURE":
+                            print(f"  - {r['justification']}")
 
-                    results.append(
-                        {
-                            "test_name": case.name,
-                            "turn": "",
-                            "user": case.user or f"Event: {case.event}",
-                            "status": status,
-                            "errors": "; ".join(errors) if errors else "",
-                            "expected": (
-                                "\n".join(expected_vals)
-                                if expected_vals
-                                else ""
-                            ),
-                            "actual": (
-                                "\n".join(actual_vals) if actual_vals else ""
-                            ),
-                            "session_id": test_session_id,
-                        }
-                    )
+                    if not eval_results:
+                        results.append(
+                            {
+                                "test_name": case.name,
+                                "turn": "",
+                                "user": case.user or f"Event: {case.event}",
+                                "status": "SUCCESS",
+                                "errors": "",
+                                "expected": "",
+                                "actual": "",
+                                "session_id": test_session_id,
+                                "llm_results": "",
+                            }
+                        )
+                    else:
+                        for r in eval_results:
+                            results.append(
+                                {
+                                    "test_name": case.name,
+                                    "turn": "",
+                                    "user": case.user or f"Event: {case.event}",
+                                    "status": r["status"],
+                                    "errors": (
+                                        r["justification"]
+                                        if r["status"] == "FAILURE"
+                                        else ""
+                                    ),
+                                    "expected": r["expected"],
+                                    "actual": r["actual"],
+                                    "session_id": test_session_id,
+                                    "llm_results": (
+                                        f"{r["expectation"]}: {r["status"]} "
+                                        f"({r["justification"]})"
+                                        if not r["expected"]
+                                        else ""
+                                    ),
+                                }
+                            )
 
             except Exception as e:
                 print(f"FAILURE: Exception {e}")
