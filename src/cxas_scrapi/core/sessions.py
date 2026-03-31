@@ -28,6 +28,7 @@ import time
 import json
 import websocket
 import ssl
+import sys
 import certifi
 from google.protobuf import json_format
 from enum import Enum
@@ -395,13 +396,27 @@ class Sessions(Common):
         Tool Calls, Tool Results, and Agent Transfers.
         Requires Jupyter Notebook or IPython environment for HTML rendering.
         """
-        try:
-            from IPython.display import display, HTML
-        except ImportError:
-            print(
-                "parse_result requires IPython.display.HTML. Please run this in a Jupyter/Colab environment."
-            )
-            return
+
+        is_notebook = "ipykernel" in sys.modules
+
+        if not is_notebook:
+            display = print
+
+            def HTML(text):
+                import re
+
+                return re.sub(r"<[^>]*>", "", text).strip()
+
+        else:
+            try:
+                from IPython.display import display, HTML
+            except ImportError:
+                display = print
+
+                def HTML(text):
+                    import re
+
+                    return re.sub(r"<[^>]*>", "", text).strip()
 
         tool_call_font = "<font color='darkred'><b>TOOL CALL:</b></font>"
         tool_res_font = "<font color='goldenrod'><b>TOOL RESULT:</b></font>"

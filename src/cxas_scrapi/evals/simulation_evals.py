@@ -401,7 +401,6 @@ class SimulationEvals(Apps):
                 if console_logging:
                     print(f"Error evaluating expectations: {e}")
 
-
     def simulate_conversation(
         self,
         test_case: Dict[str, Any],
