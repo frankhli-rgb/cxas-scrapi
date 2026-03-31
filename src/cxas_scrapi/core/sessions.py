@@ -537,6 +537,7 @@ class Sessions(Common):
         self,
         session_id: str,
         text: Optional[str | list[str]] = None,
+        dtmf: Optional[str] = None,
         event: Optional[str] = None,
         event_vars: Optional[Dict[str, Any]] = None,
         blob: bytes = None,
@@ -670,6 +671,9 @@ class Sessions(Common):
 
         if variables is not None:
             inputs.append({"variables": variables})
+
+        if dtmf is not None:
+            inputs.append({"dtmf": dtmf})
 
         if event is not None:
             event_payload = {"event": event}
