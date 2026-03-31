@@ -156,7 +156,7 @@ def test_app_pull(
     cli_app.app_pull(args)
 
     mock_apps_client.export_app.assert_called_once_with(
-        app_id="projects/test-project/locations/us/apps/123"
+        app_name="projects/test-project/locations/us/apps/123"
     )
     assert os.path.exists(os.path.join(args.target_dir, "app.yaml"))
 
@@ -185,8 +185,8 @@ def test_app_push(mock_apps_client, tmp_path):
 
     cli_app.app_push(args)
 
-    mock_apps_client.import_app.assert_called_once()
-    call_args = mock_apps_client.import_app.call_args[1]
+    mock_apps_client.import_as_new_app.assert_called_once()
+    call_args = mock_apps_client.import_as_new_app.call_args[1]
     assert call_args["display_name"] == "New App Name"
     assert "app_content" in call_args
 
@@ -219,9 +219,9 @@ def test_app_branch(
     cli_app.app_branch(args)
 
     mock_apps_client.export_app.assert_called_once_with(
-        app_id="projects/test-project/locations/us/apps/source-id"
+        app_name="projects/test-project/locations/us/apps/source-id"
     )
-    mock_apps_client.import_app.assert_called_once_with(
+    mock_apps_client.import_as_new_app.assert_called_once_with(
         app_content=dummy_zip_bytes, display_name="Branched App"
     )
 
@@ -230,7 +230,7 @@ def test_app_delete_by_app_id(
     mock_apps_client, mock_common_get_project_id, mock_common_get_location
 ):
     args = argparse.Namespace(
-        app_id="projects/test-project/locations/us/apps/123",
+        app_name="projects/test-project/locations/us/apps/123",
         display_name=None,
         project_id=None,
         location=None,
@@ -240,7 +240,7 @@ def test_app_delete_by_app_id(
     cli_app.app_delete(args)
 
     mock_apps_client.delete_app.assert_called_once_with(
-        app_id="projects/test-project/locations/us/apps/123", force=True
+        app_name="projects/test-project/locations/us/apps/123", force=True
     )
 
 
@@ -261,7 +261,7 @@ def test_app_delete_by_display_name(mock_apps_client):
 
     mock_apps_client.get_app_by_display_name.assert_called_once_with("My App")
     mock_apps_client.delete_app.assert_called_once_with(
-        app_id="projects/test-project/locations/us/apps/123", force=False
+        app_name="projects/test-project/locations/us/apps/123", force=False
     )
 
 
@@ -279,4 +279,4 @@ def test_app_delete_missing_args(mock_apps_client, capsys):
 
     assert excinfo.value.code == 1
     captured = capsys.readouterr()
-    assert "Error: Must provide either --app_id OR" in captured.out
+    assert "Error: Must provide either --app_name OR" in captured.out
