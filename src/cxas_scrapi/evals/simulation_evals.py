@@ -406,7 +406,7 @@ class SimulationEvals(Apps):
         test_case: Dict[str, Any],
         initial_utterance: str = _FIRST_UTTERANCE,
         model: str = _DEFAULT_GEMINI_MODEL,
-        session_id: str = str(uuid.uuid4()),
+        session_id: Optional[str] = None,
         console_logging: bool = True,
         modality: str = "text",
     ) -> LLMUserConversation:
@@ -419,6 +419,8 @@ class SimulationEvals(Apps):
             console_logging: Whether to print interaction transcript to
                 the console.
         """
+        if session_id is None:
+            session_id = str(uuid.uuid4())
         eval_conv = LLMUserConversation(
             genai_client=self.genai_client,
             genai_model=model,
