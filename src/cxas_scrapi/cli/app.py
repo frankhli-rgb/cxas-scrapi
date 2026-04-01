@@ -27,6 +27,7 @@ from typing import Optional, Any
 
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.common import Common
+from cxas_scrapi.utils.validator import Validator
 
 logger = logging.getLogger(__name__)
 
@@ -202,13 +203,11 @@ def app_push(args: argparse.Namespace) -> Optional[str]:
             if "apps/" in target_app_id:
                 target_app_id = target_app_id.split("apps/")[-1]
             result = apps_client.import_app(
-                app_name=target_app_id,
-                app_content=app_content
+                app_name=target_app_id, app_content=app_content
             )
         else:
             result = apps_client.import_as_new_app(
-                display_name=display_name,
-                app_content=app_content
+                display_name=display_name, app_content=app_content
             )
         return _handle_import_result(
             result, "pushed to" if target_app else "pushed"
@@ -358,4 +357,53 @@ def apps_get(args: argparse.Namespace) -> None:
         # Note: could dump full JSON if needed.
     except Exception as e:
         print(f"Failed to get app details: {e}")
+        sys.exit(1)
+
+
+def app_validate(args: argparse.Namespace) -> None:
+    """Handles the 'validate' command."""
+    if getattr(args, "app", None):
+        print(f"Validating app at: {args.app}")
+        try:
+            Validator().validate_app(args.app)
+            print("Validation successful.")
+        except Exception as e:
+            print(f"Validation failed: {e}")
+            sys.exit(1)
+    elif getattr(args, "agent", None):
+        print(f"Validating agent at: {args.agent}")
+        try:
+            Validator().validate_agent(args.agent)
+            print("Validation successful.")
+        except Exception as e:
+            print(f"Validation failed: {e}")
+            sys.exit(1)
+    elif getattr(args, "tool", None):
+        print(f"Validating tool at: {args.tool}")
+        try:
+            Validator().validate_tool(args.tool)
+            print("Validation successful.")
+        except Exception as e:
+            print(f"Validation failed: {e}")
+            sys.exit(1)
+    elif getattr(args, "toolset", None):
+        print(f"Validating toolset at: {args.toolset}")
+        try:
+            Validator().validate_toolset(args.toolset)
+            print("Validation successful.")
+        except Exception as e:
+            print(f"Validation failed: {e}")
+            sys.exit(1)
+    elif getattr(args, "guardrail", None):
+        print(f"Validating guardrail at: {args.guardrail}")
+        try:
+            Validator().validate_guardrail(args.guardrail)
+            print("Validation successful.")
+        except Exception as e:
+            print(f"Validation failed: {e}")
+            sys.exit(1)
+    else:
+        print(
+            "Error: Please specify --app, --agent, --tool, --toolset, or --guardrail to validate."
+        )
         sys.exit(1)

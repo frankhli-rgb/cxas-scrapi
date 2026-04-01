@@ -181,7 +181,7 @@ def test_app_push(mock_apps_client, tmp_path):
     mock_lro.result.return_value = mock_imported_app
     mock_result = mock_lro  # import_app returns LRO or App directly.
 
-    mock_apps_client.import_app.return_value = mock_result
+    mock_apps_client.import_as_new_app.return_value = mock_result
 
     cli_app.app_push(args)
 
@@ -214,7 +214,7 @@ def test_app_branch(
     mock_imported_app = mock.MagicMock()
     mock_imported_app.name = "projects/test-project/locations/us/apps/branch-id"
     mock_import_lro.result.return_value = mock_imported_app
-    mock_apps_client.import_app.return_value = mock_import_lro
+    mock_apps_client.import_as_new_app.return_value = mock_import_lro
 
     cli_app.app_branch(args)
 
@@ -280,3 +280,184 @@ def test_app_delete_missing_args(mock_apps_client, capsys):
     assert excinfo.value.code == 1
     captured = capsys.readouterr()
     assert "Error: Must provide either --app_name OR" in captured.out
+
+
+def test_app_validate_success(capsys):
+    args = argparse.Namespace(agent="dummy_agent_dir")
+
+    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
+        mock_instance = mock_validator_class.return_value
+        mock_instance.validate_agent.return_value = True
+
+        cli_app.app_validate(args)
+
+        mock_instance.validate_agent.assert_called_once_with("dummy_agent_dir")
+        captured = capsys.readouterr()
+        assert "Validation successful." in captured.out
+
+
+def test_app_validate_failure(capsys):
+    args = argparse.Namespace(agent="dummy_agent_dir")
+
+    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
+        mock_instance = mock_validator_class.return_value
+        mock_instance.validate_agent.side_effect = ValueError(
+            "Invalid structure"
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_validate(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "Validation failed: Invalid structure" in captured.out
+
+
+def test_app_validate_tool_success(capsys):
+    args = argparse.Namespace(agent=None, tool="dummy_tool_dir")
+
+    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
+        mock_instance = mock_validator_class.return_value
+        mock_instance.validate_tool.return_value = True
+
+        cli_app.app_validate(args)
+
+        mock_instance.validate_tool.assert_called_once_with("dummy_tool_dir")
+        captured = capsys.readouterr()
+        assert "Validation successful." in captured.out
+
+
+def test_app_validate_tool_failure(capsys):
+    args = argparse.Namespace(agent=None, tool="dummy_tool_dir")
+
+    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
+        mock_instance = mock_validator_class.return_value
+        mock_instance.validate_tool.side_effect = ValueError(
+            "Invalid structure"
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_validate(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "Validation failed: Invalid structure" in captured.out
+
+
+def test_app_validate_toolset_success(capsys):
+    args = argparse.Namespace(
+        agent=None, tool=None, toolset="dummy_toolset_dir"
+    )
+
+    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
+        mock_instance = mock_validator_class.return_value
+        mock_instance.validate_toolset.return_value = True
+
+        cli_app.app_validate(args)
+
+        mock_instance.validate_toolset.assert_called_once_with(
+            "dummy_toolset_dir"
+        )
+        captured = capsys.readouterr()
+        assert "Validation successful." in captured.out
+
+
+def test_app_validate_toolset_failure(capsys):
+    args = argparse.Namespace(
+        agent=None, tool=None, toolset="dummy_toolset_dir"
+    )
+
+    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
+        mock_instance = mock_validator_class.return_value
+        mock_instance.validate_toolset.side_effect = ValueError(
+            "Invalid structure"
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_validate(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "Validation failed: Invalid structure" in captured.out
+
+
+def test_app_validate_guardrail_success(capsys):
+    args = argparse.Namespace(
+        agent=None, tool=None, toolset=None, guardrail="dummy_guardrail_dir"
+    )
+
+    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
+        mock_instance = mock_validator_class.return_value
+        mock_instance.validate_guardrail.return_value = True
+
+        cli_app.app_validate(args)
+
+        mock_instance.validate_guardrail.assert_called_once_with(
+            "dummy_guardrail_dir"
+        )
+        captured = capsys.readouterr()
+        assert "Validation successful." in captured.out
+
+
+def test_app_validate_guardrail_failure(capsys):
+    args = argparse.Namespace(
+        agent=None, tool=None, toolset=None, guardrail="dummy_guardrail_dir"
+    )
+
+    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
+        mock_instance = mock_validator_class.return_value
+        mock_instance.validate_guardrail.side_effect = ValueError(
+            "Invalid structure"
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_validate(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "Validation failed: Invalid structure" in captured.out
+
+
+def test_app_validate_app_success(capsys):
+    args = argparse.Namespace(app="dummy_app_dir", agent=None)
+
+    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
+        mock_instance = mock_validator_class.return_value
+        mock_instance.validate_app.return_value = True
+
+        cli_app.app_validate(args)
+
+        mock_instance.validate_app.assert_called_once_with("dummy_app_dir")
+        captured = capsys.readouterr()
+        assert "Validation successful." in captured.out
+
+
+def test_app_validate_app_failure(capsys):
+    args = argparse.Namespace(app="dummy_app_dir", agent=None)
+
+    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
+        mock_instance = mock_validator_class.return_value
+        mock_instance.validate_app.side_effect = ValueError("Invalid structure")
+
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_validate(args)
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "Validation failed: Invalid structure" in captured.out
+
+
+def test_app_validate_no_args(capsys):
+    args = argparse.Namespace(
+        app=None, agent=None, tool=None, toolset=None, guardrail=None
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli_app.app_validate(args)
+
+    assert excinfo.value.code == 1
+    captured = capsys.readouterr()
+    assert (
+        "Error: Please specify --app, --agent, --tool, --toolset, or --guardrail to validate."
+        in captured.out
+    )

@@ -37,6 +37,7 @@ from cxas_scrapi.evals.tool_evals import ToolEvals
 from cxas_scrapi.cli.app import (
     app_pull,
     app_push,
+    app_validate,
     app_create,
     app_branch,
     apps_list,
@@ -1127,6 +1128,27 @@ def get_parser() -> argparse.ArgumentParser:
     )
     _add_project_location_args(parser_push)
     parser_push.set_defaults(func=app_push)
+
+    # Parser for 'validate'
+    parser_validate = subparsers.add_parser(
+        "validate", help="Validate an app directory structure."
+    )
+    parser_validate.add_argument(
+        "--app", required=False, help="Path to the app directory."
+    )
+    parser_validate.add_argument(
+        "--agent", required=False, help="Path to the agent directory."
+    )
+    parser_validate.add_argument(
+        "--tool", required=False, help="Path to the tool directory."
+    )
+    parser_validate.add_argument(
+        "--toolset", required=False, help="Path to the toolset directory."
+    )
+    parser_validate.add_argument(
+        "--guardrail", required=False, help="Path to the guardrail directory."
+    )
+    parser_validate.set_defaults(func=app_validate)
 
     # Parser for 'create'
     parser_create = subparsers.add_parser("create", help="Create a new app.")
