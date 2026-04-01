@@ -400,29 +400,40 @@ class Sessions(Common):
         is_notebook = "ipykernel" in sys.modules
 
         if not is_notebook:
+            # ANSI escape codes for terminal
+            tool_call_font = "\033[1;31mTOOL CALL:\033[0m"
+            tool_res_font = "\033[1;33mTOOL RESULT:\033[0m"
+            query_font = "\033[1;32mUSER QUERY:\033[0m"
+            response_font = "\033[1;35mAGENT RESPONSE:\033[0m"
+            transfer_font = "\033[1;36mAGENT TRANSFER:\033[0m"
+
             display = print
 
             def HTML(text):
-                import re
-
-                return re.sub(r"<[^>]*>", "", text).strip()
+                return text  # Pass-through for terminal
 
         else:
             try:
                 from IPython.display import display, HTML
+
+                tool_call_font = "<font color='darkred'><b>TOOL CALL:</b></font>"
+                tool_res_font = "<font color='goldenrod'><b>TOOL RESULT:</b></font>"
+                query_font = "<font color='darkgreen'><b>USER QUERY:</b></font>"
+                response_font = "<font color='purple'><b>AGENT RESPONSE:</b></font>"
+                transfer_font = "<font color='darkorange'><b>AGENT TRANSFER:</b></font>"
             except ImportError:
+                tool_call_font = "TOOL CALL:"
+                tool_res_font = "TOOL RESULT:"
+                query_font = "USER QUERY:"
+                response_font = "AGENT RESPONSE:"
+                transfer_font = "AGENT TRANSFER:"
+
                 display = print
 
                 def HTML(text):
                     import re
 
                     return re.sub(r"<[^>]*>", "", text).strip()
-
-        tool_call_font = "<font color='darkred'><b>TOOL CALL:</b></font>"
-        tool_res_font = "<font color='goldenrod'><b>TOOL RESULT:</b></font>"
-        query_font = "<font color='darkgreen'><b>USER QUERY:</b></font>"
-        response_font = "<font color='purple'><b>AGENT RESPONSE:</b></font>"
-        transfer_font = "<font color='darkorange'><b>AGENT TRANSFER:</b></font>"
 
         outputs = getattr(res, "outputs", [])
         if not outputs:

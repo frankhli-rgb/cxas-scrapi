@@ -81,12 +81,28 @@ class SimulationReport:
         self.expectations_df = expectations_df
 
     def __str__(self):
-        res = "--- Goal Progress ---\n" + self.goals_df.to_string()
+        import re
+
+        green = "\033[1;32m"
+        red = "\033[1;31m"
+        reset = "\033[0m"
+
+        goals_str = self.goals_df.to_string()
+        goals_str = goals_str.replace("Completed", f"{green}Completed{reset}")
+        goals_str = goals_str.replace("Not Started", f"{red}Not Started{reset}")
+        goals_str = goals_str.replace(
+            "In Progress", f"{green}In Progress{reset}"
+        )
+
+        res = "--- Goal Progress ---\n" + goals_str
+
         if self.expectations_df is not None:
-            res += (
-                "\n\n--- Expectations ---\n"
-                + self.expectations_df.to_string()
-            )
+            exp_str = self.expectations_df.to_string()
+            exp_str = exp_str.replace("Not Met", f"{red}Not Met{reset}")
+            exp_str = re.sub(r"(?<!Not )Met\b", f"{green}Met{reset}", exp_str)
+
+            res += "\n\n--- Expectations ---\n" + exp_str
+
         return res
 
     def _repr_html_(self):
