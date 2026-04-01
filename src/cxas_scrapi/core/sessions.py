@@ -473,7 +473,7 @@ class Sessions(Common):
 
                         elif chunk_type == "tool_call":
                             tc = chunk.tool_call
-                            tool_name = tc.tool or tc.display_name
+                            tool_name = tc.display_name or tc.tool
                             expanded_args = Sessions._expand_pb_struct(tc.args)
                             logging.debug(
                                 f"TOOL CALL: [{role}] {tool_name} -- Args: {expanded_args}"
@@ -486,7 +486,7 @@ class Sessions(Common):
 
                         elif chunk_type == "tool_response":
                             tr = chunk.tool_response
-                            tool_name = tr.tool or tr.display_name
+                            tool_name = tr.display_name or tr.tool
                             expanded_response = Sessions._expand_pb_struct(
                                 tr.response
                             )
