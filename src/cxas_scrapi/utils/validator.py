@@ -77,6 +77,21 @@ class Validator:
                 if item.is_dir():
                     self.validate_guardrail(str(item))
 
+        evaluations_dir = app_path / "evaluations"
+        if evaluations_dir.exists() and evaluations_dir.is_dir():
+            for item in evaluations_dir.iterdir():
+                if item.is_dir():
+                    self.validate_evaluation(str(item))
+
+        evaluation_expectations_dir = app_path / "evaluation_expectations"
+        if (
+            evaluation_expectations_dir.exists()
+            and evaluation_expectations_dir.is_dir()
+        ):
+            for item in evaluation_expectations_dir.iterdir():
+                if item.is_dir():
+                    self.validate_evaluation_expectations(str(item))
+
         return True
 
     def load_app(self, app_dir: str) -> types.App:
@@ -245,6 +260,66 @@ class Validator:
             guardrail_dict, guardrail_obj._pb, ignore_unknown_fields=False
         )
         return guardrail_obj
+
+    def validate_evaluation(self, evaluation_dir: str) -> bool:
+        """
+        Validates the evaluation structure aligns with CES exported evaluation structure.
+        """
+        loaded_evaluation = self.load_evaluation(evaluation_dir)
+        return True if loaded_evaluation else False
+
+    def load_evaluation(self, evaluation_dir: str) -> types.Evaluation:
+        """
+        Loads evaluation configuration from YAML or JSON.
+        """
+        evaluation_path = Path(evaluation_dir)
+        evaluation_name = evaluation_path.name
+
+        evaluation_dict = self._load_json_or_yaml(
+            evaluation_path, evaluation_name
+        )
+
+        # Evaluations observed so far do not contain file references.
+
+        evaluation_obj = types.Evaluation()
+        json_format.ParseDict(
+            evaluation_dict, evaluation_obj._pb, ignore_unknown_fields=False
+        )
+        return evaluation_obj
+
+    def validate_evaluation_expectations(
+        self, evaluation_expectations_dir: str
+    ) -> bool:
+        """
+        Validates the evaluation expectations structure aligns with CES exported evaluation expectations structure.
+        """
+        loaded_evaluation_expectations = self.load_evaluation_expectations(
+            evaluation_expectations_dir
+        )
+        return True if loaded_evaluation_expectations else False
+
+    def load_evaluation_expectations(
+        self, evaluation_expectations_dir: str
+    ) -> types.EvaluationExpectation:
+        """
+        Loads evaluation expectations configuration from YAML or JSON.
+        """
+        evaluation_expectations_path = Path(evaluation_expectations_dir)
+        evaluation_expectations_name = evaluation_expectations_path.name
+
+        evaluation_expectations_dict = self._load_json_or_yaml(
+            evaluation_expectations_path, evaluation_expectations_name
+        )
+
+        # Evaluations observed so far do not contain file references.
+
+        evaluation_expectations_obj = types.EvaluationExpectation()
+        json_format.ParseDict(
+            evaluation_expectations_dict,
+            evaluation_expectations_obj._pb,
+            ignore_unknown_fields=False,
+        )
+        return evaluation_expectations_obj
 
     def _load_json_or_yaml(self, directory: Path, file_name: str) -> dict:
         """Loads configuration from YAML or JSON.

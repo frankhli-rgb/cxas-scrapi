@@ -402,8 +402,28 @@ def app_validate(args: argparse.Namespace) -> None:
         except Exception as e:
             print(f"Validation failed: {e}")
             sys.exit(1)
+    elif getattr(args, "evaluation", None):
+        print(f"Validating evaluation at: {args.evaluation}")
+        try:
+            Validator().validate_evaluation(args.evaluation)
+            print("Validation successful.")
+        except Exception as e:
+            print(f"Validation failed: {e}")
+            sys.exit(1)
+    elif getattr(args, "evaluation_expectations", None):
+        print(
+            f"Validating evaluation expectations at: {args.evaluation_expectations}"
+        )
+        try:
+            Validator().validate_evaluation_expectations(
+                args.evaluation_expectations
+            )
+            print("Validation successful.")
+        except Exception as e:
+            print(f"Validation failed: {e}")
+            sys.exit(1)
     else:
         print(
-            "Error: Please specify --app, --agent, --tool, --toolset, or --guardrail to validate."
+            "Error: Please specify --[app, agent, tool, toolset, guardrail, evaluation, evaluation_expectations] to validate."
         )
         sys.exit(1)
