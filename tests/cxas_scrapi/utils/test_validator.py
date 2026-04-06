@@ -732,3 +732,184 @@ def test_validate_app_calls_sub_validators(tmp_path, validator, monkeypatch):
         mock_val_evaluation_expectations.assert_called_once_with(
             str(expectation1_dir)
         )
+
+
+def test_get_required_fields_parsing(validator):
+    class DummyProto:
+        """
+        Attributes:
+            field_one (str):
+                Required. Description.
+            field_two (int):
+                Description.
+        """
+
+    req = validator._get_required_fields(DummyProto)
+    assert req == ["field_one"]
+
+
+def test_validate_fields_missing(validator):
+    class DummyProto:
+        """
+        Attributes:
+            display_name (str):
+                Required. Description.
+        """
+
+    with pytest.raises(
+        ValueError,
+        match=r"Missing required fields for  DummyProto: \['display_name'\]",
+    ):
+        validator.validate_fields({}, DummyProto)
+
+
+def test_validate_fields_present(validator):
+    class DummyProto:
+        """
+        Attributes:
+            display_name (str):
+                Required. Description.
+        """
+
+    validator.validate_fields({"display_name": "My Name"}, DummyProto)
+
+
+def test_validate_fields_camel_case(validator):
+    class DummyProto:
+        """
+        Attributes:
+            display_name (str):
+                Required. Description.
+        """
+
+    # This might fail until we fix validator.py to support camelCase
+    validator.validate_fields({"displayName": "My Name"}, DummyProto)
+
+
+def test_load_app_missing_required_field(tmp_path, validator, monkeypatch):
+    from google.protobuf import json_format
+    import pytest
+
+    monkeypatch.chdir(tmp_path)
+    apps_dir = tmp_path / "apps"
+    apps_dir.mkdir()
+    app_dir = apps_dir / "MyApp"
+    app_dir.mkdir()
+
+    (app_dir / "app.yaml").write_text("description: MyApp without display name")
+
+    # Mock _get_required_fields to return ['display_name']
+    monkeypatch.setattr(
+        validator, "_get_required_fields", lambda cls: ["display_name"]
+    )
+
+    # Mock __name__ for the mock App class to avoid AttributeError
+    from google.cloud.ces_v1beta import types
+
+    monkeypatch.setattr(types.App, "__name__", "App", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match=r"Missing required fields for .*App: \['display_name'\]",
+    ):
+        validator.load_app(str(app_dir))
+
+
+def test_validate_fields_recursive(validator, monkeypatch):
+    import proto
+    import pytest
+
+    class MockRepeatedField:
+        def __init__(self, message):
+            self.message = message
+
+    class MockField:
+        def __init__(self, message):
+            self.message = message
+
+    # Monkeypatch proto.fields
+    monkeypatch.setattr(proto.fields, "RepeatedField", MockRepeatedField)
+    monkeypatch.setattr(proto.fields, "Field", MockField)
+
+    class NestedProto:
+        """
+        Attributes:
+            nested_name (str):
+                Required. Description.
+        """
+
+        __name__ = "NestedProto"
+
+    class ParentProto:
+        """
+        Attributes:
+            display_name (str):
+                Required. Description.
+        """
+
+        __name__ = "ParentProto"
+
+    class Meta:
+        fields = {
+            "display_name": MockField(None),
+            "nested_field": MockField(NestedProto),
+            "nested_list": MockRepeatedField(NestedProto),
+        }
+
+    ParentProto.meta = Meta()
+
+    # Mock _get_required_fields
+    original_get_required_fields = validator._get_required_fields
+
+    def mock_get_required_fields(cls):
+        if cls == ParentProto:
+            return ["display_name"]
+        if cls == NestedProto:
+            return ["nested_name"]
+        return original_get_required_fields(cls)
+
+    monkeypatch.setattr(
+        validator, "_get_required_fields", mock_get_required_fields
+    )
+
+    # Test case 1: Missing top-level required field
+    with pytest.raises(
+        ValueError,
+        match=r"Missing required fields for path ParentProto: \['display_name'\]",
+    ):
+        validator.validate_fields({}, ParentProto, "path")
+
+    # Test case 2: Valid top level, missing nested required field
+    with pytest.raises(
+        ValueError,
+        match=r"Missing required fields for  NestedProto: \['nested_name'\]",
+    ):
+        validator.validate_fields(
+            {"display_name": "My Name", "nested_field": {}}, ParentProto
+        )
+
+    # Test case 3: Valid top level, missing nested required field in list
+    with pytest.raises(
+        ValueError,
+        match=r"Missing required fields for  NestedProto: \['nested_name'\]",
+    ):
+        validator.validate_fields(
+            {
+                "display_name": "My Name",
+                "nested_list": [{"nested_name": "Valid"}, {}],
+            },
+            ParentProto,
+        )
+
+    # Test case 4: All valid
+    validator.validate_fields(
+        {
+            "display_name": "My Name",
+            "nested_field": {"nested_name": "Valid"},
+            "nested_list": [
+                {"nested_name": "Valid1"},
+                {"nested_name": "Valid2"},
+            ],
+        },
+        ParentProto,
+    )
