@@ -440,7 +440,7 @@ def init_github_action(args: argparse.Namespace) -> None:
     print("Generating GitHub Actions workflow template...", flush=True)
 
     agent_name = args.agent_name
-    app_id = args.app_id
+    app_name = args.app_name
 
     # Try to extract details from app.yaml if available
     agent_dir = args.agent_dir if args.agent_dir else "."
@@ -470,8 +470,8 @@ def init_github_action(args: argparse.Namespace) -> None:
                 app_data = yaml.safe_load(f)
                 if not agent_name and "displayName" in app_data:
                     agent_name = app_data["displayName"]
-                if not app_id and "name" in app_data:
-                    app_id = app_data["name"]
+                if not app_name and "name" in app_data:
+                    app_name = app_data["name"]
         except Exception as e:
             print(f"Warning: Could not parse {app_yaml_path}: {e}")
 
@@ -480,8 +480,8 @@ def init_github_action(args: argparse.Namespace) -> None:
         agent_name = "agent"
 
     # Extract project_id and location from app_id if it exists
-    extracted_project = Common._get_project_id(app_id) if app_id else None
-    extracted_location = Common._get_location(app_id) if app_id else None
+    extracted_project = Common._get_project_id(app_name) if app_name else None
+    extracted_location = Common._get_location(app_name) if app_name else None
 
     project_id = (
         getattr(args, "project_id", None)
@@ -490,15 +490,15 @@ def init_github_action(args: argparse.Namespace) -> None:
     )
     location = getattr(args, "location", None) or extracted_location or "global"
 
-    if not app_id:
+    if not app_name:
         app_basename = os.path.basename(os.path.abspath(agent_dir))
-        app_id = (
+        app_name = (
             f"projects/{project_id}/locations/{location}/apps/{app_basename}"
         )
         print(
-            f"Warning: No --app_id provided and could not retrieve 'name' from {app_yaml_path}."
+            f"Warning: No --app_name provided and could not retrieve 'name' from {app_yaml_path}."
         )
-        print(f"Synthesizing app identifier from directory name: {app_id}")
+        print(f"Synthesizing app identifier from directory name: {app_name}")
 
     output_path = (
         args.output
@@ -599,7 +599,7 @@ def init_github_action(args: argparse.Namespace) -> None:
         target_branch=args.branch,
         path_filter=path_filter,
         github_context_path=github_context_path,
-        app_id=app_id,
+        app_id=app_name,
         project_id=project_id,
         location=location,
         auth_env=auth_env,
