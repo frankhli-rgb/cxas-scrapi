@@ -1148,6 +1148,14 @@ def get_parser() -> argparse.ArgumentParser:
     parser_validate.add_argument(
         "--guardrail", required=False, help="Path to the guardrail directory."
     )
+    parser_validate.add_argument(
+        "--evaluation", required=False, help="Path to the evaluation directory."
+    )
+    parser_validate.add_argument(
+        "--evaluation_expectations",
+        required=False,
+        help="Path to the evaluation expectations directory.",
+    )
     parser_validate.set_defaults(func=app_validate)
 
     # Parser for 'create'

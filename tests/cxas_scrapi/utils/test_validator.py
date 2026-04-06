@@ -406,6 +406,160 @@ def test_validate_guardrail_valid(tmp_path, validator, monkeypatch):
         assert validator.validate_guardrail(str(guardrail_dir)) is True
 
 
+def test_load_evaluation_valid_yaml(tmp_path, validator, monkeypatch):
+    from unittest.mock import patch, MagicMock
+
+    monkeypatch.chdir(tmp_path)
+    evaluations_dir = tmp_path / "evaluations"
+    evaluations_dir.mkdir()
+    evaluation_dir = evaluations_dir / "MyEvaluation"
+    evaluation_dir.mkdir()
+
+    (evaluation_dir / "MyEvaluation.yaml").write_text(
+        "displayName: MyEvaluation"
+    )
+
+    with patch(
+        "cxas_scrapi.utils.validator.json_format.ParseDict"
+    ) as mock_parse_dict:
+        evaluation = validator.load_evaluation(str(evaluation_dir))
+
+        expected_dict = {
+            "displayName": "MyEvaluation",
+        }
+        mock_parse_dict.assert_called_once()
+        args, kwargs = mock_parse_dict.call_args
+        assert args[0] == expected_dict
+        assert evaluation._pb == args[1]
+
+
+def test_load_evaluation_valid_json(tmp_path, validator, monkeypatch):
+    from unittest.mock import patch, MagicMock
+
+    monkeypatch.chdir(tmp_path)
+    evaluations_dir = tmp_path / "evaluations"
+    evaluations_dir.mkdir()
+    evaluation_dir = evaluations_dir / "MyEvaluation"
+    evaluation_dir.mkdir()
+
+    (evaluation_dir / "MyEvaluation.json").write_text(
+        '{"displayName": "MyEvaluation"}'
+    )
+
+    with patch(
+        "cxas_scrapi.utils.validator.json_format.ParseDict"
+    ) as mock_parse_dict:
+        evaluation = validator.load_evaluation(str(evaluation_dir))
+
+        expected_dict = {
+            "displayName": "MyEvaluation",
+        }
+        mock_parse_dict.assert_called_once()
+        args, kwargs = mock_parse_dict.call_args
+        assert args[0] == expected_dict
+        assert evaluation._pb == args[1]
+
+
+def test_load_evaluation_invalid_yaml(tmp_path, validator, monkeypatch):
+    from google.protobuf import json_format
+    import pytest
+
+    monkeypatch.chdir(tmp_path)
+    evaluations_dir = tmp_path / "evaluations"
+    evaluations_dir.mkdir()
+    evaluation_dir = evaluations_dir / "MyEvaluation"
+    evaluation_dir.mkdir()
+
+    (evaluation_dir / "MyEvaluation.yaml").write_text(
+        "displayName: MyEvaluation\nnon_existent_field: value"
+    )
+
+    with pytest.raises(json_format.ParseError):
+        validator.load_evaluation(str(evaluation_dir))
+
+
+def test_load_evaluation_expectations_valid_yaml(
+    tmp_path, validator, monkeypatch
+):
+    from unittest.mock import patch, MagicMock
+
+    monkeypatch.chdir(tmp_path)
+    expectations_dir = tmp_path / "evaluation_expectations"
+    expectations_dir.mkdir()
+    expectation_dir = expectations_dir / "MyExpectation"
+    expectation_dir.mkdir()
+
+    (expectation_dir / "MyExpectation.yaml").write_text(
+        "displayName: MyExpectation"
+    )
+
+    with patch(
+        "cxas_scrapi.utils.validator.json_format.ParseDict"
+    ) as mock_parse_dict:
+        expectation = validator.load_evaluation_expectations(
+            str(expectation_dir)
+        )
+
+        expected_dict = {
+            "displayName": "MyExpectation",
+        }
+        mock_parse_dict.assert_called_once()
+        args, kwargs = mock_parse_dict.call_args
+        assert args[0] == expected_dict
+        assert expectation._pb == args[1]
+
+
+def test_load_evaluation_expectations_valid_json(
+    tmp_path, validator, monkeypatch
+):
+    from unittest.mock import patch, MagicMock
+
+    monkeypatch.chdir(tmp_path)
+    expectations_dir = tmp_path / "evaluation_expectations"
+    expectations_dir.mkdir()
+    expectation_dir = expectations_dir / "MyExpectation"
+    expectation_dir.mkdir()
+
+    (expectation_dir / "MyExpectation.json").write_text(
+        '{"displayName": "MyExpectation"}'
+    )
+
+    with patch(
+        "cxas_scrapi.utils.validator.json_format.ParseDict"
+    ) as mock_parse_dict:
+        expectation = validator.load_evaluation_expectations(
+            str(expectation_dir)
+        )
+
+        expected_dict = {
+            "displayName": "MyExpectation",
+        }
+        mock_parse_dict.assert_called_once()
+        args, kwargs = mock_parse_dict.call_args
+        assert args[0] == expected_dict
+        assert expectation._pb == args[1]
+
+
+def test_load_evaluation_expectations_invalid_yaml(
+    tmp_path, validator, monkeypatch
+):
+    from google.protobuf import json_format
+    import pytest
+
+    monkeypatch.chdir(tmp_path)
+    expectations_dir = tmp_path / "evaluation_expectations"
+    expectations_dir.mkdir()
+    expectation_dir = expectations_dir / "MyExpectation"
+    expectation_dir.mkdir()
+
+    (expectation_dir / "MyExpectation.yaml").write_text(
+        "displayName: MyExpectation\nnon_existent_field: value"
+    )
+
+    with pytest.raises(json_format.ParseError):
+        validator.load_evaluation_expectations(str(expectation_dir))
+
+
 def test_load_app_valid_yaml(tmp_path, validator, monkeypatch):
     from unittest.mock import patch, MagicMock
 
@@ -542,6 +696,16 @@ def test_validate_app_calls_sub_validators(tmp_path, validator, monkeypatch):
     guardrail1_dir = guardrails_dir / "Guardrail1"
     guardrail1_dir.mkdir()
 
+    evaluations_dir = app_dir / "evaluations"
+    evaluations_dir.mkdir()
+    evaluation1_dir = evaluations_dir / "Evaluation1"
+    evaluation1_dir.mkdir()
+
+    expectations_dir = app_dir / "evaluation_expectations"
+    expectations_dir.mkdir()
+    expectation1_dir = expectations_dir / "Expectation1"
+    expectation1_dir.mkdir()
+
     with patch.object(validator, "load_app") as mock_load, patch.object(
         validator, "validate_agent"
     ) as mock_val_agent, patch.object(
@@ -550,7 +714,11 @@ def test_validate_app_calls_sub_validators(tmp_path, validator, monkeypatch):
         validator, "validate_toolset"
     ) as mock_val_toolset, patch.object(
         validator, "validate_guardrail"
-    ) as mock_val_guardrail:
+    ) as mock_val_guardrail, patch.object(
+        validator, "validate_evaluation"
+    ) as mock_val_evaluation, patch.object(
+        validator, "validate_evaluation_expectations"
+    ) as mock_val_evaluation_expectations:
 
         mock_load.return_value = MagicMock()
 
@@ -560,3 +728,7 @@ def test_validate_app_calls_sub_validators(tmp_path, validator, monkeypatch):
         mock_val_tool.assert_called_once_with(str(tool1_dir))
         mock_val_toolset.assert_called_once_with(str(toolset1_dir))
         mock_val_guardrail.assert_called_once_with(str(guardrail1_dir))
+        mock_val_evaluation.assert_called_once_with(str(evaluation1_dir))
+        mock_val_evaluation_expectations.assert_called_once_with(
+            str(expectation1_dir)
+        )
