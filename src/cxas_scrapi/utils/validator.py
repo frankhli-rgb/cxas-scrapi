@@ -18,8 +18,10 @@ Utility class for validating local ces apps.
 
 import os
 import json
+import re
 from pathlib import Path
 import yaml
+import proto
 from google.protobuf import json_format
 from google.cloud.ces_v1beta import types
 
@@ -113,6 +115,7 @@ class Validator:
         resolved_dict = self._resolve_paths(
             app_dict, (app_dir,), base_path=app_dir
         )
+        self.validate_fields(resolved_dict, types.App, path=app_dir)
         json_format.ParseDict(
             resolved_dict, app_obj._pb, ignore_unknown_fields=False
         )
@@ -163,6 +166,7 @@ class Validator:
 
         resolved_dict = self._resolve_paths(agent_dict, ("agents/",), agent_dir)
         agent_obj = types.Agent()
+        self.validate_fields(resolved_dict, types.Agent, path=agent_dir)
         json_format.ParseDict(
             resolved_dict, agent_obj._pb, ignore_unknown_fields=False
         )
@@ -206,6 +210,7 @@ class Validator:
         )
 
         tool_obj = types.Tool()
+        self.validate_fields(resolved_dict, types.Tool, path=tool_dir)
         json_format.ParseDict(
             resolved_dict, tool_obj._pb, ignore_unknown_fields=False
         )
@@ -232,6 +237,7 @@ class Validator:
         )
 
         toolset_obj = types.Toolset()
+        self.validate_fields(resolved_dict, types.Toolset, path=toolset_dir)
         json_format.ParseDict(
             resolved_dict, toolset_obj._pb, ignore_unknown_fields=False
         )
@@ -256,6 +262,9 @@ class Validator:
         # Guardrails observed so far do not contain file references.
 
         guardrail_obj = types.Guardrail()
+        self.validate_fields(
+            guardrail_dict, types.Guardrail, path=guardrail_dir
+        )
         json_format.ParseDict(
             guardrail_dict, guardrail_obj._pb, ignore_unknown_fields=False
         )
@@ -282,6 +291,9 @@ class Validator:
         # Evaluations observed so far do not contain file references.
 
         evaluation_obj = types.Evaluation()
+        self.validate_fields(
+            evaluation_dict, types.Evaluation, path=evaluation_dir
+        )
         json_format.ParseDict(
             evaluation_dict, evaluation_obj._pb, ignore_unknown_fields=False
         )
@@ -314,6 +326,11 @@ class Validator:
         # Evaluations observed so far do not contain file references.
 
         evaluation_expectations_obj = types.EvaluationExpectation()
+        self.validate_fields(
+            evaluation_expectations_dict,
+            types.EvaluationExpectation,
+            path=evaluation_expectations_dir,
+        )
         json_format.ParseDict(
             evaluation_expectations_dict,
             evaluation_expectations_obj._pb,
@@ -395,3 +412,65 @@ class Validator:
                         f"Referenced file not found: {data}"
                     )
         return data
+
+    def _to_camel_case(self, snake_str: str) -> str:
+        """Converts snake_case to camelCase."""
+        components = snake_str.split("_")
+        return components[0] + "".join(x.title() for x in components[1:])
+
+    def _get_required_fields(self, cls) -> list[str]:
+        """Parses the docstring of a class to find required fields."""
+        doc = cls.__doc__
+        if not doc:
+            return []
+        lines = doc.split("\n")
+        required_fields = []
+        for i, line in enumerate(lines):
+            match = re.match(r"^\s+(\w+)\s+\([^)]+\):$", line)
+            if match:
+                field_name = match.group(1)
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    if next_line.startswith("Required."):
+                        required_fields.append(field_name)
+        return required_fields
+
+    def validate_fields(self, data: dict, cls, path: str = "") -> None:
+        """Validates that all required fields for cls are present in data.
+
+        Recursively checks nested message types if they are present in data.
+        """
+        required_fields = self._get_required_fields(cls)
+        missing_fields = []
+        for f in required_fields:
+            camel_f = self._to_camel_case(f)
+            if f not in data and camel_f not in data:
+                missing_fields.append(f)
+        if missing_fields:
+            cls_name = getattr(cls, "__name__", str(cls))
+            raise ValueError(
+                f"Missing required fields for {path} {cls_name}: {missing_fields}"
+            )
+
+        # Recursive validation for nested message types
+        if hasattr(cls, "meta") and hasattr(cls.meta, "fields"):
+            for name, field in cls.meta.fields.items():
+                if hasattr(field, "message") and field.message is not None:
+                    camel_name = self._to_camel_case(name)
+                    field_data = None
+                    if name in data:
+                        field_data = data[name]
+                    elif camel_name in data:
+                        field_data = data[camel_name]
+
+                    if field_data is not None:
+                        if isinstance(field, proto.fields.RepeatedField):
+                            if isinstance(field_data, list):
+                                for item in field_data:
+                                    if isinstance(item, dict):
+                                        self.validate_fields(
+                                            item, field.message
+                                        )
+                        elif isinstance(field, proto.fields.Field):
+                            if isinstance(field_data, dict):
+                                self.validate_fields(field_data, field.message)
