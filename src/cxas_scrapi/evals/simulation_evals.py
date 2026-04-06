@@ -29,7 +29,7 @@ from cxas_scrapi.prompts import llm_user_prompts
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.sessions import Sessions
 
-_FIRST_UTTERANCE = "Hi"
+_FIRST_UTTERANCE = "event: welcome"
 _MAX_TURNS = 30
 _DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
 
@@ -39,7 +39,14 @@ class Step(pydantic.BaseModel):
     success_criteria: str = ""
     response_guide: str = ""
     max_turns: int = 0
+    
     static_utterance: str = ""
+    # Variable injects are only supported for the first step
+    inject_variables: dict[str, Any] = {}
+
+    def model_dump(self, **kwargs):
+        kwargs.setdefault("exclude_defaults", True)
+        return super().model_dump(**kwargs)
 
 
 class StepStatus(str, enum.Enum):
@@ -53,6 +60,10 @@ class StepProgress(pydantic.BaseModel):
     status: StepStatus = StepStatus.NOT_STARTED
     justification: str = ""
 
+    def model_dump(self, **kwargs):
+        kwargs.setdefault("exclude_defaults", True)
+        return super().model_dump(**kwargs)
+
 
 class ExpectationStatus(str, enum.Enum):
     MET = "Met"
@@ -63,6 +74,10 @@ class ExpectationResult(pydantic.BaseModel):
     expectation: str
     status: ExpectationStatus = ExpectationStatus.NOT_MET
     justification: str = ""
+
+    def model_dump(self, **kwargs):
+        kwargs.setdefault("exclude_defaults", True)
+        return super().model_dump(**kwargs)
 
 
 class ExpectationOutput(pydantic.BaseModel):
@@ -136,8 +151,8 @@ class Conversation:
         """Adds a user utterance to the transcript."""
         self.transcript.append(f"User: {user_utterance}")
 
-    def next_user_utterance(self, last_agent_response: str) -> str:
-        """Gets the next user utterance."""
+    def next_user_utterance(self, last_agent_response: str) -> tuple[str, Dict[str, Any]]:
+        """Gets the next user utterance and variables to inject."""
         raise NotImplementedError
 
     def get_parsed_user_utterances(
@@ -170,7 +185,7 @@ class LLMUserConversation(Conversation):
         for step in test_case["steps"]:
             self.steps_progress.append(
                 StepProgress(
-                    step=Step(**step),
+                    step=Step(**{k: v for k, v in step.items() if k != "inject_variables"}),
                     status=StepStatus.NOT_STARTED,
                     justification="",
                 )
@@ -178,33 +193,34 @@ class LLMUserConversation(Conversation):
         self.expectations = test_case.get("expectations", [])
         self.expectation_results: List[ExpectationResult] = []
 
-    def _next_user_utterance(self) -> str:
-        """Generates the next user utterance based on the conversation history.
+    def _next_user_utterance(self) -> tuple[str, Dict[str, Any]]:
+        """Generates the next user utterance and variables to inject based on the conversation history.
 
         This method uses an LLM to determine the next utterance, considering the
         current turn, maximum turns, and the completion status of the
         defined steps.
 
         Returns:
-          The generated next user utterance as a string. Returns an empty string
-          if the conversation has reached the maximum number of turns or
-          all steps
-          are completed.
+          - The generated next user utterance as a string. Returns an empty string
+          if the conversation has reached the maximum number of turns or all steps are completed.
+          - The variables to inject as a dict.
         """
-        if self.current_turn == 0:
-            return _FIRST_UTTERANCE
-
         if self.current_turn >= self.max_turns:
-            return ""
+            return "", {}
 
         # If all steps are completed, then the conversation is complete.
         if all(
             item.status == StepStatus.COMPLETED for item in self.steps_progress
         ):
-            return ""
+            return "", {}
+
+        if self.current_turn == 0: 
+            if not self.test_case["steps"][0].get("static_utterance", None):
+                return _FIRST_UTTERANCE, {}
+            return self.test_case["steps"][0]["static_utterance"], self.test_case["steps"][0]["inject_variables"] or {} 
 
         step_list = self.test_case["steps"]
-        json_step_list = json.dumps(step_list, indent=2)
+        json_step_list = json.dumps([Step(**s).model_dump() for s in step_list], indent=2)
         prompt = llm_user_prompts.LLM_USER_PROMPT.replace(
             "{input_user_config}",
             json_step_list,
@@ -229,15 +245,16 @@ class LLMUserConversation(Conversation):
         )
         output: LLMUserConversation.Output = response.parsed
         self.steps_progress = output.step_progresses
-        return output.next_user_utterance
+        return output.next_user_utterance, {}
 
-    def next_user_utterance(self, last_agent_response: str) -> str:
+    def next_user_utterance(self, last_agent_response: str = "") -> tuple[str, dict[str, Any]]:
         """Returns the next user utterance from the LLM user."""
-        self._add_agent_response(last_agent_response)
-        next_user_utterance = self._next_user_utterance()
+        if last_agent_response:
+            self._add_agent_response(last_agent_response)
+        next_user_utterance, variables_to_inject = self._next_user_utterance()
         self._add_user_utterance(next_user_utterance)
         self.current_turn += 1
-        return next_user_utterance
+        return next_user_utterance, variables_to_inject
 
     def generate_report(self) -> Any:
         """
@@ -420,7 +437,6 @@ class SimulationEvals(Apps):
     def simulate_conversation(
         self,
         test_case: Dict[str, Any],
-        initial_utterance: str = _FIRST_UTTERANCE,
         model: str = _DEFAULT_GEMINI_MODEL,
         session_id: Optional[str] = None,
         console_logging: bool = True,
@@ -430,7 +446,6 @@ class SimulationEvals(Apps):
 
         Args:
             test_case: The test case dictionary defining evaluation steps.
-            initial_utterance: The starting user string (default "Hi").
             model: The Gemini model used for evaluating turns.
             console_logging: Whether to print interaction transcript to
                 the console.
@@ -447,23 +462,37 @@ class SimulationEvals(Apps):
             print("Starting simulated conversation...")
 
         # Initialize the first turn manually
-        user_utterance = initial_utterance
-        eval_conv._add_user_utterance(user_utterance)
-        eval_conv.current_turn += 1
+        user_utterance, variables = eval_conv.next_user_utterance()
 
         detailed_trace = []
         detailed_trace.append(f"User: {user_utterance}")
 
         while user_utterance:
             # Send utterance to the CES Agent with exponential backoff for
-            # transient 500s
+            # transient errors.
             for attempt in range(self.max_retries):
                 try:
-                    response = self.sessions_client.run(
-                        session_id=session_id,
-                        text=user_utterance,
-                        modality=modality,
-                    )
+                    if user_utterance.startswith("event:"):
+                        response = self.sessions_client.run(
+                            session_id=session_id,
+                            event=user_utterance.removeprefix("event:").strip(),
+                            variables=variables,
+                            modality=modality,
+                        )
+                    elif user_utterance.startswith("dtmf:"):
+                        response = self.sessions_client.run(
+                            session_id=session_id,
+                            event=user_utterance.removeprefix("dtmf:").strip(),
+                            variables=variables,
+                            modality=modality,
+                        )
+                    else:
+                        response = self.sessions_client.run(
+                            session_id=session_id,
+                            text=user_utterance,
+                            variables=variables,
+                            modality=modality,
+                        )
                     break
                 except Exception as e:
                     if attempt == self.max_retries - 1:
@@ -497,7 +526,7 @@ class SimulationEvals(Apps):
 
             # Get the next simulated user utterance based on the agent's
             # response
-            user_utterance = eval_conv.next_user_utterance(agent_text)
+            user_utterance, variables = eval_conv.next_user_utterance(agent_text)
             if user_utterance:
                 detailed_trace.append(f"User: {user_utterance}")
 

@@ -27,7 +27,7 @@ from cxas_scrapi.evals.simulation_evals import SimulationEvals
 def test_llm_user_conversation():
     mock_genai_client = MagicMock()
 
-    user_utterance_0 = "Hi"
+    user_utterance_0 = "event: welcome"
     agent_response_1 = "Hi, how can I help you?"
     user_utterance_1 = "I want to book a flight."
     agent_response_2 = "Done"
@@ -63,19 +63,18 @@ def test_llm_user_conversation():
 
     assert llm_conv.steps_progress[0].status == StepStatus.NOT_STARTED
 
-    got_user_utterance_0 = llm_conv.next_user_utterance("")
+    got_user_utterance_0, _ = llm_conv.next_user_utterance("")
     assert got_user_utterance_0 == user_utterance_0
     assert llm_conv.get_num_turns() == 1
     assert llm_conv.get_transcript() == "\n".join(
-        ["Agent: ", f"User: {user_utterance_0}"]
+        [f"User: {user_utterance_0}"]
     )
 
-    got_user_utterance_1 = llm_conv.next_user_utterance(agent_response_1)
+    got_user_utterance_1, _ = llm_conv.next_user_utterance(agent_response_1)
     assert got_user_utterance_1 == user_utterance_1
     assert llm_conv.get_num_turns() == 2
     assert llm_conv.get_transcript() == "\n".join(
         [
-            "Agent: ",
             f"User: {user_utterance_0}",
             f"Agent: {agent_response_1}",
             f"User: {user_utterance_1}",
@@ -84,12 +83,11 @@ def test_llm_user_conversation():
 
     assert llm_conv.steps_progress[0].status == StepStatus.COMPLETED
 
-    got_user_utterance_2 = llm_conv.next_user_utterance(agent_response_2)
+    got_user_utterance_2, _ = llm_conv.next_user_utterance(agent_response_2)
     assert got_user_utterance_2 == ""
     assert llm_conv.get_num_turns() == 3
     assert llm_conv.get_transcript() == "\n".join(
         [
-            "Agent: ",
             f"User: {user_utterance_0}",
             f"Agent: {agent_response_1}",
             f"User: {user_utterance_1}",
@@ -104,7 +102,7 @@ def test_llm_user_conversation():
 def test_llm_user_conversation_max_turns():
     mock_genai_client = MagicMock()
 
-    user_utterance_0 = "Hi"
+    user_utterance_0 = "event: welcome"
     agent_response_1 = "Hi, how can I help you?"
 
     step_1 = Step(
@@ -124,20 +122,19 @@ def test_llm_user_conversation_max_turns():
         max_turns=1,
     )
 
-    got_user_utterance_0 = llm_conv.next_user_utterance("")
+    got_user_utterance_0, _ = llm_conv.next_user_utterance("")
     assert got_user_utterance_0 == user_utterance_0
     assert llm_conv.get_num_turns() == 1
     assert llm_conv.get_transcript() == "\n".join(
-        ["Agent: ", f"User: {user_utterance_0}"]
+        [f"User: {user_utterance_0}"]
     )
 
     # Last turn since we reached the max turns.
-    got_user_utterance_1 = llm_conv.next_user_utterance(agent_response_1)
+    got_user_utterance_1, _ = llm_conv.next_user_utterance(agent_response_1)
     assert got_user_utterance_1 == ""
     assert llm_conv.get_num_turns() == 2
     assert llm_conv.get_transcript() == "\n".join(
         [
-            "Agent: ",
             f"User: {user_utterance_0}",
             f"Agent: {agent_response_1}",
             "User: ",
@@ -154,10 +151,10 @@ def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
     mock_sessions = mock_sessions_class.return_value
     mock_eval_conv = mock_llm_conv_class.return_value
 
-    # Setup the mock conversation sequence
     mock_eval_conv.next_user_utterance.side_effect = [
-        "I want to book a flight",
-        "",
+        ("event: welcome", {}),
+        ("I want to book a flight", {}),
+        ("", {}),
     ]
     mock_eval_conv.steps_progress = []
 
@@ -189,17 +186,16 @@ def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
     test_case = {"steps": []}
     result_conv = simulator.simulate_conversation(
         test_case=test_case,
-        initial_utterance="Hi",
         session_id="123",
         console_logging=False,
     )
 
     # Assertions
     mock_sessions.run.assert_any_call(
-        session_id="123", text="Hi", modality="text"
+        session_id="123", event="welcome", variables={}, modality="text"
     )
     mock_sessions.run.assert_any_call(
-        session_id="123", text="I want to book a flight", modality="text"
+        session_id="123", text="I want to book a flight", variables={}, modality="text"
     )
     mock_eval_conv.next_user_utterance.assert_any_call("Where to?")
     mock_eval_conv.next_user_utterance.assert_any_call("Flight booked.")
@@ -213,8 +209,9 @@ def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
     mock_eval_conv = mock_llm_conv_class.return_value
 
     mock_eval_conv.next_user_utterance.side_effect = [
-        "I want to book a flight",
-        "",
+        ("event: welcome", {}),
+        ("I want to book a flight", {}),
+        ("", {}),
     ]
     mock_eval_conv.steps_progress = []
 
@@ -253,19 +250,16 @@ def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
     test_case = {"steps": []}
     result_conv = simulator.simulate_conversation(
         test_case=test_case,
-        initial_utterance="Hi",
         session_id="123",
         console_logging=False,
         modality="audio",
     )
 
     mock_sessions.run.assert_any_call(
-        session_id="123", text="Hi", modality="audio"
+        session_id="123", event="welcome", variables={}, modality="audio"
     )
     mock_sessions.run.assert_any_call(
-        session_id="123",
-        text="I want to book a flight",
-        modality="audio",
+        session_id="123", text="I want to book a flight", variables={}, modality="audio"
     )
 
     # Verify text was extracted from Diagnostic Info

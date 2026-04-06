@@ -79,7 +79,7 @@ Analyze the `Conversation History`, your `User Configuration`, and the current `
             *   Update the *next* step's `status` to `"in progress"`.
             *   Update the *current* step's `status` to `"completed"`.
 
-    *   **B. If the Active Step is a `user_utterance` type:**
+    *   **B. If the Active Step is a `static_utterance` type:**
         *   The `next_user_utterance` is the exact string from `static_utterance`. Update its `status` to `"completed"`.
 
 4.  **Generate the Output JSON:**

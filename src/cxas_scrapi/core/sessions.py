@@ -585,6 +585,7 @@ class Sessions(Common):
         Args:
             session_id: Unique UUID string or identifying string (e.g. 'test1') for the session.
             text: Text input from the user. Can give a single string or list of strings.
+            dtmf: DTMF input from the user.
             event: Name of a system event to trigger (e.g. 'WELCOME').
             event_vars: Key-value map of variables to inject alongside the event.
             blob: Raw binary content (image, pdf, etc.) for multimodal inputs.
@@ -695,7 +696,7 @@ class Sessions(Common):
                         )
             config["historical_contexts"] = parsed_contexts
 
-        if variables is not None:
+        if variables:
             inputs.append({"variables": variables})
 
         if dtmf is not None:
