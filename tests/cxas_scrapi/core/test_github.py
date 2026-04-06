@@ -72,6 +72,7 @@ def test_init_github_action_auto_create():
     args = argparse.Namespace(
         agent_name="testagent",
         app_id="projects/p/locations/l/apps/a",
+        app_name="testapp",
         agent_dir=".",
         output=None,
         auth_method="wif",
@@ -96,23 +97,28 @@ def test_init_github_action_auto_create():
         assert args.workload_identity_provider == "mock-wip"
         assert args.service_account == "mock-sa"
 
+
 def test_init_github_action_missing_wif():
     args = argparse.Namespace(
         agent_name="testagent",
         app_id="projects/p/locations/l/apps/a",
+        app_name="testapp",
         agent_dir=".",
         output=None,
         auth_method="wif",
         workload_identity_provider=None,
-        service_account=None, # Missing SA
+        service_account=None,  # Missing SA
         project_id="my-project",
         location="us",
         branch="main",
         no_cleanup=False,
         install_hook=False,
-        auto_create_wif=False, # Missing auto_create
+        auto_create_wif=False,  # Missing auto_create
         github_repo="owner/repo",
     )
 
-    with pytest.raises(ValueError, match="Either provide --workload_identity_provider and --service_account, or use --auto-create-wif"):
+    with pytest.raises(
+        ValueError,
+        match="Either provide --workload_identity_provider and --service_account, or use --auto-create-wif",
+    ):
         init_github_action(args)
