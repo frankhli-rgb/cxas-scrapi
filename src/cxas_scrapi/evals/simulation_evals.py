@@ -459,7 +459,10 @@ class SimulationEvals(Apps):
         )
 
         if console_logging:
-            print("Starting simulated conversation...")
+            print(
+                f"Starting simulated conversation with session ID: "
+                f"{session_id}"
+            )
 
         # Initialize the first turn manually
         user_utterance, variables = eval_conv.next_user_utterance()
@@ -482,7 +485,7 @@ class SimulationEvals(Apps):
                     elif user_utterance.startswith("dtmf:"):
                         response = self.sessions_client.run(
                             session_id=session_id,
-                            event=user_utterance.removeprefix("dtmf:").strip(),
+                            dtmf=user_utterance.removeprefix("dtmf:").strip(),
                             variables=variables,
                             modality=modality,
                         )
