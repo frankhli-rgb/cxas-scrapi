@@ -22,6 +22,11 @@ from cxas_scrapi.evals.turn_evals import (
     TurnTestCase,
     TurnExpectation,
     TurnOperator,
+    TurnStep,
+)
+from cxas_scrapi.utils.eval_utils import (
+    ExpectationResult,
+    ExpectationStatus,
 )
 
 
@@ -32,7 +37,8 @@ class MockTurnResponse:
     @property
     def _pb(self):
         # We'll just define an object that MessageToDict can process, or
-        # mock MessageToDict directly. For testing, it's easier to mock MessageToDict
+        # mock MessageToDict directly. For testing, it's easier to mock
+        # MessageToDict
         pass
 
 
@@ -70,7 +76,7 @@ tests:
     assert cases[0].expectations[1].value == "search"
 
 
-@patch("google.protobuf.json_format.MessageToDict")
+@patch("cxas_scrapi.evals.turn_evals.MessageToDict")
 def test_validate_turn_test_success(mock_message_to_dict, mock_turn_evals):
     mock_message_to_dict.return_value = {
         "outputs": [
@@ -121,11 +127,12 @@ def test_validate_turn_test_success(mock_message_to_dict, mock_turn_evals):
         ],
     )
 
-    errors, _, _ = mock_turn_evals.validate_turn_test(test_case, MagicMock())
-    assert len(errors) == 0
+    results = mock_turn_evals.validate_turn_test(test_case, MagicMock())
+    assert len(results) == 5
+    assert all(r["status"] == "SUCCESS" for r in results)
 
 
-@patch("google.protobuf.json_format.MessageToDict")
+@patch("cxas_scrapi.evals.turn_evals.MessageToDict")
 def test_validate_turn_test_failures(mock_message_to_dict, mock_turn_evals):
     mock_message_to_dict.return_value = {
         "outputs": [
@@ -167,16 +174,38 @@ def test_validate_turn_test_failures(mock_message_to_dict, mock_turn_evals):
         ],
     )
 
-    errors, _, _ = mock_turn_evals.validate_turn_test(test_case, MagicMock())
-    assert len(errors) == 5
-    assert any("CONTAINS failed" in e for e in errors)
-    assert any("EQUALS failed" in e for e in errors)
-    assert any("TOOL_CALLED failed" in e for e in errors)
-    assert any("TOOL_INPUT failed" in e for e in errors)
-    assert any("NO_TOOLS_CALLED failed" in e for e in errors)
+    results = mock_turn_evals.validate_turn_test(test_case, MagicMock())
+    assert len(results) == 5
+    assert all(r["status"] == "FAILURE" for r in results)
+    assert any("CONTAINS failed" in r["justification"] for r in results)
+    assert any("EQUALS failed" in r["justification"] for r in results)
+    assert any("TOOL_CALLED failed" in r["justification"] for r in results)
+    assert any("TOOL_INPUT failed" in r["justification"] for r in results)
+    assert any("NO_TOOLS_CALLED failed" in r["justification"] for r in results)
 
 
-@patch("google.protobuf.json_format.MessageToDict")
+@patch("cxas_scrapi.evals.turn_evals.MessageToDict")
+def test_extract_signals(mock_message_to_dict, mock_turn_evals):
+    mock_message_to_dict.return_value = {
+        "text": "Hello there!",
+        "toolCalls": {
+            "toolCalls": [
+                {
+                    "displayName": "my_tool",
+                    "args": {"param": "value"}
+                }
+            ]
+        }
+    }
+
+    signals = mock_turn_evals._extract_signals(MagicMock())
+
+    assert signals["full_text"] == "Hello there!"
+    assert signals["called_tools"] == ["my_tool"]
+    assert signals["tool_inputs"] == {"my_tool": {"param": "value"}}
+
+
+@patch("cxas_scrapi.evals.turn_evals.MessageToDict")
 def test_run_turn_tests(mock_message_to_dict, mock_turn_evals):
     mock_message_to_dict.return_value = {"text": "Hello!"}
 
@@ -199,3 +228,45 @@ def test_run_turn_tests(mock_message_to_dict, mock_turn_evals):
     assert df.iloc[0]["status"] == "SUCCESS"
     assert df.iloc[0]["errors"] == ""
     assert mock_turn_evals.sessions_client.run.call_count == 1
+
+
+@patch("cxas_scrapi.evals.turn_evals.evaluate_expectations")
+@patch("cxas_scrapi.evals.turn_evals.MessageToDict")
+def test_run_turn_tests_conversation_expectations(
+    mock_message_to_dict, mock_evaluate_expectations, mock_turn_evals
+):
+    mock_message_to_dict.return_value = {"text": "Hello!"}
+
+    mock_evaluate_expectations.return_value = [
+        ExpectationResult(
+            expectation="Overall good",
+            status=ExpectationStatus.MET,
+            justification="Yes",
+        )
+    ]
+
+    mock_turn_evals.sessions_client.run.return_value = MagicMock()
+
+    cases = [
+        TurnTestCase(
+            name="t1",
+            turns=[
+                TurnStep(turn="1", user="hi", expectations=[])
+            ],
+            expectations=[
+                "Overall good"
+            ],
+        )
+    ]
+
+    df = mock_turn_evals.run_turn_tests(cases)
+    assert isinstance(df, pd.DataFrame)
+    # 1 row for the turn, 1 row for the conversation expectation
+    assert len(df) == 2
+
+    # Check the conversation row
+    conv_row = df[df["turn"] == "CONVERSATION"]
+    assert len(conv_row) == 1
+    assert conv_row.iloc[0]["status"] == "SUCCESS"
+    assert "Overall good" in conv_row.iloc[0]["llm_results"]
+

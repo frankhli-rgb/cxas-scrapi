@@ -28,6 +28,10 @@ import pandas as pd
 from cxas_scrapi.prompts import llm_user_prompts
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.sessions import Sessions
+from cxas_scrapi.utils.eval_utils import (
+    evaluate_expectations,
+    ExpectationResult,
+)
 
 _FIRST_UTTERANCE = "event: welcome"
 _MAX_TURNS = 30
@@ -305,8 +309,7 @@ class SimulationEvals(Apps):
 
         # Vertex AI requires a specific region (e.g. global), whereas CXAS
         # Apps use 'us' or 'eu'
-        location_map = {"us": "global", "global": "global", "eu": "global"}
-        vertex_location = location_map.get(location, location)
+        vertex_location = "global"
 
         self.genai_client = genai.Client(
             vertexai=True,
@@ -411,28 +414,13 @@ class SimulationEvals(Apps):
         if eval_conv.expectations and isinstance(eval_conv.expectations, list):
             if console_logging:
                 print("\nEvaluating Expectations...")
-            full_trace_str = "\n\n".join(detailed_trace)
-            prompt = llm_user_prompts.EVALUATE_EXPECTATIONS_PROMPT.replace(
-                "{trace}", full_trace_str
-            )
-            prompt = prompt.replace(
-                "{expectations}", json.dumps(eval_conv.expectations, indent=2)
-            )
 
-            try:
-                response = self.genai_client.models.generate_content(
-                    contents=prompt,
-                    model=model,
-                    config=genai.types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=ExpectationOutput,
-                    ),
-                )
-                output: ExpectationOutput = response.parsed
-                eval_conv.expectation_results = output.results
-            except Exception as e:
-                if console_logging:
-                    print(f"Error evaluating expectations: {e}")
+            eval_conv.expectation_results = evaluate_expectations(
+                genai_client=self.genai_client,
+                model_name=model,
+                trace=detailed_trace,
+                expectations=eval_conv.expectations,
+            )
 
     def simulate_conversation(
         self,

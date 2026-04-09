@@ -22,6 +22,10 @@ from cxas_scrapi.evals.simulation_evals import Step
 from cxas_scrapi.evals.simulation_evals import StepProgress
 from cxas_scrapi.evals.simulation_evals import StepStatus
 from cxas_scrapi.evals.simulation_evals import SimulationEvals
+from cxas_scrapi.utils.eval_utils import (
+    ExpectationResult,
+    ExpectationStatus,
+)
 
 
 def test_llm_user_conversation():
@@ -339,9 +343,7 @@ def test_evaluate_expectations():
 
     # Setup mock output for Gemini
     mock_output = MagicMock()
-    from cxas_scrapi.evals.simulation_evals import (
-        ExpectationResult, ExpectationStatus
-    )
+
     mock_output.results = [
         ExpectationResult(
             expectation="Exp 1",
