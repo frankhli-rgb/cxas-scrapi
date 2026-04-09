@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "AfterTool": [
+      {
+        "matcher": "run_shell_command",
+        "hooks": [
+          {
+            "name": "post-eval-run",
+            "type": "command",
+            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/post-eval-run.sh",
+            "timeout": 5000
+          },
+          {
+            "name": "post-agent-update",
+            "type": "command",
+            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/post-agent-update.sh",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "matcher": "write_file|replace",
+        "hooks": [
+          {
+            "name": "post-callback-write",
+            "type": "command",
+            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/post-callback-write.sh",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}
