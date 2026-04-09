@@ -406,6 +406,7 @@ class Sessions(Common):
             query_font = "\033[1;32mUSER QUERY:\033[0m"
             response_font = "\033[1;35mAGENT RESPONSE:\033[0m"
             transfer_font = "\033[1;36mAGENT TRANSFER:\033[0m"
+            payload_font = "\033[1;94mCUSTOM PAYLOAD:\033[0m"
 
             display = print
 
@@ -421,12 +422,14 @@ class Sessions(Common):
                 query_font = "<font color='darkgreen'><b>USER QUERY:</b></font>"
                 response_font = "<font color='purple'><b>AGENT RESPONSE:</b></font>"
                 transfer_font = "<font color='darkorange'><b>AGENT TRANSFER:</b></font>"
+                payload_font = "<font color='brown'><b>CUSTOM PAYLOAD:</b></font>"
             except ImportError:
                 tool_call_font = "TOOL CALL:"
                 tool_res_font = "TOOL RESULT:"
                 query_font = "USER QUERY:"
                 response_font = "AGENT RESPONSE:"
                 transfer_font = "AGENT TRANSFER:"
+                payload_font = "CUSTOM PAYLOAD:"
 
                 display = print
 
@@ -511,12 +514,13 @@ class Sessions(Common):
                             )
 
                         elif chunk_type == "payload":
+                            expanded_payload = Sessions._expand_pb_struct(chunk.payload)
                             logging.debug(
-                                f"CUSTOM PAYLOAD: [{role}] {chunk.payload}"
+                                f"CUSTOM PAYLOAD: [{role}] {expanded_payload}"
                             )
                             display(
                                 HTML(
-                                    f"<font color='brown'><b>CUSTOM PAYLOAD:</b></font> [{role}] {chunk.payload}"
+                                    f"{payload_font} [{role}] {expanded_payload}"
                                 )
                             )
 
@@ -528,10 +532,11 @@ class Sessions(Common):
                     display(HTML(f"{response_font} {text}"))
                 payload = getattr(output, "payload", None)
                 if payload:
-                    logging.debug(f"CUSTOM PAYLOAD: {payload}")
+                    expanded_payload = Sessions._expand_pb_struct(payload)
+                    logging.debug(f"CUSTOM PAYLOAD: {expanded_payload}")
                     display(
                         HTML(
-                            f"<font color='brown'><b>CUSTOM PAYLOAD:</b></font> {payload}"
+                            f"{payload_font} {expanded_payload}"
                         )
                     )
 

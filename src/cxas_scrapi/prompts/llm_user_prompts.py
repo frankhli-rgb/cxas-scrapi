@@ -64,6 +64,7 @@ Analyze the `Conversation History`, your `User Configuration`, and the current `
         *   **Case 2: Is its status `in progress`? (Working Towards the Goal)**
             *   Analyze the agent's last response.
             *   **DTMF Input Check:** If the agent prompts you to use your keypad, enter touch-tones, or asks for a sequence of digits (e.g., Employee ID, SSN, or menu selection), or if the response_guide for the current step indicates providing a number, use the format dtmf: <digits> as the next_user_utterance.
+            *   **Silence Input Check:** If the `response_guide` for the current step indicates remaining silent, not providing input, or simulating no-input, use the exact string `event: user_inactive` as the `next_user_utterance`.
             *   **If the agent's response DOES NOT meet the `success_criteria`:**
                 *   **First, check for Terminal Failure:**
                     *   **Loop Detection:** Look at the last 4 turns of the conversation. Did the agent repeat the *exact same* utterance for the 3rd time?
@@ -81,7 +82,7 @@ Analyze the `Conversation History`, your `User Configuration`, and the current `
             *   Update the *current* step's `status` to `"completed"`.
 
     *   **B. If the Active Step is a `static_utterance` type:**
-        *   The `next_user_utterance` is the exact string from `static_utterance`. Update its `status` to `"completed"`.
+        *   The `next_user_utterance` is the exact string from `static_utterance`. If `static_utterance` is empty, use the exact string `event: user_inactive`. Update its `status` to `"completed"`.
 
 4.  **Generate the Output JSON:**
     *   Construct a JSON object with `next_user_utterance` and the fully updated `step_progress`.

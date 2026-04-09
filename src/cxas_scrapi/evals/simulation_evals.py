@@ -217,7 +217,7 @@ class LLMUserConversation(Conversation):
         if self.current_turn == 0: 
             if not self.test_case["steps"][0].get("static_utterance", None):
                 return _FIRST_UTTERANCE, {}
-            return self.test_case["steps"][0]["static_utterance"], self.test_case["steps"][0]["inject_variables"] or {} 
+            return self.test_case["steps"][0]["static_utterance"], self.test_case["steps"][0].get("inject_variables", {}) 
 
         step_list = self.test_case["steps"]
         json_step_list = json.dumps([Step(**s).model_dump() for s in step_list], indent=2)
