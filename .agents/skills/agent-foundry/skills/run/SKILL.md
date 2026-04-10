@@ -91,7 +91,7 @@ results_df = cb.test_all_callbacks_in_app_dir(app_dir="evals/callback_tests")
 # Or filter by agent
 results_df = cb.test_all_callbacks_in_app_dir(
     app_dir="evals/callback_tests",
-    agent_name="handle_connectivity_issue_agent",
+    agent_name="root_agent",
     test_file_path="evals/callback_tests/test_before_agent.py",
 )
 ```

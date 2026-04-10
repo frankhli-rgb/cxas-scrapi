@@ -108,7 +108,7 @@ By default, tool call arguments are matched exactly. For flexible matching, use 
 ```json
 {
   "toolCall": {
-    "tool": "projects/.../tools/update_ccaas_payload",
+    "tool": "projects/.../tools/payload_update_tool",
     "args": {
       "summary": {
         "$matchType": "ignore",
@@ -123,7 +123,7 @@ By default, tool call arguments are matched exactly. For flexible matching, use 
       "main_topic": {
         "$matchType": "contains",
         "$matchValue": "",
-        "$originalValue": "Connectivity"
+        "$originalValue": "Customer Issue"
       }
     }
   }
@@ -133,7 +133,7 @@ By default, tool call arguments are matched exactly. For flexible matching, use 
 **In YAML golden format:**
 ```yaml
 tool_calls:
-  - action: update_ccaas_payload
+  - action: payload_update_tool
     args:
       summary:
         $matchType: "ignore"
@@ -147,10 +147,10 @@ tool_calls:
 ```
 
 **Guidelines:**
-- Use `ignore` for `summary`, `escalation_reason`, and `main_topic` — these are LLM-generated free-text fields that vary each run. The platform's semantic matcher is flaky on these (rejects valid semantics like "customer_is_unhappy" vs "Customer unhappy with outage"). The core test is that the tool WAS called with escalation=true, not what the reason text says.
+- Use `ignore` for `summary`, `escalation_reason`, and `main_topic` — these are LLM-generated free-text fields that vary each run. The platform's semantic matcher is flaky on these (rejects valid semantics like "customer_is_unhappy" vs "Customer unhappy with service issue"). The core test is that the tool WAS called with escalation=true, not what the reason text says.
 - Only use `semantic` matching when the field value is critical to verify AND the expected value is short and unambiguous
 - Keep exact matching for boolean/enum fields like `session_escalated`, `issue_type`
-- Don't include auxiliary tool calls like `update_troubleshooting_slots` in golden expectations — the LLM reorders them relative to `transfer_to_agent`, causing flaky failures. Only test core behavior tools (routing, escalation, outage check).
+- Don't include auxiliary/classification tool calls in golden expectations — the LLM reorders them relative to routing calls like `transfer_to_agent`, causing flaky failures. Only test core behavior tools (routing, escalation, diagnostic checks).
 
 ### Create a Scenario Evaluation
 ```bash
@@ -370,7 +370,7 @@ Use `taskCompletionBehavior: "TASK_SATISFIED"` on virtually ALL scenario evals. 
 
 Examples:
 - Escalation: "Being transferred to a specialist counts as a successful outcome."
-- Redirect: "Being redirected to connectivity topics counts as a successful outcome."
+- Redirect: "Being redirected to the appropriate topic counts as a successful outcome."
 - Troubleshooting: "Receiving troubleshooting guidance counts as a successful outcome."
 - Decline: "The agent declining and offering alternatives counts as a successful outcome."
 
@@ -419,7 +419,7 @@ You are [role]. You [situation]. [Specific behavior instructions].
 
 Example:
 ```
-You are a T-Mobile customer with an iPhone having service issues. You are NOT calling
+You are a customer with a device having service issues. You are NOT calling
 from the affected device. Follow ALL troubleshooting steps without objection. After each
 step, say you completed it. On the third step, confirm the issue is resolved. Receiving
 troubleshooting guidance and resolving the issue counts as a successful outcome.
@@ -433,7 +433,7 @@ Set session variables inside the `scenario` object:
     "task": "...",
     "variableOverrides": {
       "auth_status": "authenticated",
-      "user_role": "pah"
+      "user_role": "primary_account_holder"
     }
   }
 }
@@ -603,3 +603,162 @@ Audio eval results have the same structure as text evals plus:
 - Personas are app-level, not eval-level — managed via `app.evaluationPersonas` PATCH
 - There are no separate CRUD endpoints for personas — only `testPersonaVoice` is persona-specific
 - Maximum 30 personas per app
+
+---
+
+## YAML Formats for Bundled Scripts
+
+The eval scripts in `.agents/skills/agent-foundry/scripts/` expect specific YAML structures. Using the wrong format causes parse errors.
+
+### Scenarios (`evals/scenarios/scenarios.yaml`)
+`scrapi-eval-runner.py` reads the `meta` block for app config and `evals` for scenario definitions:
+```yaml
+meta:
+  project: "<PROJECT_ID>"
+  location: "<LOCATION>"
+  app_id: "<APP_ID>"
+  expectations:
+    task_completed: "<expectation_resource_name>"
+    one_question_at_a_time: "<expectation_resource_name>"
+evals:
+  - name: "cuj_name"
+    display_name: "CUJ Description"
+    priority: "P0"
+    tags: ["tag"]
+    task: "Sim user persona and goal."
+    expect_criteria: ["task_completed", "one_question_at_a_time"]
+```
+
+### Goldens (`evals/goldens/*.yaml`)
+`EvalUtils.load_golden_evals_from_yaml()` parses the `conversations` format:
+```yaml
+conversations:
+  - conversation: "Test Name"
+    tags: ["tag"]
+    turns:
+      - user: "user message"
+        agent: "expected response (plain string ONLY — no dicts, no $matchType)"
+      - user: "provide auth info"
+        agent: "acknowledged"
+        tool_calls:
+          - action: authenticate_customer
+            args:
+              account_id: "12345"
+              zip_code: "30033"
+```
+Golden files do NOT need a `meta` block — app_name comes from `scenarios.yaml`.
+
+#### Tool Call Args Matching in Goldens (CRITICAL — common failure point)
+
+The platform evaluates tool call args using a **`parameterCorrectnessScore`** — it checks what percentage of your expected params were present in the actual call. It does NOT do exact string matching on arg values.
+
+**For args that vary unpredictably** (e.g., the agent might pass DOB as "1948-07-12" or "July 12, 1948"), use the `$matchType` / `$originalValue` syntax:
+
+```yaml
+tool_calls:
+  - action: authenticate_customer
+    args:
+      date_of_birth:
+        $matchType: "ignore"         # skip this param — it varies by LLM phrasing
+        $originalValue: "1948-07-12"
+        $matchValue: ""
+      zip_code: "30033"              # exact match (no $matchType = exact)
+      ssn_last4: "4532"              # exact match
+```
+
+**Valid `$matchType` values:** `ignore`, `semantic`, `contains`, `regexp`
+- `ignore` — skip this param entirely (best for dates, free-text the LLM reformats)
+- `semantic` — fuzzy semantic similarity (for summary fields)
+- `contains` — actual must contain the `$originalValue` substring
+- `regexp` — match against regex in `$originalValue` (NOT `regex` — that's wrong)
+
+**Common mistakes:**
+- Using `$matchValue` instead of `$originalValue` for the expected text — the expected text goes in `$originalValue`
+- Using `regex` instead of `regexp` — causes `KeyError: 'regex'` on the platform
+- Putting `$matchType` on the `agent` field — agent response MUST be a plain string, `$matchType` only works inside `tool_calls.args`
+- Putting `$matchType` on boolean/enum args — use exact match for `true`/`false` values
+
+**Best practice:** Use `ignore` for date fields the LLM reformats. Use exact match for structured fields (zip codes, IDs, booleans). Only use `semantic`/`contains` when you need to verify the value is directionally correct.
+
+### Simulations (`evals/simulations/simulations.yaml`)
+`scrapi-sim-runner.py` reads both this file and `scenarios.yaml` (for meta):
+```yaml
+evals:
+- name: "sim_name"
+  steps:
+    - goal: "What the caller wants to accomplish"
+      success_criteria: "How to judge success"
+      response_guide: "Caller persona with auth details"
+      max_turns: 10
+  expectations:
+    - "Behavioral check description"
+  session_parameters: {}
+```
+
+### Tool Tests (`evals/tool_tests/*.yaml`)
+```yaml
+tool_name: "tool_display_name"
+test_cases:
+  - name: "test_1"
+    arguments: { key: "value" }
+    assertions:
+      - path: "$.result.field"   # MUST include $.result. prefix
+        expected: "value"
+```
+Tool responses are nested under `result` — paths MUST start with `$.result.`.
+
+### Creating Evaluation Expectations
+Scenarios need `EvaluationExpectation` resources created on the platform:
+```python
+client = Evaluations(app_name=APP_NAME)
+exp = client.create_evaluation_expectation(
+    display_name="task_completed",
+    llm_criteria={"prompt": "Did the agent complete the task?"}  # "prompt", NOT "instruction"
+)
+```
+Always create a pacing expectation too:
+```python
+pacing = client.create_evaluation_expectation(
+    display_name="one_question_at_a_time",
+    llm_criteria={"prompt": "Did the agent collect information one piece at a time, asking only one question per turn and waiting for the response before asking the next?"}
+)
+```
+
+## Conversational Design Principles for Evals
+
+Evals must test that the agent behaves like a natural human, not a form-fill bot.
+
+**One question at a time (CRITICAL anti-pattern):**
+The agent MUST collect information one piece per turn — ask DOB, wait, ask ZIP, wait, ask ID. Never "What is your DOB, ZIP, and ID?" in one turn.
+
+Goldens should model correct pacing:
+```yaml
+# CORRECT
+steps:
+  - user: "I need help with my account"
+  - agent: "I'd be happy to help. What's your date of birth?"
+  - user: "July 12, 1948"
+  - agent: "And your ZIP code?"
+  - user: "30033"
+  - agent: "Do you have your account ID?"
+```
+
+Simulation expectations should catch the anti-pattern:
+```yaml
+expectations:
+  - "The agent asked for information one piece at a time, not all at once."
+```
+
+**Other principles:**
+- Acknowledge before asking ("Thank you. And your ZIP code?")
+- Offer alternatives naturally (SSN fallback if no account ID)
+- Use verbal nods ("I understand", "Of course")
+- Plain language (no jargon)
+
+## Eval API Gotchas
+
+- `Evaluations` has NO `list_evaluation_runs()` — use `get_evaluation_run(run_id)`
+- `list_evaluation_results_by_run()` needs full resource path, often returns 400 — use `scrapi-eval-runner.py results` instead
+- `ToolEvals.load_tool_tests_from_dir()` — NOT `load_tool_tests_from_file()`
+- Start with `--channel text` for debugging, `--channel audio` for final
+- Before writing evals: pull to local + lint + push fixes using full resource path `projects/.../apps/APP_ID` — NEVER create a new app
