@@ -137,16 +137,16 @@ Parse the instruction text and extract every distinct directive into one of thes
 
 | Category | What to look for | Examples |
 |----------|-----------------|---------|
-| **Persona / Identity** | Role definitions, tone, communication style | "You are a T-Mobile virtual assistant", "Be professional and factual" |
+| **Persona / Identity** | Role definitions, tone, communication style | "You are a virtual assistant for [the brand]", "Be professional and factual" |
 | **Conversation Flow Rules** | Ordered steps, required sequences, state transitions | "First ask X, then do Y", "After authentication, proceed to..." |
-| **Tool Usage Rules** | When to call which tool, required parameters, how to use results | "Use FAQ tool when...", "Call check_for_outage after identifying device" |
+| **Tool Usage Rules** | When to call which tool, required parameters, how to use results | "Use the FAQ/knowledge tool when...", "Call the diagnostic tool after identifying the issue" |
 | **Conditional Behaviors** | If/then/else logic, branching based on user input or state | "If user has multiple lines, ask which one", "If API fails, escalate" |
 | **Guardrails / Constraints** | Things the agent must never do, boundaries, restrictions | "NEVER ask the user to call or contact...", "Only use information from tool responses" |
-| **Escalation Rules** | When to transfer to human or another agent, escalation triggers | "Escalate if user uses profanity", "Transfer to troubleshoot_agent when..." |
+| **Escalation Rules** | When to transfer to human or another agent, escalation triggers | "Escalate if user uses profanity", "Transfer to sub_agent_a when..." |
 | **Response Format Rules** | How to format responses, pronunciation, acknowledgements | "Pronounce numbers as individual digits", "Use brief acknowledgements" |
 | **Edge Case Handling** | Specific scenarios with special handling | "If user asks about competitor...", "Handle inappropriate questions by..." |
 | **Variable / State Management** | Session variables to set, state transitions | "Set auth_status to...", "Update device_type when..." |
-| **Transfer Rules** | When to route to child agents | "Transfer to identify_impacted_device_agent when user reports calling issues" |
+| **Transfer Rules** | When to route to child agents | "Transfer to sub_agent_b when user reports a specific issue type" |
 
 ### Instruction Directive Table
 
@@ -167,7 +167,7 @@ A directive is **covered** if there exists at least one evaluation (golden or sc
 - **Golden eval covers a directive** if:
   - A turn's `userInput` would trigger the directive's condition
   - An `expectation` (toolCall, agentResponse, agentTransfer, updatedVariables) verifies the directive's expected outcome
-  - Example: Directive "call check_for_outage after identifying device" is covered if a golden eval has a turn that identifies a device, followed by a `toolCall` expectation for `check_for_outage`
+  - Example: Directive "call the diagnostic tool after identifying the issue" is covered if a golden eval has a turn that identifies the issue, followed by a `toolCall` expectation for that diagnostic tool
 
 - **Scenario eval covers a directive** if:
   - The scenario's `task` description describes a situation that would trigger the directive

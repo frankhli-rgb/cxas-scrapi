@@ -20,13 +20,14 @@ When fixing agent instructions, also read the GECX design guide at `skills/build
 
 ### Check prerequisites
 
-Check memory first for project-specific context (app ID, variable handling rules, past pass rates). If available, use it instead of re-asking the user.
+Check `gecx-config.json` first for project configuration (project ID, app ID, location, modality). If not present, check memory or ask the user. Also check memory for project-specific context (variable handling rules, past pass rates).
 
 Then verify these exist. If any are missing, bootstrap them first.
 
 | Prerequisite | Check | If missing |
 |-------------|-------|------------|
-| **App name** | Check memory or `evals/scenarios/scenarios.yaml` meta | Ask the user for the full resource path |
+| **Environment** | Check `.venv/` exists and `cxas-scrapi` is installed | Run `./setup.sh` to create virtualenv and install cxas-scrapi |
+| **App name** | Check `gecx-config.json` → `deployed_app_id`, or memory, or `evals/scenarios/scenarios.yaml` meta | Ask the user for the full resource path |
 | **TDD** | Check for `tdd.md` in project root | Generate one — see "Bootstrap from existing agent" below |
 | **Goldens** | Check `evals/goldens/*.yaml` for conversations | Generate from TDD — see `skills/build/SKILL.md` |
 | **Sims** | Check `evals/simulations/simulations.yaml` for evals | Generate from TDD — see `skills/build/SKILL.md` |
@@ -76,16 +77,19 @@ When the user has an agent but no TDD or evals, run this before the iteration lo
 
 ## The Iteration Loop
 
+**Note:** Hooks handle sync automatically. When you edit files in `cxas_app/`, the pre-edit hook auto-pulls latest state from CXAS. When you run evals, the pre-eval hook auto-pushes local code to CXAS. When SCRAPI updates are made directly, the post-update hook auto-pulls to local files. See `gecx-config.json` for project configuration.
+
 ```
 1. LOCAL SIM    → Fast pre-flight with scrapi-sim-runner (parallel, ~1 min)
 2. PLATFORM     → Run goldens for official scoring
 3. TRIAGE       → For each failure: read the transcript, identify what the agent did wrong
-4. FIX          → Fix the agent (instruction or callback)
+4. FIX          → Fix the agent (instruction or callback) — edit locally in cxas_app/, hooks handle sync
 5. UPDATE EVALS → Sync callback code, add/update tests for any changed callbacks
 6. COMBINED RPT → Run all 4 eval types, generate combined report (goldens + sims + tools + callbacks)
 7. ITER REPORT  → Generate iteration debug report (changes + diffs + results)
 8. TDD UPDATE   → Update tdd.md with any changes to agent behavior, evals, or coverage
-9. RE-RUN       → Back to step 1
+9. COMMIT       → Commit local changes to git for traceability
+10. RE-RUN      → Back to step 1
 ```
 
 ### Combined report (MANDATORY)
@@ -178,9 +182,9 @@ Do not defer TDD updates to "later" — they accumulate and the TDD becomes usel
 ## Changelog
 
 ### Iteration 3 — 2026-04-05
-- **Agent fix:** Added `after_model_callback` to troubleshoot_agent to inject farewell text before end_session. Agent was escalating silently.
-- **Callback fix:** Added `return` after setting `authenticate_customer_api_failed_status=True` in before_agent_callback. Was causing KeyError fall-through.
-- **Eval change:** Removed `transfer_to_agent` from golden_home_internet_escalation — root agent now handles home internet directly.
+- **Agent fix:** Added `after_model_callback` to sub_agent_a to inject farewell text before end_session. Agent was escalating silently.
+- **Callback fix:** Added `return` after setting `api_failed_status=True` in before_agent_callback. Was causing KeyError fall-through.
+- **Eval change:** Removed `transfer_to_agent` from golden_excluded_category_escalation — root agent now handles the excluded category directly.
 - **Pass rates:** Goldens 43/65 (66.2%), sims 7/7 (100%), tools 19/19 (100%), callbacks 46/46 (100%).
 ```
 
@@ -246,10 +250,10 @@ If the agent skips a tool call, escalates without speaking, routes incorrectly, 
 When a golden keeps failing due to agent variance, the fix is to make the agent MORE deterministic — not to loosen the golden. Techniques from the GECX best practices:
 
 1. **Use `after_model_callback` to enforce text before end_session** — the LLM often calls tools without saying anything first. **Important:** The LLM can split a turn across multiple model calls (text in call 1, tools in call 2, end_session in call 3). Use `callback_context.state` to track whether text was already produced — see gecx-design-guide.md "Multi-model-call turns" for the pattern. Without state tracking, the callback injects duplicate text.
-2. **Use `before_model_callback` to intercept and return fixed responses** — for greetings, ETR messages, or any response that must be word-for-word consistent
+2. **Use `before_model_callback` to intercept and return fixed responses** — for greetings, status messages, or any response that must be word-for-word consistent
 3. **Inline tool calls in callbacks** instead of relying on instructions — callbacks execute deterministically, instructions don't
 4. **Handle escalation flows in the root agent** — sub-agent responses cause role mismatches in golden evaluations
-5. **Truncate goldens to the last deterministic turn** — don't test KB-dependent text or goodbye/end_session in goldens. End the golden at the last turn where the agent's response is predictable (e.g., after ETR delivery, not after goodbye). Test goodbye behavior with sims instead.
+5. **Truncate goldens to the last deterministic turn** — don't test KB-dependent text or goodbye/end_session in goldens. End the golden at the last turn where the agent's response is predictable (e.g., after a status/template-based response, not after goodbye). Test goodbye behavior with sims instead.
 
 See `build/references/gecx-design-guide.md` → "Callback Patterns for Deterministic Behavior" for code examples.
 
@@ -259,15 +263,15 @@ These are hard-won lessons from debugging agent instructions. Violating these wi
 
 **Never do wholesale instruction rewrites.** The LLM relies on the verbose context, examples, and phrasing in the instruction. A "cleaner" rewrite that looks better to a human often breaks the agent because the LLM loses context it was depending on. Instead, make small, targeted edits and test each one individually.
 
-**Don't use `conditional_logic` for intent classification.** When you put profanity, unintelligible input, live agent requests, and connectivity issues into a single `conditional_logic` block, the LLM gets confused and falls back to generic refusals ("I'm unable to assist"). Keep them as separate `<step>` elements with distinct triggers — the LLM handles sequential steps better than priority-ordered conditionals.
+**Don't use `conditional_logic` for intent classification.** When you put multiple intent types (e.g., profanity, unintelligible input, live agent requests, and domain-specific issues) into a single `conditional_logic` block, the LLM gets confused and falls back to generic refusals ("I'm unable to assist"). Keep them as separate `<step>` elements with distinct triggers — the LLM handles sequential steps better than priority-ordered conditionals.
 
-**Don't add negative conditions to triggers.** A trigger like `Customer describes a connectivity issue that is NOT home internet` confuses the LLM — it sometimes treats ALL issues as needing a "home internet check" and gets stuck. Use positive triggers only: `Customer describes a connectivity issue (calls, internet, data, signal)`. Put the home internet check as a separate, earlier step.
+**Don't add negative conditions to triggers.** A trigger like `Customer describes an issue that is NOT [excluded category]` confuses the LLM — it sometimes treats ALL issues as needing that exclusion check and gets stuck. Use positive triggers only: `Customer describes an issue (type A, type B, type C)`. Put the excluded category check as a separate, earlier step.
 
 **Keep the "Post-Answer Follow-up" simple.** A follow-up trigger like `After answering any question` fires too eagerly — including after sub-agent returns, causing the agent to say "Do you have any questions?" instead of resuming the flow. Use `Ask "Is there anything else I can help you with today?"` only when the conversation is clearly at a resolution point.
 
 **Test after every change.** Run at least one golden batch after each instruction edit. Instruction changes can have non-obvious cascading effects — a fix for one golden can break three others. If a change causes regression, revert immediately and try a different approach.
 
-**Simpler instructions are more reliable.** Adding complexity to instructions (state-tracked counting, multi-step conditional logic, explicit keyword requirements) often REDUCES reliability by confusing the LLM. A simple "On the FIRST attempt... On the SECOND attempt..." outperforms a complex "First call set_variables to increment count, then check count and branch." The LLM handles natural language instructions better than programmatic logic.
+**Simpler instructions are more reliable.** Adding complexity to instructions (state-tracked counting, multi-step conditional logic, explicit keyword requirements) often REDUCES reliability by confusing the LLM. A simple "On the FIRST attempt... On the SECOND attempt..." outperforms a complex "First call the state-setting tool to increment count, then check count and branch." The LLM handles natural language instructions better than programmatic logic.
 
 **Don't overfit the agent to pass evals.** If you find yourself adding hardcoded phrase lists to callbacks, requiring exact keywords in triggers, or bypassing the LLM for intent detection — you're overfitting. The agent might pass goldens but fail on real conversations. Signs of overfitting:
 - Callbacks with hardcoded phrase lists (e.g., `["unacceptable", "ridiculous", "terrible"]`) for intent detection
@@ -275,13 +279,13 @@ These are hard-won lessons from debugging agent instructions. Violating these wi
 - Callbacks that bypass the LLM entirely for decisions the LLM should make (e.g., detecting frustration, classifying live agent requests)
 - Golden pass rate goes up but sim pass rate or real-world behavior degrades
 
-**The right separation: LLM detects, callbacks execute.** The LLM is good at understanding natural language intent — let it handle detection (profanity, frustration, live agent requests, issue classification). Callbacks should handle execution that must be deterministic (tool calls with correct args, session termination). The trigger pattern (`set_variables` → `before_model_callback` returns tools) achieves this separation.
+**The right separation: LLM detects, callbacks execute.** The LLM is good at understanding natural language intent — let it handle detection (hostility, frustration, transfer requests, issue classification). Callbacks should handle execution that must be deterministic (tool calls with correct args, session termination). The trigger pattern (LLM calls a state-setting tool → `before_model_callback` reads the trigger and returns tools) achieves this separation.
 
 **Callbacks vs instructions for escalation:** Use `after_model_callback` to guarantee text before `end_session`, and `before_model_callback` with the trigger pattern for deterministic tool calls. But keep all intent detection in the instruction — don't reimpliment it in callbacks with phrase matching.
 
-**Don't include auxiliary tool calls in golden expectations.** Tool calls like `update_troubleshooting_slots` that run alongside routing calls (`transfer_to_agent`) should NOT be in the golden's `tool_calls` list. The LLM reorders these calls unpredictably — sometimes slot update runs before transfer, sometimes after. When it runs after, the platform marks the slot expectation as failed (outcome=2). Only include the CORE tool expectations (routing, escalation, outage check) that define the behavior being tested.
+**Don't include auxiliary tool calls in golden expectations.** Auxiliary/classification tool calls that run alongside routing calls (e.g., `transfer_to_agent`) should NOT be in the golden's `tool_calls` list. The LLM reorders these calls unpredictably — sometimes the auxiliary call runs before the transfer, sometimes after. When it runs after, the platform marks the expectation as failed (outcome=2). Only include the CORE tool expectations (routing, escalation, diagnostic checks) that define the behavior being tested.
 
-**Use `$matchType: "ignore"` for LLM-generated free-text parameters.** Fields like `escalation_reason`, `summary`, and `main_topic` in `update_ccaas_payload` are generated by the LLM and vary each run. The platform's semantic matching is flaky on these (rejects valid semantics like "customer_is_unhappy" vs "Customer unhappy with outage"). Use `ignore` unless you need to verify the exact content.
+**Use `$matchType: "ignore"` for LLM-generated free-text parameters.** Fields like `escalation_reason`, `summary`, and `main_topic` in a payload/summary update tool are generated by the LLM and vary each run. The platform's semantic matching is flaky on these (rejects valid semantics like "customer_is_unhappy" vs "Customer unhappy with issue"). Use `ignore` unless you need to verify the exact content.
 
 **Don't have duplicate YAML keys in a turn.** Having two `tool_calls:` blocks at the same level in a turn mapping is invalid YAML — the second overwrites the first. Combine all tool calls into a single `tool_calls:` list.
 

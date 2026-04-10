@@ -149,3 +149,7 @@ cython_debug/
 
 # Local Executables
 bin/
+
+# Don't ignore anything in the skills folder
+!.agents/
+!.agents/**

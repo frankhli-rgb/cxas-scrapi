@@ -4,15 +4,15 @@ This workspace manages GECX (Google Customer Engagement Suite) conversational ag
 
 ## Skills
 
-Two skills handle the core workflows:
-
 - **`agent-foundry`** — End-to-end agent lifecycle: build from PRD, create evals, run evals, debug failures. This is a composite skill with three sub-skills (build/run/debug) and shared scripts.
-- **`skill-creator`** — Meta-skill for creating and improving skills.
 
 ## Project Structure
 
 ```
+setup.sh                        # Environment setup (virtualenv + cxas-scrapi install)
+gecx-config.json                # Centralized project config (project, app ID, modality, environments)
 tdd.md                          # Technical Design Document (source of truth)
+cxas_app/                       # Local agent code pulled from CXAS (canonical source)
 eval-reports/                   # Generated reports
   debug_iteration_*.html        #   Per-iteration debug reports (changes + diffs + results)
   combined_report_*.html        #   Combined eval reports (goldens + sims + tools + callbacks)
@@ -27,14 +27,65 @@ evals/                          # All eval definitions
     └── tests/                  # Test assertions (symlinked into agents/)
 
 .agents/skills/
-├── agent-foundry/              # Composite skill (build + run + debug)
-│   ├── SKILL.md                # Router
-│   ├── scripts/                # All eval scripts
-│   └── skills/{build,run,debug}/
-└── skill-creator/              # Meta-skill
-
-cxas-scrapi/                    # SCRAPI Python library (installed locally)
+└── agent-foundry/              # Composite skill (build + run + debug)
+    ├── SKILL.md                # Router
+    ├── scripts/                # All eval scripts
+    ├── hooks/                  # Workflow automation hooks (sync, reminders)
+    └── skills/{build,run,debug}/
 ```
+
+## Setup
+
+Run the setup script to create a virtualenv and install `cxas-scrapi`:
+
+```bash
+./setup.sh          # Install latest version
+./setup.sh 0.1.5    # Install specific version
+source .venv/bin/activate
+```
+
+Requires `gsutil` (Google Cloud SDK) and Python 3.
+
+## Development Workflow
+
+Agent development uses a **hybrid approach** — local files in git for version control, with SCRAPI for running evals and platform operations. Hooks automate the sync between local files and the CXAS platform.
+
+- **`gecx-config.json`** — Centralized config (project ID, app ID, location, modality, environments). Hooks and skills read this instead of parsing YAML or asking the user.
+- **`cxas_app/`** — Local agent code (instructions, callbacks, tools, variables) pulled from CXAS. This is the canonical source for agent definitions. Edit locally, hooks auto-push before evals.
+- **Hooks** handle sync automatically (configured in `.claude/settings.json` and `.gemini/settings.json`):
+  - `pre-agent-edit.sh` — Auto-pulls latest from CXAS before editing files in `cxas_app/`
+  - `pre-eval-run.sh` — Auto-pushes local code to CXAS before running evals
+  - `pre-agent-push.sh` — Blocks push if local files are stale vs platform (drift detection)
+  - `post-agent-update.sh` — Auto-pulls after SCRAPI updates to keep local in sync
+  - `post-agent-push.sh` — Reminds to commit to git after pushing
+- **SCRAPI** is still used for running evals, testing sessions, inspecting state, and rapid prototyping. When prototyping via SCRAPI, the post-hook auto-pulls changes to local files.
+
+## Developer Quick Reference
+
+The core principle: **create on platform, edit locally**.
+
+```
+CREATE (new agent/tool/callback/variable)
+  └─ Use SCRAPI create_*() → hook auto-pulls to cxas_app/
+  └─ See build skill (references/api-reference.md) for SCRAPI API
+
+EDIT (instruction, callback code, tool config)
+  └─ Edit directly in cxas_app/ → hook auto-pushes on eval run
+  └─ cxas_app/
+     ├── agents/{name}/instruction.txt
+     ├── callbacks/{agent}/{type}/python_code.py
+     ├── tools/{name}/...
+     └── variables/...
+
+TEST
+  └─ Run evals via scripts → hook auto-pushes first
+  └─ See run skill for eval commands
+
+COMMIT
+  └─ git add cxas_app/ evals/ tdd.md && git commit
+```
+
+Refresh local files: `./setup.sh --configure` → "Pull app from CXAS"
 
 ## Key Conventions
 
