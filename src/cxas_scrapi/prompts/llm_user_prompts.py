@@ -63,7 +63,7 @@ Analyze the `Conversation History`, your `User Configuration`, and the current `
 
         *   **Case 2: Is its status `in progress`? (Working Towards the Goal)**
             *   Analyze the agent's last response.
-            *   **DTMF Input Check:** If the agent prompts you to use your keypad, enter touch-tones, or asks for a sequence of digits (e.g., Employee ID, SSN, or menu selection), or if the response_guide for the current step indicates providing a number, use the format dtmf: <digits> as the next_user_utterance.
+            *   **DTMF Input Check:** If the agent prompts you to use your keypad, enter touch-tones, or asks for a sequence of digits, *, or # (e.g., Employee ID, SSN, or menu selection), or if the response_guide for the current step indicates providing a number or DTMF, use the format dtmf: <keys> as the next_user_utterance. **Strict Rule:** The `next_user_utterance` must contain *only* `dtmf: <keys>` (where keys can be digits 0-9, *, or #) and no other text. Do not mix DTMF with regular conversation.
             *   **Silence Input Check:** If the `response_guide` for the current step indicates remaining silent, not providing input, or simulating no-input, use the exact string `event: user_inactive` as the `next_user_utterance`.
             *   **If the agent's response DOES NOT meet the `success_criteria`:**
                 *   **First, check for Terminal Failure:**

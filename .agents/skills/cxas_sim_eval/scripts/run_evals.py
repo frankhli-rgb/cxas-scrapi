@@ -46,7 +46,7 @@ class TeeStdout:
     def isatty(self):
         return True
 
-def run_single_eval(item, evals_dir, app_name):
+def run_single_eval(item, evals_dir, app_name, skip_analysis=False):
     json_path = os.path.join(evals_dir, item)
     log_path = json_path.replace(".json", ".log")
     session_id = str(uuid.uuid4())
@@ -90,7 +90,7 @@ def run_single_eval(item, evals_dir, app_name):
         # Read log file for analysis if failed
         analysis_results = []
         llm_suggestions = ""
-        if not passed:
+        if not passed and not skip_analysis:
             try:
                 tee.flush()
                 with open(log_path, 'r', encoding='utf-8') as f:
@@ -462,6 +462,7 @@ def main():
     parser.add_argument("--parallelism", type=int, default=5, help="Number of parallel workers")
     parser.add_argument("--start_index", type=int, default=0, help="Start index of files to run")
     parser.add_argument("--end_index", type=int, default=10, help="End index of files to run")
+    parser.add_argument("--skip_analysis", action="store_true", help="Skip cognitive diagnostics and LLM analysis")
     args = parser.parse_args()
 
     evals_dir = os.path.join(args.output_dir, 'sim_evals')
@@ -477,7 +478,7 @@ def main():
     results_list = []
     with concurrent.futures.ProcessPoolExecutor(max_workers=args.parallelism) as executor:
         future_to_item = {
-            executor.submit(run_single_eval, item, evals_dir, args.app_name): item
+            executor.submit(run_single_eval, item, evals_dir, args.app_name, args.skip_analysis): item
             for item in files_to_run
         }
         for future in concurrent.futures.as_completed(future_to_item):
