@@ -370,15 +370,15 @@ def test_create_session_id(mock_client_cls):
 @patch("cxas_scrapi.core.sessions.ces_v1beta.SessionInput")
 @patch("cxas_scrapi.core.sessions.time.sleep")
 def test_bidi_session_handler_send_audio_message_with_variables(
-        mock_sleep, mock_session_input, mock_to_json
-    ):
+    mock_sleep, mock_session_input, mock_to_json
+):
     mock_to_json.return_value = "{}"
     config = {"session": "session_123"}
     audio_msg = {
         "audio": b"fake_audio",
         "text": "Hello",
-        "variables": {"var": "val"}
-        }
+        "variables": {"var": "val"},
+    }
     inputs = [{"audio": audio_msg}]
     handler = BidiSessionHandler(
         location="us", token="fake", config=config, inputs=inputs
@@ -435,3 +435,40 @@ def test_run_session_audio_modality_variables_all_turns(
         assert inputs[1]["audio"]["variables"] == {"v": "1"}
 
 
+@patch("cxas_scrapi.core.sessions.types.RunSessionRequest")
+@patch("cxas_scrapi.core.sessions.SessionServiceClient")
+def test_run_session_use_tool_fakes(mock_client_cls, mock_run_session_request):
+    """Test Sessions.run with use_tool_fakes=True."""
+    mock_client = mock_client_cls.return_value
+    sessions = Sessions(app_name="projects/p/locations/l/apps/a")
+
+    sessions.run(
+        session_id="s1",
+        text="hello",
+        use_tool_fakes=True,
+    )
+
+    mock_run_session_request.assert_called_once()
+    kwargs = mock_run_session_request.call_args[1]
+    assert kwargs["config"]["use_tool_fakes"] is True
+
+
+@patch("cxas_scrapi.core.sessions.time.sleep")
+def test_bidi_session_handler_send_inputs_use_tool_fakes(mock_sleep):
+    """Test BidiSessionHandler sends use_tool_fakes in config."""
+    config = {"session": "session_123", "use_tool_fakes": True}
+    handler = BidiSessionHandler(
+        location="us", token="fake", config=config, inputs=[]
+    )
+
+    handler.ws_app = MagicMock()
+
+    from google.cloud import ces_v1beta
+
+    ces_v1beta.SessionConfig.reset_mock()
+
+    handler._send_inputs()
+
+    ces_v1beta.SessionConfig.assert_called_once()
+    kwargs = ces_v1beta.SessionConfig.call_args[1]
+    assert kwargs["use_tool_fakes"] is True

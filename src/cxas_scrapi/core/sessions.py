@@ -202,6 +202,7 @@ class BidiSessionHandler:
                     session=self.config["session"],
                     input_audio_config=self.config.get("input_audio_config"),
                     output_audio_config=self.config.get("output_audio_config"),
+                    use_tool_fakes=self.config.get("use_tool_fakes", False),
                 )
             )
             config_json = json_format.MessageToJson(
@@ -433,9 +434,7 @@ class Sessions(Common):
                 tool_res_font = (
                     "<font color='goldenrod'><b>TOOL RESULT:</b></font>"
                 )
-                query_font = (
-                    "<font color='darkgreen'><b>USER QUERY:</b></font>"
-                )
+                query_font = "<font color='darkgreen'><b>USER QUERY:</b></font>"
                 response_font = (
                     "<font color='purple'><b>AGENT RESPONSE:</b></font>"
                 )
@@ -569,11 +568,7 @@ class Sessions(Common):
                 if payload:
                     expanded_payload = Sessions._expand_pb_struct(payload)
                     logging.debug(f"CUSTOM PAYLOAD: {expanded_payload}")
-                    display(
-                        HTML(
-                            f"{payload_font} {expanded_payload}"
-                        )
-                    )
+                    display(HTML(f"{payload_font} {expanded_payload}"))
 
                 tool_calls_msg = getattr(output, "tool_calls", None)
                 if tool_calls_msg and hasattr(tool_calls_msg, "tool_calls"):
@@ -620,6 +615,7 @@ class Sessions(Common):
         historical_contexts: Optional[List[Dict[str, Any]] | str] = None,
         turn_count: Optional[int] = None,
         modality: Modality | str = Modality.TEXT,
+        use_tool_fakes: bool = False,
     ):
         """Sends inputs to a Conversational Agents Session and returns the
         response.
@@ -655,6 +651,7 @@ class Sessions(Common):
             saved conversation ID.
             modality: Running via text (synced) or audio (asynchronous
             bidirectional streaming). Defaults to Modality.TEXT.
+            use_tool_fakes: Use fake tools for the session if available. Defaults to False.
         """
 
         if isinstance(modality, str):
@@ -666,6 +663,8 @@ class Sessions(Common):
                 )
 
         config = {"session": f"{self.app_name}/sessions/{session_id}"}
+        if use_tool_fakes:
+            config["use_tool_fakes"] = True
         inputs = []
 
         if modality == Modality.AUDIO:
