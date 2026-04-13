@@ -14,8 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Migration utilities for DFCX agent visualization and analysis."""
+"""Migration utilities for porting DFCX agents to CXAS."""
 
+from cxas_scrapi.migration.dfcx_exporter import (
+    BaseDFCXClient,
+    DFCXAgentExporter,
+    DFCXAgents,
+    DFCXPlaybooks,
+    DFCXTools,
+    DFCXGenerativeSettings,
+    ConversationalAgentsAPI,
+)
 from cxas_scrapi.migration.flow_visualizer import (
     FlowDependencyResolver,
     FlowTreeVisualizer,
@@ -25,6 +34,13 @@ from cxas_scrapi.migration.playbook_visualizer import PlaybookTreeVisualizer
 from cxas_scrapi.migration.main_visualizer import MainVisualizer
 
 __all__ = [
+    "BaseDFCXClient",
+    "DFCXAgentExporter",
+    "DFCXAgents",
+    "DFCXPlaybooks",
+    "DFCXTools",
+    "DFCXGenerativeSettings",
+    "ConversationalAgentsAPI",
     "FlowDependencyResolver",
     "FlowTreeVisualizer",
     "HighLevelGraphVisualizer",

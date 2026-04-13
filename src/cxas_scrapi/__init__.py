@@ -38,6 +38,15 @@ from cxas_scrapi.evals.callback_evals import CallbackEvals
 from cxas_scrapi.evals.turn_evals import TurnEvals
 
 # Migration / Visualization
+from cxas_scrapi.migration.dfcx_exporter import (
+    BaseDFCXClient,
+    DFCXAgentExporter,
+    DFCXAgents,
+    DFCXPlaybooks,
+    DFCXTools,
+    DFCXGenerativeSettings,
+    ConversationalAgentsAPI,
+)
 from cxas_scrapi.migration.flow_visualizer import (
     FlowDependencyResolver,
     FlowTreeVisualizer,
@@ -69,6 +78,13 @@ __all__ = [
     "SimulationEvals",
     "CallbackEvals",
     "TurnEvals",
+    "BaseDFCXClient",
+    "DFCXAgentExporter",
+    "DFCXAgents",
+    "DFCXPlaybooks",
+    "DFCXTools",
+    "DFCXGenerativeSettings",
+    "ConversationalAgentsAPI",
     "FlowDependencyResolver",
     "FlowTreeVisualizer",
     "HighLevelGraphVisualizer",

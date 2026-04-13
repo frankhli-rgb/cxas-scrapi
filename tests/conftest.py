@@ -76,3 +76,11 @@ if "--run-online" not in sys.argv:
     mock_ces.EvaluationServiceClient = MagicMock
     mock_ces.types = MagicMock()
     sys.modules["google.cloud.ces_v1beta"] = mock_ces
+
+    # Mock google.cloud.dialogflowcx_v3beta1 for dfcx_exporter offline tests
+    mock_dfcx = MagicMock()
+    mock_dfcx_services = MagicMock()
+    mock_dfcx_types = MagicMock()
+    sys.modules["google.cloud.dialogflowcx_v3beta1"] = mock_dfcx
+    sys.modules["google.cloud.dialogflowcx_v3beta1.services"] = mock_dfcx_services
+    sys.modules["google.cloud.dialogflowcx_v3beta1.types"] = mock_dfcx_types
