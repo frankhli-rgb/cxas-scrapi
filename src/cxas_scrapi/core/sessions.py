@@ -41,7 +41,10 @@ class Modality(str, Enum):
     AUDIO = "audio"
 
 
-BIDI_SESSION_URI = "wss://ces.googleapis.com/ws/google.cloud.ces.v1.SessionService/BidiRunSession/locations/"
+BIDI_SESSION_URI = (
+    "wss://ces.googleapis.com/ws/"
+    "google.cloud.ces.v1.SessionService/BidiRunSession/locations/"
+)
 AUDIO_CHUNK_SIZE = 3200
 CHUNK_DELAY = 0.1
 SILENCE_PADDING_CHUNKS = 3
@@ -157,10 +160,16 @@ class BidiSessionHandler:
 
         logging.debug("Sending audio chunks for turn %d...", turn_index)
 
+        variables = audio_payload.get("variables")
         for i in range(0, len(audio_bytes), AUDIO_CHUNK_SIZE):
             chunk = audio_bytes[i : i + AUDIO_CHUNK_SIZE]
+
+            input_args = {"audio": chunk}
+            if i == 0 and variables:
+                input_args["variables"] = variables
+
             query_message = ces_v1beta.BidiSessionClientMessage(
-                realtime_input=ces_v1beta.SessionInput(audio=chunk)
+                realtime_input=ces_v1beta.SessionInput(**input_args)
             )
             query_json = json_format.MessageToJson(
                 query_message._pb,
@@ -285,7 +294,8 @@ class BidiSessionHandler:
 
                 if response.session_output.turn_completed:
                     logging.debug(
-                        "Agent turn network payload completed. Waiting for audio playback."
+                        "Agent turn network payload completed. "
+                        "Waiting for audio playback."
                     )
                     self.agent_turn_manager.mark_turn_completed()
 
@@ -417,12 +427,24 @@ class Sessions(Common):
             try:
                 from IPython.display import display, HTML
 
-                tool_call_font = "<font color='darkred'><b>TOOL CALL:</b></font>"
-                tool_res_font = "<font color='goldenrod'><b>TOOL RESULT:</b></font>"
-                query_font = "<font color='darkgreen'><b>USER QUERY:</b></font>"
-                response_font = "<font color='purple'><b>AGENT RESPONSE:</b></font>"
-                transfer_font = "<font color='darkorange'><b>AGENT TRANSFER:</b></font>"
-                payload_font = "<font color='brown'><b>CUSTOM PAYLOAD:</b></font>"
+                tool_call_font = (
+                    "<font color='darkred'><b>TOOL CALL:</b></font>"
+                )
+                tool_res_font = (
+                    "<font color='goldenrod'><b>TOOL RESULT:</b></font>"
+                )
+                query_font = (
+                    "<font color='darkgreen'><b>USER QUERY:</b></font>"
+                )
+                response_font = (
+                    "<font color='purple'><b>AGENT RESPONSE:</b></font>"
+                )
+                transfer_font = (
+                    "<font color='darkorange'><b>AGENT TRANSFER:</b></font>"
+                )
+                payload_font = (
+                    "<font color='brown'><b>CUSTOM PAYLOAD:</b></font>"
+                )
             except ImportError:
                 tool_call_font = "TOOL CALL:"
                 tool_res_font = "TOOL RESULT:"
@@ -445,7 +467,8 @@ class Sessions(Common):
         for output in outputs:
             diagnostic_info = getattr(output, "diagnostic_info", None)
 
-            # If diagnostic_info is available, use it for a rich turn-by-turn trace
+            # If diagnostic_info is available, use it for a rich
+            # turn-by-turn trace
             if diagnostic_info and hasattr(diagnostic_info, "messages"):
                 messages = getattr(diagnostic_info, "messages", [])
                 for message in messages:
@@ -453,7 +476,8 @@ class Sessions(Common):
                     chunks = getattr(message, "chunks", [])
 
                     for chunk in chunks:
-                        # Depending on the generated class, WhichOneof is available on the internal _pb message
+                        # Depending on the generated class, WhichOneof is
+                        # available on the internal _pb message
                         chunk_type = (
                             chunk._pb.WhichOneof("data")
                             if hasattr(chunk, "_pb")
@@ -470,7 +494,8 @@ class Sessions(Common):
                                 )
                                 display(
                                     HTML(
-                                        f"{response_font} [{role}] {chunk.text}"
+                                        f"{response_font} [{role}] "
+                                        f"{chunk.text}"
                                     )
                                 )
 
@@ -479,11 +504,13 @@ class Sessions(Common):
                             tool_name = tc.display_name or tc.tool
                             expanded_args = Sessions._expand_pb_struct(tc.args)
                             logging.debug(
-                                f"TOOL CALL: [{role}] {tool_name} -- Args: {expanded_args}"
+                                f"TOOL CALL: [{role}] {tool_name} -- "
+                                f"Args: {expanded_args}"
                             )
                             display(
                                 HTML(
-                                    f"{tool_call_font} [{role}] {tool_name} -- Args: {expanded_args}"
+                                    f"{tool_call_font} [{role}] {tool_name} -- "
+                                    f"Args: {expanded_args}"
                                 )
                             )
 
@@ -494,38 +521,46 @@ class Sessions(Common):
                                 tr.response
                             )
                             logging.debug(
-                                f"TOOL RESULT: [{role}] {tool_name} -- Result: {expanded_response}"
+                                f"TOOL RESULT: [{role}] {tool_name} -- "
+                                f"Result: {expanded_response}"
                             )
                             display(
                                 HTML(
-                                    f"{tool_res_font} [{role}] {tool_name} -- Result: {expanded_response}"
+                                    f"{tool_res_font} [{role}] {tool_name} -- "
+                                    f"Result: {expanded_response}"
                                 )
                             )
 
                         elif chunk_type == "agent_transfer":
                             at = chunk.agent_transfer
                             logging.debug(
-                                f"AGENT TRANSFER: [{role}] Transferred to {at.display_name}"
+                                f"AGENT TRANSFER: [{role}] "
+                                f"Transferred to {at.display_name}"
                             )
                             display(
                                 HTML(
-                                    f"{transfer_font} [{role}] Transferred to {at.display_name}"
+                                    f"{transfer_font} [{role}] "
+                                    f"Transferred to {at.display_name}"
                                 )
                             )
 
                         elif chunk_type == "payload":
-                            expanded_payload = Sessions._expand_pb_struct(chunk.payload)
+                            expanded_payload = Sessions._expand_pb_struct(
+                                chunk.payload
+                            )
                             logging.debug(
                                 f"CUSTOM PAYLOAD: [{role}] {expanded_payload}"
                             )
                             display(
                                 HTML(
-                                    f"{payload_font} [{role}] {expanded_payload}"
+                                    f"{payload_font} [{role}] "
+                                    f"{expanded_payload}"
                                 )
                             )
 
             else:
-                # Fallback to high-level outputs if no diagnostic trace is available
+                # Fallback to high-level outputs if no diagnostic trace is
+                # available
                 text = getattr(output, "text", None)
                 if text:
                     logging.debug(f"AGENT RESPONSE: {text}")
@@ -550,7 +585,8 @@ class Sessions(Common):
                         )
                         display(
                             HTML(
-                                f"{tool_call_font} {tool_name} -- Args: {expanded_args}"
+                                f"{tool_call_font} {tool_name} -- "
+                                f"Args: {expanded_args}"
                             )
                         )
 
@@ -585,27 +621,40 @@ class Sessions(Common):
         turn_count: Optional[int] = None,
         modality: Modality | str = Modality.TEXT,
     ):
-        """Sends inputs to a Conversational Agents Session and returns the response.
+        """Sends inputs to a Conversational Agents Session and returns the
+        response.
 
         Args:
-            session_id: Unique UUID string or identifying string (e.g. 'test1') for the session.
-            text: Text input from the user. Can give a single string or list of strings.
+            session_id: Unique UUID string or identifying string (e.g. 'test1')
+            for the session.
+            text: Text input from the user. Can give a single string or list of
+            strings.
             dtmf: DTMF input from the user.
             event: Name of a system event to trigger (e.g. 'WELCOME').
-            event_vars: Key-value map of variables to inject alongside the event.
+            event_vars: Key-value map of variables to inject alongside the
+            event.
             blob: Raw binary content (image, pdf, etc.) for multimodal inputs.
-            blob_mime_type: Mime type for the blob (defaults to 'application/octet-stream').
+            blob_mime_type: Mime type for the blob (defaults to
+            'application/octet-stream').
             variables: Key-value state maps to inject for the session turn.
-            tool_responses: Pre-computed tool run outputs if mocking tool execution.
+            tool_responses: Pre-computed tool run outputs if mocking tool
+            execution.
             audio: Raw audio bytes to send as user input.
             audio_config: Custom turn-specific audio configurations.
-            input_audio_config: Custom gRPC properties for input audio (defaults to 16kHz linear PCM).
-            output_audio_config: Custom gRPC properties for output audio (defaults to 16kHz linear PCM).
-            deployment_id: Overrides the default deployment ID setting for this turn run.
-            version_id: Overrides the default app version setting for this turn run.
-            historical_contexts: An existing conversation ID (string) or raw list of dictionaries to pre-set past history.
-            turn_count: Truncates historical context limits when pulling from a saved conversation ID.
-            modality: Running via text (synced) or audio (asynchronous bidirectional streaming). Defaults to Modality.TEXT.
+            input_audio_config: Custom gRPC properties for input audio
+            (defaults to 16kHz linear PCM).
+            output_audio_config: Custom gRPC properties for output audio
+            (defaults to 16kHz linear PCM).
+            deployment_id: Overrides the default deployment ID setting for this
+            turn run.
+            version_id: Overrides the default app version setting for this turn
+            run.
+            historical_contexts: An existing conversation ID (string) or raw
+            list of dictionaries to pre-set past history.
+            turn_count: Truncates historical context limits when pulling from a
+            saved conversation ID.
+            modality: Running via text (synced) or audio (asynchronous
+            bidirectional streaming). Defaults to Modality.TEXT.
         """
 
         if isinstance(modality, str):
@@ -638,7 +687,8 @@ class Sessions(Common):
         # Determine deployment/version
         if deployment_id or self.deployment_id:
             config["deployment"] = (
-                f"{self.app_name}/deployments/{deployment_id or self.deployment_id}"
+                f"{self.app_name}/deployments/"
+                f"{deployment_id or self.deployment_id}"
             )
         if version_id or self.version_id:
             config["app_version"] = (
@@ -697,11 +747,12 @@ class Sessions(Common):
                             parsed_contexts.append(ctx)
                     else:
                         raise ValueError(
-                            f"historical_contexts must be a list of dictionaries. Received: {type(ctx)}"
+                            f"historical_contexts must be a list of "
+                            f"dictionaries. Received: {type(ctx)}"
                         )
             config["historical_contexts"] = parsed_contexts
 
-        if variables:
+        if variables and modality == Modality.TEXT:
             inputs.append({"variables": variables})
 
         if dtmf is not None:
@@ -721,6 +772,8 @@ class Sessions(Common):
             audio_payload = {"audio": audio}
             if audio_config:
                 audio_payload["config"] = audio_config
+            if variables and modality == Modality.AUDIO:
+                audio_payload["variables"] = variables
             inputs.append({"audio": audio_payload})
 
         # Wrap tool responses correctly
@@ -733,7 +786,8 @@ class Sessions(Common):
             if text is not None:
                 if isinstance(text, str):
                     logger.warning(
-                        "Single string input for audio modality introduces minor latency before user utterances."
+                        "Single string input for audio modality introduces "
+                        "minor latency before user utterances."
                     )
                     text = [text]
                 audio_transformer = AudioTransformer()
@@ -752,13 +806,16 @@ class Sessions(Common):
                         "audio": input_data["audio_bytes"],
                         "text": input_data["text"],
                     }
+                    if variables:
+                        audio_payload["variables"] = variables
                     inputs.append({"audio": audio_payload})
                 return self.async_bidi_run_session(config=config, inputs=inputs)
             elif inputs:
                 return self.async_bidi_run_session(config=config, inputs=inputs)
             else:
                 raise ValueError(
-                    "Input payloads (text, audio, event, etc.) must be provided for audio modality."
+                    "Input payloads (text, audio, event, etc.) must be "
+                    "provided for audio modality."
                 )
         elif modality == Modality.TEXT:
             if text is not None and isinstance(text, str):
@@ -778,7 +835,8 @@ class Sessions(Common):
                             all_outputs.extend(response.outputs)
                         final_response = response
             elif inputs:
-                # Handle case where only event/blob/variables are provided without text
+                # Handle case where only event/blob/variables are provided
+                # without text
                 response = self.make_text_request(config, inputs)
                 if response:
                     if hasattr(response, "outputs"):
