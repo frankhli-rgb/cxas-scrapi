@@ -270,3 +270,31 @@ def test_run_turn_tests_conversation_expectations(
     assert conv_row.iloc[0]["status"] == "SUCCESS"
     assert "Overall good" in conv_row.iloc[0]["llm_results"]
 
+
+def test_run_turn_tests_multi_turn_passes_historical_contexts(mock_turn_evals):
+    mock_turn_evals.sessions_client.run.return_value = MagicMock()
+
+    cases = [
+        TurnTestCase(
+            name="t1",
+            historical_contexts="some_context_id",
+            turns=[
+                TurnStep(turn="1", user="hi", expectations=[]),
+                TurnStep(turn="2", user="how are you", expectations=[])
+            ],
+        )
+    ]
+
+    mock_turn_evals.run_turn_tests(cases)
+
+    assert mock_turn_evals.sessions_client.run.call_count == 2
+
+    # Check first call
+    args, kwargs = mock_turn_evals.sessions_client.run.call_args_list[0]
+    assert kwargs["historical_contexts"] == "some_context_id"
+
+    # Check second call
+    args, kwargs = mock_turn_evals.sessions_client.run.call_args_list[1]
+    assert kwargs["historical_contexts"] is None
+
+

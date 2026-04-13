@@ -435,6 +435,88 @@ def test_run_session_audio_modality_variables_all_turns(
         assert inputs[1]["audio"]["variables"] == {"v": "1"}
 
 
+@patch("cxas_scrapi.core.sessions.time.sleep")
+@patch("cxas_scrapi.core.sessions.ces_v1beta.SessionConfig")
+@patch("cxas_scrapi.core.sessions.json_format.MessageToJson")
+def test_bidi_session_handler_send_inputs_with_historical_contexts(
+    mock_message_to_json, mock_session_config, mock_sleep
+):
+    mock_message_to_json.return_value = '{"mocked": "json"}'
+
+    config = {
+        "session": "session_123",
+        "historical_contexts": [{"role": "user", "chunks": [{"text": "hi"}]}],
+    }
+    audio_msg = {"audio": b"fake_audio", "text": "Hello"}
+    inputs = [{"audio": audio_msg}]
+    handler = BidiSessionHandler(
+        location="us", token="fake", config=config, inputs=inputs
+    )
+
+    handler.ws_app = MagicMock()
+    handler.agent_turn_manager.is_agent_done_talking = MagicMock(
+        return_value=True
+    )
+
+    handler._send_inputs()
+
+    mock_session_config.assert_called_once()
+    kwargs = mock_session_config.call_args[1]
+    assert kwargs["session"] == "session_123"
+    assert kwargs["historical_contexts"] == [
+        {"role": "user", "chunks": [{"text": "hi"}]}
+    ]
+
+    assert handler.ws_app.send.call_count > 0
+    # First send should be the mocked JSON
+    first_call_arg = handler.ws_app.send.call_args_list[0][0][0]
+    assert first_call_arg == '{"mocked": "json"}'
+
+
+
+
+
+@patch("cxas_scrapi.core.sessions.time.sleep")
+@patch("cxas_scrapi.core.sessions.ces_v1beta.SessionConfig")
+@patch("cxas_scrapi.core.sessions.json_format.MessageToJson")
+def test_bidi_session_handler_send_inputs_with_historical_contexts(
+    mock_message_to_json, mock_session_config, mock_sleep
+):
+    mock_message_to_json.return_value = '{"mocked": "json"}'
+
+    config = {
+        "session": "session_123",
+        "historical_contexts": [{"role": "user", "chunks": [{"text": "hi"}]}],
+    }
+    audio_msg = {"audio": b"fake_audio", "text": "Hello"}
+    inputs = [{"audio": audio_msg}]
+    handler = BidiSessionHandler(
+        location="us", token="fake", config=config, inputs=inputs
+    )
+
+    handler.ws_app = MagicMock()
+    handler.agent_turn_manager.is_agent_done_talking = MagicMock(
+        return_value=True
+    )
+
+    handler._send_inputs()
+
+    mock_session_config.assert_called_once()
+    kwargs = mock_session_config.call_args[1]
+    assert kwargs["session"] == "session_123"
+    assert kwargs["historical_contexts"] == [
+        {"role": "user", "chunks": [{"text": "hi"}]}
+    ]
+
+    assert handler.ws_app.send.call_count > 0
+    # First send should be the mocked JSON
+    first_call_arg = handler.ws_app.send.call_args_list[0][0][0]
+    assert first_call_arg == '{"mocked": "json"}'
+
+
+
+
+
 @patch("cxas_scrapi.core.sessions.types.RunSessionRequest")
 @patch("cxas_scrapi.core.sessions.SessionServiceClient")
 def test_run_session_use_tool_fakes(mock_client_cls, mock_run_session_request):
@@ -454,8 +536,14 @@ def test_run_session_use_tool_fakes(mock_client_cls, mock_run_session_request):
 
 
 @patch("cxas_scrapi.core.sessions.time.sleep")
-def test_bidi_session_handler_send_inputs_use_tool_fakes(mock_sleep):
+@patch("cxas_scrapi.core.sessions.ces_v1beta.SessionConfig")
+@patch("cxas_scrapi.core.sessions.json_format.MessageToJson")
+def test_bidi_session_handler_send_inputs_use_tool_fakes(
+    mock_message_to_json, mock_session_config, mock_sleep
+):
     """Test BidiSessionHandler sends use_tool_fakes in config."""
+    mock_message_to_json.return_value = "{}"
+
     config = {"session": "session_123", "use_tool_fakes": True}
     handler = BidiSessionHandler(
         location="us", token="fake", config=config, inputs=[]
@@ -463,12 +551,9 @@ def test_bidi_session_handler_send_inputs_use_tool_fakes(mock_sleep):
 
     handler.ws_app = MagicMock()
 
-    from google.cloud import ces_v1beta
-
-    ces_v1beta.SessionConfig.reset_mock()
-
     handler._send_inputs()
 
-    ces_v1beta.SessionConfig.assert_called_once()
-    kwargs = ces_v1beta.SessionConfig.call_args[1]
+    mock_session_config.assert_called_once()
+    kwargs = mock_session_config.call_args[1]
     assert kwargs["use_tool_fakes"] is True
+

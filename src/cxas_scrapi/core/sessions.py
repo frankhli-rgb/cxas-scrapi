@@ -203,6 +203,7 @@ class BidiSessionHandler:
                     input_audio_config=self.config.get("input_audio_config"),
                     output_audio_config=self.config.get("output_audio_config"),
                     use_tool_fakes=self.config.get("use_tool_fakes", False),
+                    historical_contexts=self.config.get("historical_contexts"),
                 )
             )
             config_json = json_format.MessageToJson(
@@ -710,7 +711,6 @@ class Sessions(Common):
                     for turn in turns_to_process:
                         msgs = turn.get("messages", [])
                         for m in msgs:
-                            # only add chunks that have a role and text
                             if "role" in m and "chunks" in m:
                                 parsed_contexts.append(
                                     {"role": m["role"], "chunks": m["chunks"]}

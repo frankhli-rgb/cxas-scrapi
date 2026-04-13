@@ -565,7 +565,11 @@ class TurnEvals:
                             text=step.user,
                             event=step.event,
                             variables=step.variables,
-                            historical_contexts=None,
+                            historical_contexts=(
+                                case.historical_contexts
+                                if step is case.turns[0]
+                                else None
+                            ),
                             **merged_config,
                         )
 
