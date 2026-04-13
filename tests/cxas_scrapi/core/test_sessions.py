@@ -29,9 +29,6 @@ from google.protobuf import json_format
 import IPython.display
 
 
-import IPython.display
-
-
 class FakeRunSessionResponse:
     def __init__(self, outputs=None, **kwargs):
         self.outputs = outputs or []
@@ -92,7 +89,8 @@ def test_run_session_basic(mock_client_cls, mock_types):
         getattr(call_args, "config", getattr(call_args, "_config", None))
         is not None
     )
-    # We just ensure it was called since proto-plus handles the object construction
+    # We just ensure it was called since proto-plus
+    # handles the object construction
 
 
 @patch("cxas_scrapi.core.sessions.SessionServiceClient")
@@ -171,7 +169,8 @@ def test_parse_result_with_diagnostic_info(mock_client_cls):
 
 @patch("cxas_scrapi.core.sessions.SessionServiceClient")
 def test_parse_result_fallback(mock_client_cls):
-    """Test parse_result without diagnostic info but with basic and tool responses ensures no crash."""
+    """Test parse_result without diagnostic info but
+    with basic and tool responses ensures no crash."""
     mock_display = MagicMock()
     mock_html = MagicMock(side_effect=lambda x: x)
     sys.modules["IPython"] = MagicMock()
@@ -209,8 +208,10 @@ def test_run_session_audio_modality_text_inputs(
     """Test Sessions.run handles text inputs for audio modality (TTS)."""
     sessions = Sessions(app_name="projects/p/locations/l/apps/a")
 
-    # Mock text_to_speech_bytes internally or just rely on AudioTransformer mock if we had one
-    # But AudioTransformer is instantiated inside run, so we need to patch it.
+    # Mock text_to_speech_bytes internally or just rely on
+    # AudioTransformer mock if we had one
+    # But AudioTransformer is instantiated inside run,
+    # so we need to patch it.
     with patch("cxas_scrapi.core.sessions.AudioTransformer") as MockTransformer:
         mock_transformer = MockTransformer.return_value
         mock_transformer.text_to_speech_bytes.side_effect = (
@@ -363,5 +364,74 @@ def test_create_session_id(mock_client_cls):
     sess_id = sessions.create_session_id()
     assert sess_id is not None
     assert "/" not in sess_id
+
+
+@patch("cxas_scrapi.core.sessions.json_format.MessageToJson")
+@patch("cxas_scrapi.core.sessions.ces_v1beta.SessionInput")
+@patch("cxas_scrapi.core.sessions.time.sleep")
+def test_bidi_session_handler_send_audio_message_with_variables(
+        mock_sleep, mock_session_input, mock_to_json
+    ):
+    mock_to_json.return_value = "{}"
+    config = {"session": "session_123"}
+    audio_msg = {
+        "audio": b"fake_audio",
+        "text": "Hello",
+        "variables": {"var": "val"}
+        }
+    inputs = [{"audio": audio_msg}]
+    handler = BidiSessionHandler(
+        location="us", token="fake", config=config, inputs=inputs
+    )
+
+    handler.ws_app = MagicMock()
+    handler.agent_turn_manager.is_agent_done_talking = MagicMock(
+        return_value=True
+    )
+
+    handler._send_inputs()
+
+    # Verify that SessionInput was called with variables
+    calls = mock_session_input.call_args_list
+    found_vars = False
+    for call in calls:
+        kwargs = call[1]
+        if "variables" in kwargs and kwargs["variables"] == {"var": "val"}:
+            found_vars = True
+            break
+    assert found_vars is True
+
+
+@patch("cxas_scrapi.core.sessions.SessionServiceClient")
+@patch("cxas_scrapi.core.sessions.Sessions.async_bidi_run_session")
+def test_run_session_audio_modality_variables_all_turns(
+    mock_async_run, mock_client_cls
+):
+    """Test Sessions.run attaches variables to all turns in audio modality."""
+    sessions = Sessions(app_name="projects/p/locations/l/apps/a")
+
+    with patch("cxas_scrapi.core.sessions.AudioTransformer") as MockTransformer:
+        mock_transformer = MockTransformer.return_value
+        mock_transformer.text_to_speech_bytes.side_effect = (
+            lambda text, **kwargs: {
+                "audio_bytes": b"tts_" + text.encode(),
+                "text": text,
+            }
+        )
+
+        sessions.run(
+            session_id="s1",
+            text=["Hello", "World"],
+            modality=Modality.AUDIO,
+            variables={"v": "1"},
+        )
+
+        mock_async_run.assert_called_once()
+        call_kwargs = mock_async_run.call_args[1]
+
+        inputs = call_kwargs["inputs"]
+        assert len(inputs) == 2
+        assert inputs[0]["audio"]["variables"] == {"v": "1"}
+        assert inputs[1]["audio"]["variables"] == {"v": "1"}
 
 
