@@ -1,11 +1,8 @@
 pytest
 pytest-asyncio
-black
-flake8
 requests
 google-cloud-secret-manager
 google-genai
-pylint
 ipython
 google-auth
 protobuf
@@ -25,3 +22,4 @@ certifi
 json5
 graphviz
 rich
+ruff
