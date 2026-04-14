@@ -18,9 +18,10 @@ Validates golden, scenario, and simulation YAML files.
 """
 
 import re
-import yaml
 from pathlib import Path
 from typing import Optional
+
+import yaml
 
 from cxas_scrapi.utils.linter import (
     LintContext,
@@ -53,7 +54,7 @@ def _parse_yaml(content: str) -> Optional[dict]:
 
 
 def _iter_golden_turns(data: dict):
-    """Yield (conv_name, turn_index, turn_dict) for each turn in a golden eval."""
+    """Yield (conv_name, turn_index, turn_dict) for golden eval turns."""
     for conv in data.get("conversations", []):
         conv_name = conv.get("conversation", "")
         for i, turn in enumerate(conv.get("turns", [])):
@@ -146,8 +147,17 @@ class InvalidToolCall(Rule):
                     results.append(
                         self.make_result(
                             file=rel,
-                            message=f"Conv '{conv_name}' turn {turn_num}: tool_call '{action}' not found in local app tools",
-                            fix=f"Available local tools: {', '.join(sorted(context.all_known_tools))}",
+                            message=(
+                                f"Conv '{conv_name}'"
+                                f" turn {turn_num}:"
+                                f" tool_call '{action}'"
+                                " not found in local"
+                                " app tools"
+                            ),
+                            fix=(
+                                "Available local tools:"
+                                f" {', '.join(sorted(context.all_known_tools))}"
+                            ),
                         )
                     )
         return results
@@ -197,7 +207,12 @@ class DuplicateYamlKeys(Rule):
                         self.make_result(
                             file=rel,
                             line=i,
-                            message=f"Duplicate '{key}:' key at same level — second overwrites first",
+                            message=(
+                                f"Duplicate '{key}:'"
+                                " key at same level"
+                                " — second overwrites"
+                                " first"
+                            ),
                             fix="Combine into a single tool_calls: list",
                         )
                     )
@@ -239,7 +254,11 @@ class GoldenWithoutMocks(Rule):
             return [
                 self.make_result(
                     file=rel,
-                    message="Golden eval has tool_calls but no common_session_parameters",
+                    message=(
+                        "Golden eval has tool_calls"
+                        " but no"
+                        " common_session_parameters"
+                    ),
                     fix="Add session parameters for reliable tool responses",
                 )
             ]
@@ -268,7 +287,12 @@ class GoldenAgentFieldNotString(Rule):
                 file=rel,
                 message=f"Conv '{conv}' turn {i}: 'agent' field is a "
                 f"{type(turn['agent']).__name__}, must be a plain string",
-                fix="Replace the dict with a plain string containing the expected agent response text",
+                fix=(
+                    "Replace the dict with a"
+                    " plain string containing"
+                    " the expected agent"
+                    " response text"
+                ),
             )
             for conv, i, turn in _iter_golden_turns(data)
             if turn.get("agent") is not None
@@ -280,7 +304,11 @@ class GoldenAgentFieldNotString(Rule):
 class GoldenMissingAgentField(Rule):
     id = "E008"
     name = "eval-missing-agent"
-    description = "Golden turn missing 'agent' field — causes automatic FAIL from unexpected response"
+    description = (
+        "Golden turn missing 'agent' field"
+        " — causes automatic FAIL from"
+        " unexpected response"
+    )
     default_severity = Severity.WARNING
 
     def check(
@@ -296,9 +324,18 @@ class GoldenMissingAgentField(Rule):
         return [
             self.make_result(
                 file=rel,
-                message=f"Conv '{conv}' turn {i}: has 'user' but no 'agent' field — "
-                f"any agent response will be flagged as UNEXPECTED RESPONSE",
-                fix="Add an 'agent' field with the expected response text",
+                message=(
+                    f"Conv '{conv}' turn {i}:"
+                    " has 'user' but no"
+                    " 'agent' field — any"
+                    " agent response will be"
+                    " flagged as UNEXPECTED"
+                    " RESPONSE"
+                ),
+                fix=(
+                    "Add an 'agent' field with"
+                    " the expected response text"
+                ),
             )
             for conv, i, turn in _iter_golden_turns(data)
             if "user" in turn and "agent" not in turn
@@ -347,7 +384,11 @@ class SimMissingTags(Rule):
 class ToolTestWrongKey(Rule):
     id = "E010"
     name = "eval-tool-test-wrong-key"
-    description = "Tool test YAML uses 'test_cases' instead of 'tests' — SCRAPI silently returns 0 tests"
+    description = (
+        "Tool test YAML uses 'test_cases'"
+        " instead of 'tests' — SCRAPI"
+        " silently returns 0 tests"
+    )
     default_severity = Severity.ERROR
 
     def check(
@@ -365,7 +406,12 @@ class ToolTestWrongKey(Rule):
             results.append(
                 self.make_result(
                     file=rel,
-                    message="Uses 'test_cases' key but SCRAPI expects 'tests' — all tests will be silently skipped",
+                    message=(
+                        "Uses 'test_cases' key but"
+                        " SCRAPI expects 'tests'"
+                        " — all tests will be"
+                        " silently skipped"
+                    ),
                     fix="Rename 'test_cases:' to 'tests:'",
                 )
             )
@@ -373,8 +419,18 @@ class ToolTestWrongKey(Rule):
             results.append(
                 self.make_result(
                     file=rel,
-                    message="Uses top-level 'tool_name' (old format) — SCRAPI expects 'tool' on each test case inside 'tests'",
-                    fix="Restructure: move tool_name into each test case as 'tool:', rename 'test_cases:' to 'tests:'",
+                    message=(
+                        "Uses top-level 'tool_name'"
+                        " (old format) — SCRAPI"
+                        " expects 'tool' on each"
+                        " test case inside 'tests'"
+                    ),
+                    fix=(
+                        "Restructure: move"
+                        " tool_name into each test"
+                        " case as 'tool:', rename"
+                        " 'test_cases:' to 'tests:'"
+                    ),
                 )
             )
         return results
@@ -420,15 +476,30 @@ class InvalidMatchType(Rule):
                     ):
                         continue
                     suggestion = self.COMMON_TYPOS.get(match_type)
+                    valid_vals = ", ".join(
+                        sorted(self.VALID_MATCH_TYPES)
+                    )
                     fix = (
-                        f'Did you mean "{suggestion}"?'
+                        f'Did you mean'
+                        f' "{suggestion}"?'
                         if suggestion
-                        else f"Valid values: {', '.join(sorted(self.VALID_MATCH_TYPES))}"
+                        else f"Valid values:"
+                        f" {valid_vals}"
                     )
                     results.append(
                         self.make_result(
                             file=rel,
-                            message=f"Conv '{conv_name}' turn {turn_num}: arg '{arg_name}' has invalid $matchType '{match_type}'",
+                            message=(
+                                f"Conv"
+                                f" '{conv_name}'"
+                                f" turn"
+                                f" {turn_num}:"
+                                f" arg"
+                                f" '{arg_name}'"
+                                " has invalid"
+                                " $matchType"
+                                f" '{match_type}'"
+                            ),
                             fix=fix,
                         )
                     )

@@ -107,8 +107,15 @@ class AgentToolNotExists(Rule):
                 results.append(
                     self.make_result(
                         file=rel,
-                        message=f"Agent config lists tool '{tool}' but it does not exist",
-                        fix=f"Available tools: {', '.join(sorted(context.all_known_tools))}",
+                        message=(
+                            f"Agent config lists tool"
+                            f" '{tool}' but it does"
+                            " not exist"
+                        ),
+                        fix=(
+                            "Available tools:"
+                            f" {', '.join(sorted(context.all_known_tools))}"
+                        ),
                     )
                 )
         return results
@@ -135,8 +142,16 @@ class AgentMissingInstruction(Rule):
             return [
                 self.make_result(
                     file=rel,
-                    message=f"Agent '{agent_dir.name}' has config but no instruction.txt",
-                    fix="Create instruction.txt with <role>, <persona>, and <taskflow> sections",
+                    message=(
+                        f"Agent '{agent_dir.name}'"
+                        " has config but no"
+                        " instruction.txt"
+                    ),
+                    fix=(
+                        "Create instruction.txt"
+                        " with <role>, <persona>,"
+                        " and <taskflow> sections"
+                    ),
                 )
             ]
         return []
@@ -181,8 +196,22 @@ class RootAgentMissingEndSession(Rule):
             return [
                 self.make_result(
                     file=rel,
-                    message=f"Root agent '{root_agent_name}' is missing 'end_session' tool — the agent cannot terminate conversations",
-                    fix="Associate end_session with the root agent via: agents_client.update_agent(agent_name=..., tools=[..., 'end_session'])",
+                    message=(
+                        f"Root agent"
+                        f" '{root_agent_name}' is"
+                        " missing 'end_session'"
+                        " tool — the agent cannot"
+                        " terminate conversations"
+                    ),
+                    fix=(
+                        "Associate end_session with"
+                        " the root agent via:"
+                        " agents_client"
+                        ".update_agent("
+                        "agent_name=...,"
+                        " tools=[...,"
+                        " 'end_session'])"
+                    ),
                 )
             ]
         return []

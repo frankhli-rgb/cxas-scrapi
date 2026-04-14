@@ -49,7 +49,7 @@ When the user has an agent but no TDD or evals:
 **Note:** All paths below are relative to the active project folder (resolved from `.active-project`).
 
 ```
-1. FIX          → Fix the agent, then run lint.py to catch issues early
+1. FIX          → Fix the agent, then run `cxas lint` to catch issues early
 2. RUN-AND-REPORT → python run-and-report.py --message "what changed" --auto-revert
 3. RE-RUN       → Back to step 1
 ```

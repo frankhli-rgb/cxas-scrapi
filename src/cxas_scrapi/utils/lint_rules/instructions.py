@@ -77,7 +77,11 @@ class RequiredXmlStructure(Rule):
             self.make_result(
                 file=rel,
                 message=f"Missing required XML tag: {tag}",
-                fix=f"Add {tag}...{tag.replace('<', '</')} section to instruction",
+                fix=(
+                    f"Add {tag}..."
+                    f"{tag.replace('<', '</')}"
+                    " section to instruction"
+                ),
             )
             for tag in self.REQUIRED_TAGS
             if tag not in content
@@ -106,7 +110,12 @@ class TaskflowChildren(Rule):
                 self.make_result(
                     file=rel,
                     message="<taskflow> has no <subtask> or <step> children",
-                    fix='Add <subtask name="..."><step>...</step></subtask> inside <taskflow>',
+                    fix=(
+                        'Add <subtask name="...">'
+                        "<step>...</step>"
+                        "</subtask> inside"
+                        " <taskflow>"
+                    ),
                 )
             ]
         return []
@@ -129,12 +138,17 @@ class ExcessiveIfElse(Rule):
         count = sum(
             1 for line in content.split("\n") if self.IF_ELSE_RE.search(line)
         )
-        if count >= 3:
+        if count >= 3:  # noqa: PLR2004
             rel = str(file_path.relative_to(context.project_root))
             return [
                 self.make_result(
                     file=rel,
-                    message=f"Found {count} IF/ELSE blocks — excessive programmatic logic degrades LLM reliability",
+                    message=(
+                        f"Found {count} IF/ELSE"
+                        " blocks — excessive"
+                        " programmatic logic"
+                        " degrades LLM reliability"
+                    ),
                     fix="Move deterministic branching to callbacks.",
                 )
             ]
@@ -170,7 +184,12 @@ class NegativeTriggers(Rule):
                         file=rel,
                         line=line_num,
                         message=f"Negative condition in trigger: {label}",
-                        fix="Use positive triggers only. Put the excluded case as a separate, earlier step.",
+                        fix=(
+                            "Use positive triggers"
+                            " only. Put the excluded"
+                            " case as a separate,"
+                            " earlier step."
+                        ),
                     )
                 )
         return results
@@ -193,8 +212,17 @@ class ConditionalLogicBlock(Rule):
             self.make_result(
                 file=rel,
                 line=content[: m.start()].count("\n") + 1,
-                message="<conditional_logic> block — LLM gets confused by priority-ordered conditionals",
-                fix="Use separate <step> elements with distinct triggers instead",
+                message=(
+                    "<conditional_logic> block"
+                    " — LLM gets confused by"
+                    " priority-ordered"
+                    " conditionals"
+                ),
+                fix=(
+                    "Use separate <step>"
+                    " elements with distinct"
+                    " triggers instead"
+                ),
             )
             for m in re.finditer(r"<conditional_logic>", content)
         ]
@@ -241,8 +269,17 @@ class HardcodedData(Rule):
                         self.make_result(
                             file=rel,
                             line=i,
-                            message=f"Possible hardcoded {label}: '{m.group()}'",
-                            fix="Data should come from tool responses, not hardcoded in instructions",
+                            message=(
+                                f"Possible hardcoded"
+                                f" {label}:"
+                                f" '{m.group()}'"
+                            ),
+                            fix=(
+                                "Data should come from"
+                                " tool responses, not"
+                                " hardcoded in"
+                                " instructions"
+                            ),
                         )
                     )
         return results
@@ -252,7 +289,11 @@ class HardcodedData(Rule):
 class InstructionTooLong(Rule):
     id = "I007"
     name = "instruction-too-long"
-    description = "Instruction exceeds word count threshold — consider splitting into sub-agents"
+    description = (
+        "Instruction exceeds word count"
+        " threshold — consider splitting"
+        " into sub-agents"
+    )
     default_severity = Severity.INFO
 
     def check(
@@ -265,8 +306,16 @@ class InstructionTooLong(Rule):
             return [
                 self.make_result(
                     file=rel,
-                    message=f"Instruction is {word_count} words (threshold: {max_words})",
-                    fix="Consider splitting into sub-agents to reduce context size",
+                    message=(
+                        f"Instruction is"
+                        f" {word_count} words"
+                        f" (threshold: {max_words})"
+                    ),
+                    fix=(
+                        "Consider splitting into"
+                        " sub-agents to reduce"
+                        " context size"
+                    ),
                 )
             ]
         return []
@@ -313,7 +362,10 @@ class InvalidToolRef(Rule):
             self.make_result(
                 file=rel,
                 message=f"{{@TOOL: {ref}}} references non-existent tool",
-                fix=f"Available tools: {', '.join(sorted(context.all_known_tools))}",
+                fix=(
+                    "Available tools:"
+                    f" {', '.join(sorted(context.all_known_tools))}"
+                ),
             )
             for ref in _extract_tool_refs(content)
             if ref not in context.all_known_tools
@@ -338,7 +390,11 @@ def _check_wrong_syntax(
                     rule_obj.make_result(
                         file=rel,
                         line=i,
-                        message=f"Wrong reference syntax: {label} found: {m.group(0)}",
+                        message=(
+                            "Wrong reference syntax:"
+                            f" {label} found:"
+                            f" {m.group(0)}"
+                        ),
                         fix=fix,
                     )
                 )
@@ -423,8 +479,17 @@ class UnusedToolInConfig(Rule):
         return [
             self.make_result(
                 file=agent_json_rel,
-                message=f"Agent config lists tool '{tool}' but instruction never references it",
-                fix=f"Add {{@TOOL: {tool}}} in instruction, or remove from agent config if not needed",
+                message=(
+                    f"Agent config lists tool"
+                    f" '{tool}' but instruction"
+                    " never references it"
+                ),
+                fix=(
+                    f"Add {{@TOOL: {tool}}} in"
+                    " instruction, or remove"
+                    " from agent config if"
+                    " not needed"
+                ),
             )
             for tool in sorted(unused)
         ]
@@ -450,7 +515,11 @@ class ToolNotInConfig(Rule):
         return [
             self.make_result(
                 file=rel,
-                message=f"Instruction references {{@TOOL: {ref}}} but agent config does not list it",
+                message=(
+                    "Instruction references"
+                    f" {{@TOOL: {ref}}} but agent"
+                    " config does not list it"
+                ),
                 fix=f"Add '{ref}' to tools array, or remove the reference.",
             )
             for ref in sorted(missing)

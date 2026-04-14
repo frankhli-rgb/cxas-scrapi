@@ -17,10 +17,11 @@
 import argparse
 import io
 import os
-
 import zipfile
 from unittest import mock
+
 import pytest
+
 from cxas_scrapi.cli import app as cli_app
 
 
@@ -307,15 +308,20 @@ def _lint_args(tmp_path=None, **overrides):
 def _make_lint_app(tmp_path, agents=None):
     """Helper to create a minimal app for lint testing."""
     (tmp_path / "app.json").write_text(
-        '{"name": "test-app", "displayName": "Test App", "rootAgent": "root_agent"}'
+        '{"name": "test-app",'
+        ' "displayName": "Test App",'
+        ' "rootAgent": "root_agent"}'
     )
     (tmp_path / "agents").mkdir()
     for name in (agents or ["root_agent"]):
         agent_dir = tmp_path / "agents" / name
         agent_dir.mkdir()
         (agent_dir / "instruction.txt").write_text(
-            "<role>test</role><persona>test</persona>"
-            "<taskflow><subtask name='main'><step>do it</step></subtask></taskflow>"
+            "<role>test</role>"
+            "<persona>test</persona>"
+            "<taskflow><subtask name='main'>"
+            "<step>do it</step>"
+            "</subtask></taskflow>"
         )
         (agent_dir / f"{name}.json").write_text(
             f'{{"displayName": "{name}", "tools": ["end_session"]}}'
@@ -350,7 +356,10 @@ def test_app_lint_clean_app(capsys, tmp_path):
     _make_lint_app(tmp_path)
     args = _lint_args(tmp_path)
 
-    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+    with mock.patch(
+        "cxas_scrapi.utils.lint_rules"
+        ".schema.json_format.ParseDict"
+    ):
         with pytest.raises(SystemExit) as excinfo:
             cli_app.app_lint(args)
 
@@ -373,7 +382,10 @@ def test_app_lint_with_errors(capsys, tmp_path):
 
     args = _lint_args(tmp_path)
 
-    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+    with mock.patch(
+        "cxas_scrapi.utils.lint_rules"
+        ".schema.json_format.ParseDict"
+    ):
         with pytest.raises(SystemExit) as excinfo:
             cli_app.app_lint(args)
 
@@ -386,13 +398,16 @@ def test_app_lint_json_output(capsys, tmp_path):
     _make_lint_app(tmp_path)
     args = _lint_args(tmp_path, json_output=True)
 
-    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+    with mock.patch(
+        "cxas_scrapi.utils.lint_rules"
+        ".schema.json_format.ParseDict"
+    ):
         with pytest.raises(SystemExit) as excinfo:
             cli_app.app_lint(args)
 
     assert excinfo.value.code == 0
     captured = capsys.readouterr()
-    import json
+    import json  # noqa: PLC0415,I001
     parsed = json.loads(captured.out)
     assert isinstance(parsed, list)
 
@@ -401,13 +416,16 @@ def test_app_lint_validate_only(capsys, tmp_path):
     _make_lint_app(tmp_path)
     args = _lint_args(tmp_path, json_output=True, validate_only=True)
 
-    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+    with mock.patch(
+        "cxas_scrapi.utils.lint_rules"
+        ".schema.json_format.ParseDict"
+    ):
         with pytest.raises(SystemExit) as excinfo:
             cli_app.app_lint(args)
 
     assert excinfo.value.code == 0
     captured = capsys.readouterr()
-    import json
+    import json  # noqa: PLC0415,I001
     results = json.loads(captured.out)
     valid_prefixes = ("A", "S", "V")
     for r in results:
@@ -419,13 +437,16 @@ def test_app_lint_only_filter(capsys, tmp_path):
     _make_lint_app(tmp_path)
     args = _lint_args(tmp_path, json_output=True, only="config")
 
-    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+    with mock.patch(
+        "cxas_scrapi.utils.lint_rules"
+        ".schema.json_format.ParseDict"
+    ):
         with pytest.raises(SystemExit) as excinfo:
             cli_app.app_lint(args)
 
     assert excinfo.value.code == 0
     captured = capsys.readouterr()
-    import json
+    import json  # noqa: PLC0415,I001
     results = json.loads(captured.out)
     for r in results:
         assert r["rule_id"].startswith("A"), \
@@ -436,13 +457,16 @@ def test_app_lint_rule_filter(capsys, tmp_path):
     _make_lint_app(tmp_path)
     args = _lint_args(tmp_path, json_output=True, rule="I001")
 
-    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+    with mock.patch(
+        "cxas_scrapi.utils.lint_rules"
+        ".schema.json_format.ParseDict"
+    ):
         with pytest.raises(SystemExit) as excinfo:
             cli_app.app_lint(args)
 
     assert excinfo.value.code == 0
     captured = capsys.readouterr()
-    import json
+    import json  # noqa: PLC0415,I001
     results = json.loads(captured.out)
     for r in results:
         assert r["rule_id"] == "I001", \

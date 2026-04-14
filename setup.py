@@ -14,13 +14,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import pathlib
+
 from setuptools import find_packages, setup
 
 here = pathlib.Path(__file__).parent.resolve()
 
 # Get the long description from the README file
 long_description = (here / "README.md").read_text(encoding="utf-8")
+
+
+def _collect_data_files(source_dirs, root_files):
+    """Walk directories and collect (dest, [files]) for data_files."""
+    result = []
+    for src_dir in source_dirs:
+        if not os.path.isdir(src_dir):
+            continue
+        for dirpath, dirnames, filenames in os.walk(src_dir):
+            dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+            files = [
+                os.path.join(dirpath, f)
+                for f in filenames
+                if not f.endswith(".pyc")
+            ]
+            if files:
+                dest = os.path.join("share/cxas-scrapi/skills", dirpath)
+                result.append((dest, files))
+    if root_files:
+        existing = [f for f in root_files if os.path.exists(f)]
+        if existing:
+            result.append(("share/cxas-scrapi/skills", existing))
+    return result
+
 
 setup(
     name="cxas-scrapi",
@@ -76,4 +102,8 @@ setup(
             'cxas=cxas_scrapi.cli.main:main',
         ],
     },
+    data_files=_collect_data_files(
+        [".agents", ".claude", ".gemini"],
+        ["AGENTS.md", "GEMINI.md", "examples/cxaslint.yaml"],
+    ),
 )

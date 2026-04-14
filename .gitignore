@@ -153,3 +153,5 @@ bin/
 # Don't ignore anything in the skills folder
 !.agents/
 !.agents/**
+.agents/**/__pycache__/
+.agents/**/*.pyc

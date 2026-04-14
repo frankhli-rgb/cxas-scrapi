@@ -19,7 +19,7 @@ GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas pull \
   --project_id $PROJECT_ID --location $LOCATION --target_dir cxas_app/
 
 # 2. Run linter
-.venv/bin/python .agents/skills/cxas-agent-foundry/scripts/lint.py
+.venv/bin/cxas lint --app-dir cxas_app/
 
 # 3. If lint found issues — fix them locally in cxas_app/, then push back
 GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas push \
@@ -33,7 +33,7 @@ GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas pull \
   --project_id $PROJECT_ID --location $LOCATION --target_dir cxas_app/
 
 # 5. Re-lint — must pass clean
-.venv/bin/python .agents/skills/cxas-agent-foundry/scripts/lint.py
+.venv/bin/cxas lint --app-dir cxas_app/
 ```
 The `--to` flag in `cxas push` MUST use the full resource path `projects/.../apps/$APP_ID` — not just the UUID. Using the wrong path or omitting `--to` may create a new app.
 

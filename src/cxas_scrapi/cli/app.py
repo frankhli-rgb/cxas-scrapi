@@ -15,16 +15,15 @@
 # limitations under the License.
 
 import argparse
+import io
 import logging
 import os
 import shutil
 import sys
 import tempfile
 import zipfile
-import io
 from pathlib import Path
-
-from typing import Optional, Any
+from typing import Any, Optional
 
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.common import Common
@@ -114,7 +113,7 @@ def app_pull(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def app_push(args: argparse.Namespace) -> Optional[str]:
+def app_push(args: argparse.Namespace) -> Optional[str]:  # noqa: C901
     """Handles the 'push' command."""
     # We will reuse the deploy_agent logic from main.py, slightly adjusted.
     agent_dir = args.agent_dir if args.agent_dir else "."
@@ -157,11 +156,13 @@ def app_push(args: argparse.Namespace) -> Optional[str]:
             dst_path = os.path.join(inner_dir, "environment.json")
             shutil.copy2(env_file, dst_path)
             print(
-                f"Included custom environment file from {env_file} as environment.json"
+                f"Included custom environment file "
+                f"from {env_file} as environment.json"
             )
         else:
             print(
-                f"Warning: Custom environment file '{env_file}' not found. Skipping."
+                f"Warning: Custom environment file "
+                f"'{env_file}' not found. Skipping."
             )
 
     # Zip the filtered agent directory
@@ -322,7 +323,7 @@ def apps_list(args: argparse.Namespace) -> None:
 
         # Attempt to format output using pandas if available.
         try:
-            import pandas as pd
+            import pandas as pd  # noqa: PLC0415
 
             data = [
                 {"Display Name": app.display_name, "Name": app.name}
@@ -360,14 +361,14 @@ def apps_get(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def app_lint(args: argparse.Namespace) -> None:
+def app_lint(args: argparse.Namespace) -> None:  # noqa: C901
     """Handles the 'lint' command."""
-    from cxas_scrapi.utils.linter import (
+    from cxas_scrapi.utils.linter import (  # noqa: PLC0415
+        SINGLE_RESOURCE_RULES,
         Discovery,
         LintConfig,
         LintContext,
         LintReport,
-        SINGLE_RESOURCE_RULES,
         build_context,
         build_registry,
         run_rules,
@@ -421,7 +422,7 @@ def app_lint(args: argparse.Namespace) -> None:
                 "Use --app-dir to specify the app location."
             )
         else:
-            import json
+            import json  # noqa: PLC0415
 
             print(
                 json.dumps(
@@ -430,7 +431,10 @@ def app_lint(args: argparse.Namespace) -> None:
                             "file": str(app_dir),
                             "severity": "error",
                             "rule_id": "SETUP",
-                            "message": f"No app directory found under {app_dir}",
+                            "message": (
+                                "No app directory "
+                                f"found under {app_dir}"
+                            ),
                         }
                     ]
                 )
@@ -474,3 +478,66 @@ def app_lint(args: argparse.Namespace) -> None:
     )
 
     report.print_and_exit(json_output, show_fixes)
+
+
+def app_init(args: argparse.Namespace) -> None:
+    """Handles the 'init' command -- copies skill files."""
+    import shutil  # noqa: PLC0415
+
+    target_dir = Path(getattr(args, "target_dir", ".")).resolve()
+    force = getattr(args, "force", False)
+    skills_root = Path(sys.prefix) / "share" / "cxas-scrapi" / "skills"
+
+    if not skills_root.exists():
+        print(f"ERROR: Bundled skills not found at {skills_root}")
+        print(
+            "This may happen if cxas-scrapi was "
+            "installed without skill data."
+        )
+        sys.exit(1)
+
+    overwrite_all = force
+    copied, skipped = 0, 0
+
+    for item in sorted(skills_root.iterdir()):
+        dest = target_dir / item.name
+        if dest.exists() and not overwrite_all:
+            choice = _prompt_overwrite(item.name)
+            if choice == "abort":
+                print("Aborted.")
+                sys.exit(0)
+            elif choice == "all":
+                overwrite_all = True
+            elif choice == "skip":
+                skipped += 1
+                print(f"  Skipped: {item.name}")
+                continue
+
+        if item.is_dir():
+            if dest.exists():
+                shutil.rmtree(dest)
+            shutil.copytree(item, dest)
+        else:
+            shutil.copy2(item, dest)
+
+        copied += 1
+        print(f"  Installed: {item.name}")
+
+    print(f"\nDone. {copied} installed, {skipped} skipped.")
+
+
+def _prompt_overwrite(name: str) -> str:
+    """Prompt user for overwrite decision."""
+    while True:
+        choice = input(
+            f"  '{name}' already exists. "
+            "[o]verwrite / [a]ll / [s]kip / [q]uit? "
+        ).strip().lower()
+        if choice in ("o", "overwrite"):
+            return "yes"
+        if choice in ("a", "all"):
+            return "all"
+        if choice in ("s", "skip"):
+            return "skip"
+        if choice in ("q", "quit"):
+            return "abort"

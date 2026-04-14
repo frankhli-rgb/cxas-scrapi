@@ -124,7 +124,7 @@ Triage failures, fix eval configs or agent instructions, iterate to target pass 
 | `run-and-report.py` | Single-command iteration step: snapshot + evals + triage + report |
 | `generate-combined-report.py` | Combined HTML report |
 | `configure.py` | Interactive project configuration (legacy — agent writes `gecx-config.json` directly now) |
-| `lint.py` | Lint agent instructions + callbacks for common issues |
+| `cxas lint` | Lint agent instructions, callbacks, tools, evals, and configs (installed via cxas-scrapi) |
 | `capture-golden-transcripts.py` | Capture live agent transcripts for reference |
 
 **Eval files** — in `<project>/evals/` (relative to the active project folder, e.g., `tmobile/evals/`):

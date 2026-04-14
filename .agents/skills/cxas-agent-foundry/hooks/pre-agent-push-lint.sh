@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs the GECX linter before pushing to CXAS.
+# Runs cxas lint before pushing to CXAS.
 # Blocks the push if any lint errors are found.
 # Works with both Claude Code and Gemini CLI.
 
@@ -15,15 +15,13 @@ cmd=$(echo "$input" | jq -r '.tool_input.command // .arguments.command // ""')
 
 # Only act if pushing to CXAS
 if echo "$cmd" | grep -qE 'cxas(-eval)? push'; then
-  # Resolve project directory for lint
   project_dir=$(resolve_project_dir)
-  lint_project_arg=""
+  lint_app_arg=""
   if [ -n "$project_dir" ]; then
-    lint_project_arg="--project-dir $project_dir"
+    lint_app_arg="--app-dir $project_dir"
   fi
 
-  # Run the linter in JSON mode
-  lint_output=$(python .agents/skills/cxas-agent-foundry/scripts/lint.py --json $lint_project_arg 2>/dev/null || echo "[]")
+  lint_output=$(cxas lint --json $lint_app_arg 2>/dev/null || echo "[]")
   error_count=$(echo "$lint_output" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
@@ -31,7 +29,6 @@ print(sum(1 for r in data if r.get('severity') == 'error'))
 " 2>/dev/null || echo "0")
 
   if [ "$error_count" -gt 0 ]; then
-    # Format errors for display
     error_summary=$(echo "$lint_output" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
@@ -47,7 +44,7 @@ if len(errors) > 10:
 print('\n'.join(lines))
 " 2>/dev/null || echo "  Lint errors found")
 
-    msg="LINT BLOCKED: ${error_count} error(s) found. Fix before pushing.\n${error_summary}\nRun 'python .agents/skills/cxas-agent-foundry/scripts/lint.py --fix $lint_project_arg' for suggestions."
+    msg="LINT BLOCKED: ${error_count} error(s) found. Fix before pushing.\n${error_summary}\nRun 'cxas lint --fix $lint_app_arg' for suggestions."
     if [ "$agent" = "claude" ]; then
       echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"blockToolExecution\":true,\"additionalContext\":\"$msg\"}}"
     else

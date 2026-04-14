@@ -15,36 +15,34 @@
 """CLI script for running CXAS SCRAPI evaluations."""
 
 import argparse
-
 import logging
 import os
 import subprocess
 import sys
-from typing import Dict, List
-
 import time
 import uuid
+from typing import Dict, List
 
 import pandas as pd
 
-from cxas_scrapi.core.github import init_github_action
-from cxas_scrapi.core.apps import Apps
-from cxas_scrapi.core.common import Common
-from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
-from cxas_scrapi.utils.eval_utils import EvalUtils
-from cxas_scrapi.evals.callback_evals import CallbackEvals
-from cxas_scrapi.evals.tool_evals import ToolEvals
 from cxas_scrapi.cli.app import (
+    app_branch,
+    app_create,
+    app_delete,
+    app_init,
+    app_lint,
     app_pull,
     app_push,
-    app_lint,
-    app_create,
-    app_branch,
-    apps_list,
     apps_get,
-    app_delete,
+    apps_list,
 )
 from cxas_scrapi.cli.insights_cli import populate_insights_parser
+from cxas_scrapi.core.apps import Apps
+from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
+from cxas_scrapi.core.github import init_github_action
+from cxas_scrapi.evals.callback_evals import CallbackEvals
+from cxas_scrapi.evals.tool_evals import ToolEvals
+from cxas_scrapi.utils.eval_utils import EvalUtils
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +161,7 @@ def wait_for_evaluation_completion(
     sys.exit(1)
 
 
-def filter_metrics_and_assess(
+def filter_metrics_and_assess(  # noqa: C901
     df_dict_new_run: Dict[str, pd.DataFrame],
     filter_auto_metrics: bool,
 ) -> bool:
@@ -248,15 +246,14 @@ def filter_metrics_and_assess(
             print("WARNING: No custom expectations found in this evaluation.")
             # Fallback: check basic tool execution result limit
 
-    else:
-        # Strict overall pass/fail based on the server constraints
-        if overall_status != "PASS":
-            passed = False
+    # Strict overall pass/fail based on the server constraints
+    elif overall_status != "PASS":
+        passed = False
 
     return passed
 
 
-def run_eval(args: argparse.Namespace) -> None:
+def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
     """Handles the 'run' command."""
 
     print(f"Triggering evaluation for App: {args.app_name}")
@@ -272,13 +269,15 @@ def run_eval(args: argparse.Namespace) -> None:
         if not args.display_name_prefix and not args.tags:
             print(
                 "Error: You must provide either --evaluation_id, "
-                "--display_name_prefix, or --tags to specify which tests to run."
+                "--display_name_prefix, or --tags to "
+                "specify which tests to run."
             )
             sys.exit(1)
 
         if args.display_name_prefix:
             print(
-                f"Fetching tests matching prefix: '{args.display_name_prefix}'..."
+                "Fetching tests matching prefix: "
+                f"'{args.display_name_prefix}'..."
             )
         elif args.tags:
             print(f"Fetching tests matching tags: {args.tags}...")
@@ -292,7 +291,9 @@ def run_eval(args: argparse.Namespace) -> None:
             ):
                 match = True
 
-            # Assuming tags are accessible as a list/repeated field on the Evaluation object
+            # Assuming tags are accessible as a
+            # list/repeated field on the Evaluation
+            # object
             if args.tags and hasattr(eval_obj, "tags"):
                 # intersection of CLI tags and agent tags
                 if any(t in eval_obj.tags for t in args.tags):
@@ -303,7 +304,8 @@ def run_eval(args: argparse.Namespace) -> None:
 
         if not evaluations_to_run:
             print(
-                "No matching tests found for the given prefix or tags. Aborting run."
+                "No matching tests found for the "
+                "given prefix or tags. Aborting run."
             )
             sys.exit(0)
 
@@ -318,13 +320,15 @@ def run_eval(args: argparse.Namespace) -> None:
         if not args.display_name_prefix and not args.tags:
             print(
                 "Error: You must provide either --evaluation_id, "
-                "--display_name_prefix, or --tags to specify which tests to run."
+                "--display_name_prefix, or --tags to "
+                "specify which tests to run."
             )
             sys.exit(1)
 
         if args.display_name_prefix:
             print(
-                f"Fetching tests matching prefix: '{args.display_name_prefix}'..."
+                "Fetching tests matching prefix: "
+                f"'{args.display_name_prefix}'..."
             )
         elif args.tags:
             print(f"Fetching tests matching tags: {args.tags}...")
@@ -338,7 +342,9 @@ def run_eval(args: argparse.Namespace) -> None:
             ):
                 match = True
 
-            # Assuming tags are accessible as a list/repeated field on the Evaluation object
+            # Assuming tags are accessible as a
+            # list/repeated field on the Evaluation
+            # object
             if args.tags and hasattr(eval_obj, "tags"):
                 # intersection of CLI tags and agent tags
                 if any(t in eval_obj.tags for t in args.tags):
@@ -349,7 +355,8 @@ def run_eval(args: argparse.Namespace) -> None:
 
         if not evaluations_to_run:
             print(
-                "No matching tests found for the given prefix or tags. Aborting run."
+                "No matching tests found for the "
+                "given prefix or tags. Aborting run."
             )
             sys.exit(0)
 
@@ -499,7 +506,9 @@ def test_single_callback(args: argparse.Namespace) -> None:
     """Handles the 'test-single-callback' command."""
 
     print(
-        f"Running single callback test for Agent: {args.agent_name}, Type: {args.callback_type}"
+        f"Running single callback test for "
+        f"Agent: {args.agent_name}, "
+        f"Type: {args.callback_type}"
     )
     callback_evals = CallbackEvals()
 
@@ -572,7 +581,7 @@ def ci_test(args: argparse.Namespace) -> None:
                 test_file,
             ]
             print(f"Executing: {' '.join(cmd)}")
-            res = subprocess.run(cmd)
+            res = subprocess.run(cmd, check=False)
             if res.returncode != 0:
                 print("Tool tests failed.")
                 sys.exit(1)
@@ -603,7 +612,7 @@ def ci_test(args: argparse.Namespace) -> None:
                     "--filter-auto-metrics",
                 ]
                 print(f"Executing: {' '.join(cmd)}")
-                res = subprocess.run(cmd)
+                res = subprocess.run(cmd, check=False)
                 if res.returncode != 0:
                     print(f"Evaluation '{eval_id}' failed.")
                     sys.exit(1)
@@ -811,7 +820,11 @@ def get_parser() -> argparse.ArgumentParser:
     parser_init_gh.add_argument(
         "--auto-create-wif",
         action="store_true",
-        help="Optional: Automatically create Workload Identity Pool, Provider, and Service Account on Google Cloud.",
+        help=(
+            "Optional: Automatically create Workload "
+            "Identity Pool, Provider, and Service "
+            "Account on Google Cloud."
+        ),
     )
     parser_init_gh.add_argument(
         "--wif-pool-name",
@@ -820,7 +833,10 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_init_gh.add_argument(
         "--github-repo",
-        help="Optional: Override inferred GitHub repository (e.g., owner/repo).",
+        help=(
+            "Optional: Override inferred GitHub "
+            "repository (e.g., owner/repo)."
+        ),
     )
 
     parser_init_gh.set_defaults(func=init_github_action)
@@ -1004,7 +1020,10 @@ def get_parser() -> argparse.ArgumentParser:
         "--tags",
         nargs="+",
         default=[],
-        help="Space-separated list of tags. Runs tests containing any of these tags.",
+        help=(
+            "Space-separated list of tags. Runs tests "
+            "containing any of these tags."
+        ),
     )
     parser_run.add_argument(
         "--wait",
@@ -1046,7 +1065,10 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_ci_test.add_argument(
         "--env_file",
-        help="Path to a specific environment JSON file to include as environment.json.",
+        help=(
+            "Path to a specific environment JSON "
+            "file to include as environment.json."
+        ),
     )
     _add_project_location_args(parser_ci_test)
     parser_ci_test.set_defaults(func=ci_test)
@@ -1088,7 +1110,10 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_local_test.add_argument(
         "--env_file",
-        help="Path to a specific environment JSON file to include as environment.json.",
+        help=(
+            "Path to a specific environment JSON "
+            "file to include as environment.json."
+        ),
     )
     _add_project_location_args(parser_local_test)
     parser_local_test.set_defaults(func=local_test)
@@ -1116,7 +1141,10 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_push.add_argument(
         "--env_file",
-        help="Path to a specific environment JSON file to include as environment.json.",
+        help=(
+            "Path to a specific environment JSON "
+            "file to include as environment.json."
+        ),
     )
     parser_push.add_argument(
         "--app_name",
@@ -1200,9 +1228,30 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_lint.add_argument(
         "--evaluation-expectations",
-        help="Validate a single evaluation expectations directory against CES schema.",
+        help=(
+            "Validate a single evaluation expectations"
+            " directory against CES schema."
+        ),
     )
     parser_lint.set_defaults(func=app_lint)
+
+    # Parser for 'init'
+    parser_init = subparsers.add_parser(
+        "init",
+        help="Initialize a project with CXAS agent development skills "
+             "(.agents, .claude, .gemini, AGENTS.md, etc.).",
+    )
+    parser_init.add_argument(
+        "--target-dir",
+        default=".",
+        help="Directory to install skills into (default: current directory).",
+    )
+    parser_init.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing files without prompting.",
+    )
+    parser_init.set_defaults(func=app_init)
 
     # Parser for 'create'
     parser_create = subparsers.add_parser("create", help="Create a new app.")

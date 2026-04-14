@@ -57,7 +57,7 @@ def _load_json_or_yaml(directory: Path, file_name: str) -> dict:
         )
 
 
-def _resolve_paths(data, extra_prefixes=(), base_path=None):
+def _resolve_paths(data, extra_prefixes=(), base_path=None):  # noqa: C901
     """Recursively replace file-path strings with their contents."""
     if isinstance(data, dict):
         return {
@@ -307,12 +307,37 @@ for (
     _pfx,
     _resolve,
 ) in _RESOURCE_SCHEMAS:
+    def _make_init(
+        rid, rn, rd, rt, rp, rc, rpfx, rr
+    ):
+        def __init__(self):
+            SchemaValid.__init__(
+                self,
+                rid,
+                rn,
+                rd,
+                rt,
+                rp,
+                rc,
+                rpfx,
+                rr,
+            )
+
+        return __init__
+
     cls = type(
         f"SchemaValid_{_id}",
         (SchemaValid,),
         {
-            "__init__": lambda self, rid=_id, rn=_name, rd=_desc, rt=_target, rp=_proto, rc=_cfg, rpfx=_pfx, rr=_resolve: SchemaValid.__init__(
-                self, rid, rn, rd, rt, rp, rc, rpfx, rr
+            "__init__": _make_init(
+                _id,
+                _name,
+                _desc,
+                _target,
+                _proto,
+                _cfg,
+                _pfx,
+                _resolve,
             )
         },
     )

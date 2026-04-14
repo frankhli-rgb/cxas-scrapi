@@ -24,13 +24,14 @@ Configuration lives in ``cxaslint.yaml``.
 
 import fnmatch
 import json
-import yaml
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Optional
+
+import yaml
 
 # ── Severity ─────────────────────────────────────────────────────────────
 
@@ -114,7 +115,8 @@ class LintReport:
 
         info_count = len(self.results) - len(self.errors) - len(self.warnings)
         print(
-            f"\n  {len(self.errors)} error(s), {len(self.warnings)} warning(s), "
+            f"\n  {len(self.errors)} error(s), "
+            f"{len(self.warnings)} warning(s), "
             f"{info_count} info"
         )
 
@@ -125,7 +127,7 @@ class LintReport:
         self, json_output: bool = False, show_fixes: bool = False
     ) -> None:
         """Print results and exit with code 1 if errors, 0 otherwise."""
-        import sys
+        import sys  # noqa: PLC0415
 
         if json_output:
             print(self.to_json())
@@ -329,10 +331,21 @@ class LintConfig:
             config.ignore = data.get("ignore") or []
             config.per_file = data.get("per_file") or {}
 
+        # Fall back to gecx-config.json for app_dir if not set by cxaslint.yaml
+        if config.app_dir == ".":
+            gecx_config_path = project_root / "gecx-config.json"
+            if gecx_config_path.exists():
+                with open(gecx_config_path) as f:
+                    gecx = json.load(f)
+                config.app_dir = gecx.get("app_dir", config.app_dir)
+
         return config
 
     def get_severity(self, rule_obj: Rule, file_path: str = "") -> Severity:
-        """Get the effective severity for a rule, considering per-file overrides."""
+        """Get the effective severity for a rule.
+
+        Considers per-file overrides.
+        """
         for pattern, overrides in self.per_file.items():
             if fnmatch.fnmatch(file_path, pattern):
                 if rule_obj.id in overrides:
@@ -356,7 +369,10 @@ class LintConfig:
 
 
 class Discovery:
-    """Discovers agents, tools, callbacks, evals, and configs in an app directory."""
+    """Discovers agents, tools, callbacks, evals, and configs.
+
+    Scans an app directory for all resources.
+    """
 
     def __init__(self, app_dir: Path, evals_dir: Path):
         self.app_dir = app_dir
@@ -433,6 +449,8 @@ class Discovery:
             "after_model_callbacks",
             "before_agent_callbacks",
             "after_agent_callbacks",
+            "before_tool_callbacks",
+            "after_tool_callbacks",
         ]
         for agent_dir in sorted(agents_dir.iterdir()):
             if not agent_dir.is_dir():
@@ -483,7 +501,10 @@ class Discovery:
         return result
 
     def _discover_resource_dirs(self, subdir: str) -> dict[str, Path]:
-        """Return ``{name: dir_path}`` for all subdirectories under ``app_root/<subdir>/``."""
+        """Return ``{name: dir_path}`` for subdirs.
+
+        Scans ``app_root/<subdir>/``.
+        """
         if not self.app_root:
             return {}
         parent = self.app_root / subdir
@@ -529,7 +550,7 @@ def build_registry() -> RuleRegistry:
     decorator on every rule class, populating ``_RULE_REGISTRY``.  We
     then copy those into a ``RuleRegistry`` for config-aware lookups.
     """
-    import cxas_scrapi.utils.lint_rules  # noqa: F401 — triggers registration
+    import cxas_scrapi.utils.lint_rules  # noqa: F401,PLC0415
 
     registry = RuleRegistry()
     for _category, rules in get_registered_rules().items():
@@ -560,7 +581,7 @@ def build_context(
     )
 
 
-def run_rules(
+def run_rules(  # noqa: C901
     registry: RuleRegistry,
     config: LintConfig,
     context: LintContext,
@@ -583,12 +604,12 @@ def run_rules(
         return sev if sev != Severity.OFF else None
 
     def _lint_files(rules: list[Rule], files: dict[str, Path]):
-        """Apply rules to a set of discovered files."""
+        """Apply rules to a set of discovered files or directories."""
         for _name, file_path in files.items():
             rel = str(file_path.relative_to(context.project_root))
             if config.is_ignored(rel):
                 continue
-            content = file_path.read_text()
+            content = file_path.read_text() if file_path.is_file() else ""
             for rule_obj in rules:
                 sev = _get_severity(rule_obj, rel)
                 if sev is None:
@@ -643,11 +664,13 @@ def run_rules(
             "app_config": {},
             "instruction": instruction_files,
             "agent_config": discovery.discover_agent_configs(),
-            "tool_config": discovery.discover_tools(),
+            "tool_config": discovery._discover_resource_dirs("tools"),
             "toolset_config": discovery.discover_toolsets(),
             "guardrail_config": discovery.discover_guardrails(),
             "evaluation_config": discovery.discover_evaluations(),
-            "eval_expectation_config": discovery.discover_evaluation_expectations(),
+            "eval_expectation_config": (
+                discovery.discover_evaluation_expectations()
+            ),
         }
         app_cfg = discovery.discover_app_config()
         if app_cfg:

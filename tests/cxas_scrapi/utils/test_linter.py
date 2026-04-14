@@ -15,6 +15,7 @@
 """Tests for the linter framework, configuration, discovery, and runner."""
 
 import json
+
 import pytest
 
 from cxas_scrapi.utils.linter import (
@@ -28,10 +29,9 @@ from cxas_scrapi.utils.linter import (
     build_context,
     build_registry,
     reset_registry,
-    run_rules,
     rule,
+    run_rules,
 )
-
 
 # ── Severity ─────────────────────────────────────────────────────────────
 
@@ -88,7 +88,7 @@ def test_lint_result_to_dict():
     assert d["file"] == "app.json"
     assert d["rule_id"] == "A001"
     assert d["severity"] == "error"
-    assert d["line"] == 5
+    assert d["line"] == 5  # noqa: PLR2004
     assert d["fix_suggestion"] == "Fix the JSON syntax"
 
 
@@ -102,7 +102,7 @@ def test_lint_report_add_and_counts():
 
     assert len(report.errors) == 1
     assert len(report.warnings) == 1
-    assert len(report.results) == 3
+    assert len(report.results) == 3  # noqa: PLR2004
 
 
 def test_lint_report_to_json():
@@ -146,8 +146,8 @@ def test_rule_registry_lookup():
 
 
 def test_rule_decorator_deduplication():
-    """@rule with the same ID twice should not create duplicate entries."""
-    from cxas_scrapi.utils.linter import _RULE_REGISTRY
+    """@rule with same ID twice should not create duplicates."""
+    from cxas_scrapi.utils.linter import _RULE_REGISTRY  # noqa: PLC0415,I001
 
     # Record the initial count so the test is additive-safe
     initial_count = sum(len(v) for v in _RULE_REGISTRY.values())
@@ -180,11 +180,14 @@ def test_rule_decorator_deduplication():
 
 def test_reset_registry():
     """reset_registry() clears all registered rules."""
-    from cxas_scrapi.utils.linter import _RULE_REGISTRY, _REGISTERED_IDS
+    from cxas_scrapi.utils.linter import (  # noqa: PLC0415,I001
+        _REGISTERED_IDS,
+        _RULE_REGISTRY,
+    )
 
     # Ensure there are rules registered
     registry = build_registry()
-    assert len(registry.all_rules()) >= 55
+    assert len(registry.all_rules()) >= 60  # noqa: PLR2004
 
     # Reset
     reset_registry()
@@ -200,19 +203,20 @@ def test_reset_registry():
 
     # Re-populate for other tests by forcing re-registration
     # (reload the rule modules so decorators fire again)
-    import importlib
-    import cxas_scrapi.utils.lint_rules.instructions as mod_i
-    import cxas_scrapi.utils.lint_rules.callbacks as mod_c
-    import cxas_scrapi.utils.lint_rules.tools as mod_t
-    import cxas_scrapi.utils.lint_rules.evals as mod_e
-    import cxas_scrapi.utils.lint_rules.config as mod_a
-    import cxas_scrapi.utils.lint_rules.structure as mod_s
-    import cxas_scrapi.utils.lint_rules.schema as mod_v
+    import importlib  # noqa: PLC0415,I001
+
+    import cxas_scrapi.utils.lint_rules.callbacks as mod_c  # noqa: PLC0415,I001
+    import cxas_scrapi.utils.lint_rules.config as mod_a  # noqa: PLC0415,I001
+    import cxas_scrapi.utils.lint_rules.evals as mod_e  # noqa: PLC0415,I001
+    import cxas_scrapi.utils.lint_rules.instructions as mod_i  # noqa: PLC0415,I001
+    import cxas_scrapi.utils.lint_rules.schema as mod_v  # noqa: PLC0415,I001
+    import cxas_scrapi.utils.lint_rules.structure as mod_s  # noqa: PLC0415,I001
+    import cxas_scrapi.utils.lint_rules.tools as mod_t  # noqa: PLC0415,I001
     for mod in [mod_i, mod_c, mod_t, mod_e, mod_a, mod_s, mod_v]:
         importlib.reload(mod)
 
     registry_restored = build_registry()
-    assert len(registry_restored.all_rules()) == 55
+    assert len(registry_restored.all_rules()) == 60  # noqa: PLR2004
 
 
 # ── LintConfig ───────────────────────────────────────────────────────────
@@ -243,6 +247,23 @@ def test_lint_config_load_from_yaml(tmp_path):
     assert "**/__pycache__/**" in config.ignore
 
 
+def test_lint_config_gecx_config_fallback(tmp_path):
+    """LintConfig falls back to gecx-config.json for app_dir."""
+    (tmp_path / "gecx-config.json").write_text(
+        '{"app_dir": "cxas_app/", "gcp_project_id": "test"}'
+    )
+    config = LintConfig.load(tmp_path)
+    assert config.app_dir == "cxas_app/"
+
+
+def test_lint_config_cxaslint_overrides_gecx(tmp_path):
+    """cxaslint.yaml app_dir takes precedence over gecx-config.json."""
+    (tmp_path / "gecx-config.json").write_text('{"app_dir": "from_gecx/"}')
+    (tmp_path / "cxaslint.yaml").write_text("app_dir: from_lint/\n")
+    config = LintConfig.load(tmp_path)
+    assert config.app_dir == "from_lint/"
+
+
 def test_lint_config_severity_override():
     config = LintConfig()
     config.rules["I001"] = Severity.OFF
@@ -270,8 +291,10 @@ def test_lint_config_per_file_override():
             return []
 
     r = DummyRule()
-    assert config.get_severity(r, "app/agents/root_agent/instruction.txt") == Severity.OFF
-    assert config.get_severity(r, "app/agents/billing/instruction.txt") == Severity.INFO
+    root_path = "app/agents/root_agent/instruction.txt"
+    assert config.get_severity(r, root_path) == Severity.OFF
+    billing_path = "app/agents/billing/instruction.txt"
+    assert config.get_severity(r, billing_path) == Severity.INFO
 
 
 def test_lint_config_is_ignored():
@@ -287,7 +310,9 @@ def test_lint_config_is_ignored():
 
 def _make_app(tmp_path, agents=None, tools=None):
     """Helper to create a minimal app directory structure."""
-    (tmp_path / "app.json").write_text('{"name": "test", "displayName": "Test"}')
+    (tmp_path / "app.json").write_text(
+        '{"name": "test", "displayName": "Test"}'
+    )
     (tmp_path / "agents").mkdir()
     for name in (agents or []):
         agent_dir = tmp_path / "agents" / name
@@ -343,9 +368,14 @@ def test_discovery_tools(tmp_path):
 
 def test_discovery_callbacks(tmp_path):
     _make_app(tmp_path, agents=["root_agent"])
-    cb_dir = tmp_path / "agents" / "root_agent" / "before_model_callbacks" / "greet_01"
+    cb_dir = (
+        tmp_path / "agents" / "root_agent"
+        / "before_model_callbacks" / "greet_01"
+    )
     cb_dir.mkdir(parents=True)
-    (cb_dir / "python_code.py").write_text("def before_model_callback(ctx, req): pass")
+    (cb_dir / "python_code.py").write_text(
+        "def before_model_callback(ctx, req): pass"
+    )
 
     discovery = Discovery(tmp_path, tmp_path / "evals")
     callbacks = discovery.discover_callbacks()
@@ -375,12 +405,53 @@ def test_discovery_agent_configs(tmp_path):
     assert "root_agent" in configs
 
 
+def test_discovery_nested_via_gecx_config(tmp_path):
+    """gecx-config.json app_dir points to cxas_app/ which has a nested app."""
+    cxas_app = tmp_path / "cxas_app" / "my-agent"
+    cxas_app.mkdir(parents=True)
+    _make_app(cxas_app, agents=["root_agent"])
+    (tmp_path / "gecx-config.json").write_text('{"app_dir": "cxas_app/"}')
+
+    config = LintConfig.load(tmp_path)
+    app_dir = tmp_path / config.app_dir
+    discovery = Discovery(app_dir, tmp_path / "evals")
+    assert discovery.app_root == cxas_app
+
+
+def test_discovery_toolsets_guardrails(tmp_path):
+    _make_app(tmp_path)
+    (tmp_path / "toolsets" / "crm_service").mkdir(parents=True)
+    (tmp_path / "guardrails" / "profanity").mkdir(parents=True)
+
+    discovery = Discovery(tmp_path, tmp_path / "evals")
+    assert "crm_service" in discovery.discover_toolsets()
+    assert "profanity" in discovery.discover_guardrails()
+
+
+def test_discovery_tool_callbacks(tmp_path):
+    """before_tool_callbacks and after_tool_callbacks are discovered."""
+    _make_app(tmp_path, agents=["root_agent"])
+    cb_dir = (
+        tmp_path / "agents" / "root_agent"
+        / "before_tool_callbacks" / "log_01"
+    )
+    cb_dir.mkdir(parents=True)
+    (cb_dir / "python_code.py").write_text(
+        "def before_tool_callback(t, i, ctx): pass"
+    )
+
+    discovery = Discovery(tmp_path, tmp_path / "evals")
+    callbacks = discovery.discover_callbacks()
+    tool_cbs = [cb for cb in callbacks if cb[1] == "before_tool_callbacks"]
+    assert len(tool_cbs) == 1
+
+
 # ── Runner ───────────────────────────────────────────────────────────────
 
 def test_build_registry_all_rules():
     registry = build_registry()
     all_rules = registry.all_rules()
-    assert len(all_rules) == 55
+    assert len(all_rules) == 60  # noqa: PLR2004
 
 
 def test_build_context(tmp_path):
@@ -426,12 +497,70 @@ def test_run_rules_specific_rules_filter(tmp_path):
         assert r.rule_id == "I001", f"Expected I001, got {r.rule_id}"
 
 
+def test_run_rules_handles_directory_targets(tmp_path):
+    """Schema rules receive directory paths (not files).
+    The runner must not crash on read_text() for directories."""
+    _make_app(tmp_path, agents=["root_agent"], tools=["my_tool"])
+    # Add a toolset directory (has no python files, just a dir)
+    (tmp_path / "toolsets" / "crm").mkdir(parents=True)
+    (tmp_path / "toolsets" / "crm" / "crm.yaml").write_text("displayName: crm")
+
+    config = LintConfig()
+    discovery = Discovery(tmp_path, tmp_path / "evals")
+    context = build_context(tmp_path, config, discovery)
+    registry = build_registry()
+
+    from unittest.mock import patch  # noqa: PLC0415,I001
+    with patch(
+        "cxas_scrapi.utils.lint_rules.schema"
+        ".json_format.ParseDict"
+    ):
+        report = LintReport()
+        run_rules(
+            registry, config, context, discovery,
+            report, categories=["schema"],
+        )
+
+    # Should not crash -- directories are handled gracefully
+    assert isinstance(report.results, list)
+
+
+def test_run_rules_with_gecx_nested_layout(tmp_path):
+    """Full lint on gecx-style nested layout."""
+    app_root = tmp_path / "cxas_app" / "my-agent"
+    app_root.mkdir(parents=True)
+    _make_app(app_root, agents=["root_agent"])
+    (tmp_path / "gecx-config.json").write_text(
+        '{"app_dir": "cxas_app/"}'
+    )
+
+    config = LintConfig.load(tmp_path)
+    app_dir = tmp_path / config.app_dir
+    discovery = Discovery(app_dir, tmp_path / "evals")
+    assert discovery.app_root == app_root
+
+    context = build_context(tmp_path, config, discovery)
+    registry = build_registry()
+
+    from unittest.mock import patch  # noqa: PLC0415,I001
+    with patch(
+        "cxas_scrapi.utils.lint_rules.schema"
+        ".json_format.ParseDict"
+    ):
+        report = LintReport()
+        run_rules(registry, config, context, discovery, report,
+                  specific_rules={"I001"})
+
+    # I001 checks instruction tags — our _make_app only has <role>
+    assert any(r.rule_id == "I001" for r in report.results)
+
+
 def test_structure_rules_dispatched_by_target(tmp_path):
-    """Structure rules are dispatched by their ``target`` property,
-    not by hardcoded rule IDs in the runner.  A new rule with
-    target='agent_config' should automatically receive agent JSON
-    files without any runner changes."""
-    from cxas_scrapi.utils.linter import _RULE_REGISTRY, _REGISTERED_IDS
+    """Structure rules are dispatched by target property."""
+    from cxas_scrapi.utils.linter import (  # noqa: PLC0415,I001
+        _REGISTERED_IDS,
+        _RULE_REGISTRY,
+    )
 
     _make_app(tmp_path, agents=["root_agent"])
     config = LintConfig()

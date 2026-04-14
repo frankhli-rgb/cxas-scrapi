@@ -88,18 +88,28 @@ class AgentToolReferences(Rule):
             results.append(
                 self.make_result(
                     str(file_path),
-                    f"Instruction references tool '{tool_name}' but it's not in "
-                    f"the agent's tool list.",
+                    (
+                        "Instruction references"
+                        f" tool '{tool_name}'"
+                        " but it's not in the"
+                        " agent's tool list."
+                    ),
                     line=line_num,
-                    fix=f"Add '{tool_name}' to the tools list in {agent_json.name}, "
-                    f"or remove the reference from the instruction.",
+                    fix=(
+                        f"Add '{tool_name}' to"
+                        " the tools list in"
+                        f" {agent_json.name},"
+                        " or remove the"
+                        " reference from the"
+                        " instruction."
+                    ),
                 )
             )
         return results
 
 
 def _resolve_path(app_dir: Path, relative_path: str) -> Path:
-    """Resolve a relative path against app_dir, searching subdirectories as fallback."""
+    """Resolve a relative path against app_dir, with subdirectory fallback."""
     candidate = app_dir / relative_path
     if candidate.exists():
         return candidate
@@ -150,7 +160,11 @@ class CallbackFileReferences(Rule):
                     self.make_result(
                         str(file_path),
                         f"Callback references '{code_path}' but file not found",
-                        fix="Create the callback file or fix the path in the agent JSON",
+                        fix=(
+                            "Create the callback"
+                            " file or fix the path"
+                            " in the agent JSON"
+                        ),
                     )
                 )
         return results
@@ -183,8 +197,13 @@ class ChildAgentReferences(Rule):
                 results.append(
                     self.make_result(
                         str(file_path),
-                        f"References child agent '{child_name}' but no agent directory "
-                        f"found. Available agents: {sorted(context.all_agent_names)}",
+                        (
+                            "References child agent"
+                            f" '{child_name}' but no"
+                            " agent directory found."
+                            " Available agents:"
+                            f" {sorted(context.all_agent_names)}"
+                        ),
                         fix="Create the agent directory or fix the reference",
                     )
                 )

@@ -107,7 +107,7 @@ cxas push --agent_dir <project>/cxas_app/<AppName> \
 
 ### Required Patterns (lint-enforced)
 
-The linter (`scripts/lint.py`) checks for these patterns. Code that violates them will fail lint and block the push. Write code that passes these from the start:
+The linter (`cxas lint`) checks for these patterns. Code that violates them will fail lint and block the push. Write code that passes these from the start:
 
 | Rule | What it checks | How to comply |
 |------|---------------|---------------|
@@ -128,7 +128,7 @@ After pushing:
 
 For a first build, run these 3 essential checks instead of the full 7-gate process:
 
-1. **Lint** — `python .agents/skills/cxas-agent-foundry/scripts/lint.py` (catches structural issues in instructions and callbacks)
+1. **Lint** — `cxas lint --app-dir cxas_app/` (catches structural issues in instructions, callbacks, tools, and configs)
 2. **Smoke test** — Send "Hello" via Sessions API and confirm the agent responds without errors:
    ```python
    from cxas_scrapi.core.sessions import Sessions

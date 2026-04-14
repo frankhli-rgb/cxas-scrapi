@@ -39,6 +39,62 @@ CALLBACK_SIGNATURES = {
     ),
     "before_agent_callbacks": ("before_agent_callback", ["callback_context"]),
     "after_agent_callbacks": ("after_agent_callback", ["callback_context"]),
+    "before_tool_callbacks": (
+        "before_tool_callback",
+        ["tool", "input", "callback_context"],
+    ),
+    "after_tool_callbacks": (
+        "after_tool_callback",
+        ["tool", "input", "callback_context", "tool_response"],
+    ),
+}
+
+EXPECTED_TYPED_SIGNATURES = {
+    "before_model_callbacks": {
+        "fn": "before_model_callback",
+        "params": {
+            "callback_context": "CallbackContext",
+            "llm_request": "LlmRequest",
+        },
+        "return": "Optional[LlmResponse]",
+    },
+    "after_model_callbacks": {
+        "fn": "after_model_callback",
+        "params": {
+            "callback_context": "CallbackContext",
+            "llm_response": "LlmResponse",
+        },
+        "return": "Optional[LlmResponse]",
+    },
+    "before_agent_callbacks": {
+        "fn": "before_agent_callback",
+        "params": {"callback_context": "CallbackContext"},
+        "return": "Optional[Content]",
+    },
+    "after_agent_callbacks": {
+        "fn": "after_agent_callback",
+        "params": {"callback_context": "CallbackContext"},
+        "return": "Optional[Content]",
+    },
+    "before_tool_callbacks": {
+        "fn": "before_tool_callback",
+        "params": {
+            "tool": "Tool",
+            "input": "dict[str, Any]",
+            "callback_context": "CallbackContext",
+        },
+        "return": "Optional[dict[str, Any]]",
+    },
+    "after_tool_callbacks": {
+        "fn": "after_tool_callback",
+        "params": {
+            "tool": "Tool",
+            "input": "dict[str, Any]",
+            "callback_context": "CallbackContext",
+            "tool_response": "dict[str, Any]",
+        },
+        "return": "Optional[dict[str, Any]]",
+    },
 }
 
 
@@ -80,7 +136,11 @@ class WrongFunctionName(Rule):
                 self.make_result(
                     file=rel,
                     line=1,
-                    message=f"No '{expected_fn}' function found (found: {', '.join(all_fns)})",
+                    message=(
+                        f"No '{expected_fn}' function"
+                        f" found (found:"
+                        f" {', '.join(all_fns)})"
+                    ),
                     fix=f"Add entry function: def {expected_fn}(...)",
                 )
             ]
@@ -125,8 +185,19 @@ class WrongArgCount(Rule):
                 self.make_result(
                     file=rel,
                     line=1,
-                    message=f"Expected {len(expected_args)} args ({', '.join(expected_args)}), got {len(args)} ({', '.join(args)})",
-                    fix=f"Use signature: def {expected_fn}({', '.join(expected_args)}):",
+                    message=(
+                        f"Expected"
+                        f" {len(expected_args)}"
+                        f" args"
+                        f" ({', '.join(expected_args)}),"
+                        f" got {len(args)}"
+                        f" ({', '.join(args)})"
+                    ),
+                    fix=(
+                        f"Use signature: def"
+                        f" {expected_fn}"
+                        f"({', '.join(expected_args)}):"
+                    ),
                 )
             ]
         return []
@@ -149,7 +220,10 @@ class CamelCaseFunction(Rule):
             results.append(
                 self.make_result(
                     file=rel,
-                    message=f"camelCase function '{fn}' — CES requires snake_case",
+                    message=(
+                        f"camelCase function '{fn}'"
+                        " — CES requires snake_case"
+                    ),
                     fix="Rename to snake_case",
                 )
             )
@@ -176,8 +250,17 @@ class ReturnsDictNotLlmResponse(Rule):
             return [
                 self.make_result(
                     file=rel,
-                    message="Callback returns a dict — should return LlmResponse or None",
-                    fix="Use: return LlmResponse.from_parts(parts=[Part.from_text(text='...')])",
+                    message=(
+                        "Callback returns a dict"
+                        " — should return"
+                        " LlmResponse or None"
+                    ),
+                    fix=(
+                        "Use: return"
+                        " LlmResponse.from_parts("
+                        "parts=[Part.from_text("
+                        "text='...')])"
+                    ),
                 )
             ]
         return []
@@ -187,7 +270,11 @@ class ReturnsDictNotLlmResponse(Rule):
 class HardcodedPhraseList(Rule):
     id = "C005"
     name = "callback-hardcoded-phrases"
-    description = "Hardcoded phrase lists for intent detection — keep detection in instructions"
+    description = (
+        "Hardcoded phrase lists for intent"
+        " detection — keep detection in"
+        " instructions"
+    )
     default_severity = Severity.WARNING
 
     PATTERNS = [
@@ -219,8 +306,17 @@ class HardcodedPhraseList(Rule):
             self.make_result(
                 file=rel,
                 line=i,
-                message="Hardcoded phrase list for intent detection — misses natural variations",
-                fix="Keep detection in instructions (LLM understands intent). Use callbacks for execution only.",
+                message=(
+                    "Hardcoded phrase list for"
+                    " intent detection"
+                    " — misses natural variations"
+                ),
+                fix=(
+                    "Keep detection in instructions"
+                    " (LLM understands intent)."
+                    " Use callbacks for"
+                    " execution only."
+                ),
             )
             for i, line in enumerate(content.split("\n"), 1)
             if self._is_detection_line(line)
@@ -247,8 +343,18 @@ class BareExcept(Rule):
                     self.make_result(
                         file=rel,
                         line=i,
-                        message="Bare 'except:' — catches all errors silently. Platform tool errors bypass try/except.",
-                        fix="Use 'except Exception as e:' with logging, or catch specific exceptions",
+                        message=(
+                            "Bare 'except:' — catches"
+                            " all errors silently."
+                            " Platform tool errors"
+                            " bypass try/except."
+                        ),
+                        fix=(
+                            "Use 'except Exception"
+                            " as e:' with logging,"
+                            " or catch specific"
+                            " exceptions"
+                        ),
                     )
                 )
         return results
@@ -272,8 +378,21 @@ class ToolNamingConvention(Rule):
                 results.append(
                     self.make_result(
                         file=rel,
-                        message=f"tools.{tool_name}() — verify naming: Python tools use function name, API connectors use DisplayName_OperationId",
-                        fix="Check the exact tool name from the platform. Platform errors from wrong names bypass try/except.",
+                        message=(
+                            f"tools.{tool_name}()"
+                            " — verify naming:"
+                            " Python tools use"
+                            " function name, API"
+                            " connectors use"
+                            " DisplayName_OperationId"
+                        ),
+                        fix=(
+                            "Check the exact tool"
+                            " name from the platform."
+                            " Platform errors from"
+                            " wrong names bypass"
+                            " try/except."
+                        ),
                     )
                 )
         return results
@@ -283,7 +402,11 @@ class ToolNamingConvention(Rule):
 class MissingTypingImport(Rule):
     id = "C008"
     name = "callback-missing-typing-import"
-    description = "Callback uses typing types (Optional, Iterator, etc.) without importing them"
+    description = (
+        "Callback uses typing types"
+        " (Optional, Iterator, etc.)"
+        " without importing them"
+    )
     default_severity = Severity.ERROR
 
     TYPING_TYPES = {
@@ -330,9 +453,174 @@ class MissingTypingImport(Rule):
             results.append(
                 self.make_result(
                     file=rel,
-                    message=f"Uses {types_str} without importing from typing — will fail with 'name not defined' at push time",
+                    message=(
+                        f"Uses {types_str} without"
+                        " importing from typing"
+                        " — will fail with 'name"
+                        " not defined' at push"
+                        " time"
+                    ),
                     fix=f"Add: from typing import {types_str}",
                 )
             )
 
         return results
+
+
+@rule("callbacks")
+class WrongCallbackSignature(Rule):
+    id = "C009"
+    name = "callback-signature"
+    description = "Callback function must have correct type annotations"
+    default_severity = Severity.ERROR
+
+    def check(  # noqa: C901
+        self,
+        file_path: Path,
+        content: str,
+        context: LintContext,
+    ) -> list[LintResult]:
+        rel = str(
+            file_path.relative_to(context.project_root)
+        )
+        cb_type = file_path.parent.parent.name
+        expected = EXPECTED_TYPED_SIGNATURES.get(cb_type)
+        if not expected:
+            return []
+
+        fn_name = expected["fn"]
+        pattern = (
+            rf"def\s+{re.escape(fn_name)}"
+            r"\s*\(([^)]*)\)(\s*->\s*[^:]+)?:"
+        )
+        match = re.search(pattern, content, re.DOTALL)
+        if not match:
+            return []
+
+        args_str = match.group(1)
+        return_str = match.group(2)
+        params_str = ", ".join(
+            f"{k}: {v}"
+            for k, v in expected["params"].items()
+        )
+        expected_sig = (
+            f"def {fn_name}({params_str})"
+            f" -> {expected['return']}:"
+        )
+
+        results = []
+        for param in (
+            p.strip()
+            for p in args_str.split(",")
+            if p.strip()
+        ):
+            parts = param.split(":")
+            param_name = parts[0].strip()
+            expected_type = expected["params"].get(
+                param_name
+            )
+            if not expected_type:
+                continue
+            if len(parts) < 2:  # noqa: PLR2004
+                results.append(
+                    self.make_result(
+                        file=rel,
+                        message=(
+                            f"Parameter"
+                            f" '{param_name}'"
+                            " missing type"
+                            " annotation,"
+                            f" expected"
+                            f" '{param_name}:"
+                            f" {expected_type}'"
+                        ),
+                        fix=expected_sig,
+                    )
+                )
+            elif parts[1].strip() != expected_type:
+                actual_t = parts[1].strip()
+                results.append(
+                    self.make_result(
+                        file=rel,
+                        message=(
+                            f"Parameter"
+                            f" '{param_name}'"
+                            f" has type"
+                            f" '{actual_t}',"
+                            f" expected"
+                            f" '{expected_type}'"
+                        ),
+                        fix=expected_sig,
+                    )
+                )
+
+        if not return_str:
+            results.append(
+                self.make_result(
+                    file=rel,
+                    message=(
+                        "Missing return type"
+                        " annotation, expected"
+                        f" '-> {expected['return']}'"
+                    ),
+                    fix=expected_sig,
+                )
+            )
+        else:
+            actual = (
+                return_str.strip().lstrip("->").strip()
+            )
+            if actual != expected["return"]:
+                results.append(
+                    self.make_result(
+                        file=rel,
+                        message=(
+                            f"Return type is"
+                            f" '{actual}', expected"
+                            f" '{expected['return']}'"
+                        ),
+                        fix=expected_sig,
+                    )
+                )
+
+        return results
+
+
+@rule("callbacks")
+class InvalidPythonSyntax(Rule):
+    id = "C010"
+    name = "callback-python-syntax"
+    description = "Callback Python file must have valid syntax"
+    default_severity = Severity.ERROR
+
+    def check(
+        self,
+        file_path: Path,
+        content: str,
+        context: LintContext,
+    ) -> list[LintResult]:
+        if not str(file_path).endswith(".py"):
+            return []
+        rel = str(
+            file_path.relative_to(context.project_root)
+        )
+        try:
+            compile(content, rel, "exec")
+        except SyntaxError as e:
+            return [
+                self.make_result(
+                    file=rel,
+                    line=e.lineno,
+                    message=(
+                        "Invalid Python syntax:"
+                        f" {e.msg}"
+                    ),
+                    fix=(
+                        "Fix the syntax error"
+                        " — invalid Python causes"
+                        " callbacks to silently"
+                        " fail on the platform"
+                    ),
+                )
+            ]
+        return []

@@ -67,7 +67,11 @@ class MissingAgentAction(Rule):
                 self.make_result(
                     file=rel,
                     message="Missing agent_action error return pattern",
-                    fix='Add: return {"agent_action": "error message for agent to relay"}',
+                    fix=(
+                        'Add: return {"agent_action":'
+                        ' "error message for agent'
+                        ' to relay"}'
+                    ),
                 )
             ]
         return []
@@ -88,8 +92,17 @@ class MissingDocstring(Rule):
             return [
                 self.make_result(
                     file=rel,
-                    message="Missing docstring — CES uses tool docstrings for invocation routing",
-                    fix="Add a descriptive docstring explaining when and how the LLM should use this tool",
+                    message=(
+                        "Missing docstring — CES"
+                        " uses tool docstrings"
+                        " for invocation routing"
+                    ),
+                    fix=(
+                        "Add a descriptive docstring"
+                        " explaining when and how"
+                        " the LLM should use"
+                        " this tool"
+                    ),
                 )
             ]
         return []
@@ -115,7 +128,11 @@ class MissingTypeHints(Rule):
                         file=rel,
                         line=1,
                         message="Function arguments lack type hints",
-                        fix="Add type hints: def tool_name(arg: str, count: int) -> dict:",
+                        fix=(
+                        "Add type hints: def"
+                        " tool_name(arg: str,"
+                        " count: int) -> dict:"
+                    ),
                     )
                 ]
         return []
@@ -150,7 +167,12 @@ class FunctionNameMismatch(Rule):
                 self.make_result(
                     file=rel,
                     line=1,
-                    message=f"Function named '{actual_fn}', expected '{tool_dir_name}' (matching directory)",
+                    message=(
+                        f"Function named"
+                        f" '{actual_fn}', expected"
+                        f" '{tool_dir_name}'"
+                        " (matching directory)"
+                    ),
                     fix=f"Rename to: def {tool_dir_name}(...):",
                 )
             ]
@@ -162,13 +184,21 @@ class HighCardinalityArgs(Rule):
     id = "T005"
     name = "tool-high-cardinality"
     description = (
-        "High-cardinality input arguments reduce deterministic tool selection"
+        "High-cardinality input arguments"
+        " reduce deterministic tool selection"
     )
     default_severity = Severity.INFO
 
     HIGH_CARDINALITY_PATTERNS = [
-        (r"timestamp", "timestamp — hard for voice users to express"),
-        (r"latitude|longitude|coordinates", "coordinates — high cardinality"),
+        (
+            r"timestamp",
+            "timestamp — hard for voice"
+            " users to express",
+        ),
+        (
+            r"latitude|longitude|coordinates",
+            "coordinates — high cardinality",
+        ),
         (
             r"session_id|request_id|trace_id",
             "internal ID — not voice-expressible",
@@ -188,7 +218,12 @@ class HighCardinalityArgs(Rule):
             self.make_result(
                 file=rel,
                 message=f"High-cardinality argument: {label}",
-                fix="Design args that a human can express in voice mode (e.g., region, category, last_n_days)",
+                fix=(
+                    "Design args that a human"
+                    " can express in voice mode"
+                    " (e.g., region, category,"
+                    " last_n_days)"
+                ),
             )
             for pattern, label in self.HIGH_CARDINALITY_PATTERNS
             if re.search(pattern, args_str, re.IGNORECASE)
@@ -205,13 +240,21 @@ class ExcessiveReturnData(Rule):
     RETURN_PATTERNS = [
         (
             r"return\s+response\.json\(\)",
-            "Returning raw API response — may include data the LLM doesn't need",
-            "Filter the response to only include fields the LLM needs for decision-making",
+            "Returning raw API response"
+            " — may include data the"
+            " LLM doesn't need",
+            "Filter the response to only"
+            " include fields the LLM"
+            " needs for decision-making",
         ),
         (
             r"return\s+json\.loads\(",
-            "Returning parsed JSON directly — consider filtering to relevant fields only",
-            "Only return data that the LLM needs to see",
+            "Returning parsed JSON"
+            " directly — consider"
+            " filtering to relevant"
+            " fields only",
+            "Only return data that the"
+            " LLM needs to see",
         ),
     ]
 
@@ -230,7 +273,10 @@ class ExcessiveReturnData(Rule):
 class ToolNameNotSnakeCase(Rule):
     id = "T007"
     name = "tool-name-snake-case"
-    description = "Tool JSON name/displayName must be snake_case (no spaces or mixed case)"
+    description = (
+        "Tool JSON name/displayName must be"
+        " snake_case (no spaces or mixed case)"
+    )
     default_severity = Severity.ERROR
 
     def check(
@@ -249,7 +295,11 @@ class ToolNameNotSnakeCase(Rule):
                 results.append(
                     self.make_result(
                         file=rel,
-                        message=f"Tool {field_name} '{value}' is not snake_case",
+                        message=(
+                            f"Tool {field_name}"
+                            f" '{value}' is not"
+                            " snake_case"
+                        ),
                         fix=f'Change to: "{field_name}": "{snake}"',
                     )
                 )
@@ -260,7 +310,10 @@ class ToolNameNotSnakeCase(Rule):
 class ToolDisplayNameUnreferenced(Rule):
     id = "T008"
     name = "tool-displayname-unreferenced"
-    description = "Tool displayName not referenced by any agent's tools array"
+    description = (
+        "Tool displayName not referenced"
+        " by any agent's tools array"
+    )
     default_severity = Severity.WARNING
 
     def check(
@@ -281,10 +334,15 @@ class ToolDisplayNameUnreferenced(Rule):
             return []
 
         referenced = any(
-            display_name in json.loads(agent_json.read_text()).get("tools", [])
+            display_name
+            in json.loads(
+                agent_json.read_text()
+            ).get("tools", [])
             for agent_dir in agents_dir.iterdir()
             if agent_dir.is_dir()
-            for agent_json in [agent_dir / f"{agent_dir.name}.json"]
+            for agent_json in [
+                agent_dir / f"{agent_dir.name}.json"
+            ]
             if agent_json.exists()
         )
 
@@ -293,8 +351,162 @@ class ToolDisplayNameUnreferenced(Rule):
             return [
                 self.make_result(
                     file=rel,
-                    message=f"Tool displayName '{display_name}' not found in any agent's tools array",
-                    fix="Add this tool to the relevant agent's JSON config, or remove the tool if unused",
+                    message=(
+                        f"Tool displayName"
+                        f" '{display_name}' not"
+                        " found in any agent's"
+                        " tools array"
+                    ),
+                    fix=(
+                        "Add this tool to the"
+                        " relevant agent's JSON"
+                        " config, or remove the"
+                        " tool if unused"
+                    ),
                 )
             ]
         return []
+
+
+@rule("tools")
+class KwargsInSignature(Rule):
+    id = "T009"
+    name = "tool-kwargs-signature"
+    description = (
+        "Tool function uses **kwargs"
+        " — platform requires explicit"
+        " named parameters"
+    )
+    default_severity = Severity.ERROR
+
+    def check(
+        self,
+        file_path: Path,
+        content: str,
+        context: LintContext,
+    ) -> list[LintResult]:
+        rel = str(
+            file_path.relative_to(context.project_root)
+        )
+        fn_match = FUNC_DEF_RE.search(content)
+        if fn_match and "**" in fn_match.group(2):
+            line = (
+                content[: fn_match.start()].count("\n")
+                + 1
+            )
+            return [
+                self.make_result(
+                    file=rel,
+                    line=line,
+                    message=(
+                        "Tool function uses"
+                        " **kwargs — platform"
+                        " silently drops tools"
+                        " with **kwargs during"
+                        " import"
+                    ),
+                    fix=(
+                        "Replace **kwargs with"
+                        " explicit parameters:"
+                        " def my_tool(param1:"
+                        " str = '', param2:"
+                        " str = '') -> dict:"
+                    ),
+                )
+            ]
+        return []
+
+
+@rule("tools")
+class ToolInvalidPythonSyntax(Rule):
+    id = "T010"
+    name = "tool-python-syntax"
+    description = "Tool Python file must have valid syntax"
+    default_severity = Severity.ERROR
+
+    def check(
+        self,
+        file_path: Path,
+        content: str,
+        context: LintContext,
+    ) -> list[LintResult]:
+        rel = str(
+            file_path.relative_to(context.project_root)
+        )
+        try:
+            compile(content, rel, "exec")
+        except SyntaxError as e:
+            return [
+                self.make_result(
+                    file=rel,
+                    line=e.lineno,
+                    message=(
+                        "Invalid Python syntax:"
+                        f" {e.msg}"
+                    ),
+                    fix=(
+                        "Fix the syntax error"
+                        " — invalid Python causes"
+                        " tools to be silently"
+                        " dropped during import"
+                    ),
+                )
+            ]
+        return []
+
+
+@rule("tools")
+class NoneDefaultValue(Rule):
+    id = "T011"
+    name = "tool-none-default"
+    description = (
+        "Tool parameter uses None as default"
+        " — platform silently drops"
+        " these tools"
+    )
+    default_severity = Severity.ERROR
+
+    def check(
+        self,
+        file_path: Path,
+        content: str,
+        context: LintContext,
+    ) -> list[LintResult]:
+        fn_match = FUNC_DEF_RE.search(content)
+        if not fn_match:
+            return []
+
+        rel = str(
+            file_path.relative_to(context.project_root)
+        )
+        args_str = fn_match.group(2)
+        line = (
+            content[: fn_match.start()].count("\n") + 1
+        )
+        def _param_name(p):
+            return p.split(":")[0].strip()
+
+        return [
+            self.make_result(
+                file=rel,
+                line=line,
+                message=(
+                    f"Parameter"
+                    f" '{_param_name(p)}'"
+                    " uses None as default"
+                    " — platform silently"
+                    " drops tools with None"
+                    " defaults during import"
+                ),
+                fix=(
+                    "Use type-matching"
+                    " defaults: str = '',"
+                    " int = 0, list = []"
+                ),
+            )
+            for p in args_str.split(",")
+            if "=" in p
+            and re.search(
+                r"=\s*None\s*$", p.strip()
+            )
+        ]
