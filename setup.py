@@ -68,6 +68,8 @@ setup(
         "websocket-client",
         "certifi",
         "json5",
+        "graphviz",
+        "rich",
     ],
     entry_points={
         'console_scripts': [
