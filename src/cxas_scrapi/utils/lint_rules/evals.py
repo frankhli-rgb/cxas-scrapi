@@ -22,7 +22,13 @@ import yaml
 from pathlib import Path
 from typing import Optional
 
-from cxas_scrapi.utils.linter import LintContext, LintResult, Rule, Severity, rule
+from cxas_scrapi.utils.linter import (
+    LintContext,
+    LintResult,
+    Rule,
+    Severity,
+    rule,
+)
 
 
 def _is_golden(file_path: Path) -> bool:
@@ -62,7 +68,9 @@ class InvalidYaml(Rule):
     description = "Eval file must be valid YAML"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         try:
             yaml.safe_load(content)
@@ -78,17 +86,26 @@ class MissingConversations(Rule):
     description = "Golden eval must have 'conversations' key"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         if not _is_golden(file_path):
             return []
         rel = str(file_path.relative_to(context.project_root))
         data = _parse_yaml(content)
         if data is None:
-            return [self.make_result(file=rel, message="Eval file is empty or invalid")]
+            return [
+                self.make_result(
+                    file=rel, message="Eval file is empty or invalid"
+                )
+            ]
         if "conversations" not in data:
-            return [self.make_result(
-                file=rel, message="Missing 'conversations' key in golden eval YAML",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message="Missing 'conversations' key in golden eval YAML",
+                )
+            ]
         return []
 
 
@@ -101,28 +118,38 @@ class InvalidToolCall(Rule):
 
     SPECIAL_ACTIONS = {"transfer_to_agent", "end_session"}
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
-        if _is_golden(file_path) or str(file_path).startswith(str(context.evals_dir)):
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
+        if _is_golden(file_path) or str(file_path).startswith(
+            str(context.evals_dir)
+        ):
             return []
 
         data = _parse_yaml(content)
         if not data:
             return []
 
-        conversations = data if isinstance(data, list) else data.get("conversations", [])
+        conversations = (
+            data if isinstance(data, list) else data.get("conversations", [])
+        )
         valid_tools = context.all_known_tools | self.SPECIAL_ACTIONS
         rel = str(file_path.relative_to(context.project_root))
 
         results = []
-        for conv_name, turn_num, turn in _iter_golden_turns({"conversations": conversations}):
+        for conv_name, turn_num, turn in _iter_golden_turns(
+            {"conversations": conversations}
+        ):
             for tc in turn.get("tool_calls", []):
                 action = tc.get("action", "")
                 if action and action not in valid_tools:
-                    results.append(self.make_result(
-                        file=rel,
-                        message=f"Conv '{conv_name}' turn {turn_num}: tool_call '{action}' not found in local app tools",
-                        fix=f"Available local tools: {', '.join(sorted(context.all_known_tools))}",
-                    ))
+                    results.append(
+                        self.make_result(
+                            file=rel,
+                            message=f"Conv '{conv_name}' turn {turn_num}: tool_call '{action}' not found in local app tools",
+                            fix=f"Available local tools: {', '.join(sorted(context.all_known_tools))}",
+                        )
+                    )
         return results
 
 
@@ -133,7 +160,9 @@ class UndeclaredSessionParam(Rule):
     description = "Session parameters should reference known variables"
     default_severity = Severity.WARNING
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         return []
 
 
@@ -141,10 +170,14 @@ class UndeclaredSessionParam(Rule):
 class DuplicateYamlKeys(Rule):
     id = "E005"
     name = "eval-duplicate-keys"
-    description = "Duplicate YAML keys in same mapping (second overwrites first)"
+    description = (
+        "Duplicate YAML keys in same mapping (second overwrites first)"
+    )
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         results = []
         prev_key = ""
@@ -152,18 +185,29 @@ class DuplicateYamlKeys(Rule):
         for i, line in enumerate(content.split("\n"), 1):
             stripped = line.lstrip()
             indent = len(line) - len(stripped)
-            key_match = re.match(r'^(\w+):', stripped)
+            key_match = re.match(r"^(\w+):", stripped)
             if key_match:
                 key = key_match.group(1)
-                if key == prev_key and indent == prev_indent and key == "tool_calls":
-                    results.append(self.make_result(
-                        file=rel, line=i,
-                        message=f"Duplicate '{key}:' key at same level — second overwrites first",
-                        fix="Combine into a single tool_calls: list",
-                    ))
+                if (
+                    key == prev_key
+                    and indent == prev_indent
+                    and key == "tool_calls"
+                ):
+                    results.append(
+                        self.make_result(
+                            file=rel,
+                            line=i,
+                            message=f"Duplicate '{key}:' key at same level — second overwrites first",
+                            fix="Combine into a single tool_calls: list",
+                        )
+                    )
                 prev_key = key
                 prev_indent = indent
-            elif stripped and not stripped.startswith("-") and not stripped.startswith("#"):
+            elif (
+                stripped
+                and not stripped.startswith("-")
+                and not stripped.startswith("#")
+            ):
                 prev_key = ""
         return results
 
@@ -175,7 +219,9 @@ class GoldenWithoutMocks(Rule):
     description = "Golden eval with tool_calls but no session_parameters"
     default_severity = Severity.WARNING
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         if not _is_golden(file_path):
             return []
         data = _parse_yaml(content)
@@ -190,11 +236,13 @@ class GoldenWithoutMocks(Rule):
 
         if has_tool_calls and not has_common_params:
             rel = str(file_path.relative_to(context.project_root))
-            return [self.make_result(
-                file=rel,
-                message="Golden eval has tool_calls but no common_session_parameters",
-                fix="Add session parameters for reliable tool responses",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message="Golden eval has tool_calls but no common_session_parameters",
+                    fix="Add session parameters for reliable tool responses",
+                )
+            ]
         return []
 
 
@@ -205,7 +253,9 @@ class GoldenAgentFieldNotString(Rule):
     description = "Golden agent response must be a plain string, not a dict"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         if not _is_golden(file_path):
             return []
         data = _parse_yaml(content)
@@ -217,11 +267,12 @@ class GoldenAgentFieldNotString(Rule):
             self.make_result(
                 file=rel,
                 message=f"Conv '{conv}' turn {i}: 'agent' field is a "
-                        f"{type(turn['agent']).__name__}, must be a plain string",
+                f"{type(turn['agent']).__name__}, must be a plain string",
                 fix="Replace the dict with a plain string containing the expected agent response text",
             )
             for conv, i, turn in _iter_golden_turns(data)
-            if turn.get("agent") is not None and not isinstance(turn["agent"], str)
+            if turn.get("agent") is not None
+            and not isinstance(turn["agent"], str)
         ]
 
 
@@ -232,7 +283,9 @@ class GoldenMissingAgentField(Rule):
     description = "Golden turn missing 'agent' field — causes automatic FAIL from unexpected response"
     default_severity = Severity.WARNING
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         if not _is_golden(file_path):
             return []
         data = _parse_yaml(content)
@@ -244,7 +297,7 @@ class GoldenMissingAgentField(Rule):
             self.make_result(
                 file=rel,
                 message=f"Conv '{conv}' turn {i}: has 'user' but no 'agent' field — "
-                        f"any agent response will be flagged as UNEXPECTED RESPONSE",
+                f"any agent response will be flagged as UNEXPECTED RESPONSE",
                 fix="Add an 'agent' field with the expected response text",
             )
             for conv, i, turn in _iter_golden_turns(data)
@@ -256,10 +309,14 @@ class GoldenMissingAgentField(Rule):
 class SimMissingTags(Rule):
     id = "E009"
     name = "eval-sim-missing-tags"
-    description = "Simulation eval missing 'tags' field — won't match --priority filters"
+    description = (
+        "Simulation eval missing 'tags' field — won't match --priority filters"
+    )
     default_severity = Severity.WARNING
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         if not _is_simulation(file_path):
             return []
         data = _parse_yaml(content)
@@ -278,7 +335,7 @@ class SimMissingTags(Rule):
             self.make_result(
                 file=rel,
                 message=f"Sim '{ev.get('name', '')}' has no 'tags' field — "
-                        f"won't be found by --priority P0/P1/P2 filters",
+                f"won't be found by --priority P0/P1/P2 filters",
                 fix='Add: tags: ["P0", "category"]',
             )
             for ev in evals_list
@@ -293,7 +350,9 @@ class ToolTestWrongKey(Rule):
     description = "Tool test YAML uses 'test_cases' instead of 'tests' — SCRAPI silently returns 0 tests"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         if not _is_tool_test(file_path):
             return []
         data = _parse_yaml(content)
@@ -303,17 +362,21 @@ class ToolTestWrongKey(Rule):
         rel = str(file_path.relative_to(context.project_root))
         results = []
         if "test_cases" in data and "tests" not in data:
-            results.append(self.make_result(
-                file=rel,
-                message="Uses 'test_cases' key but SCRAPI expects 'tests' — all tests will be silently skipped",
-                fix="Rename 'test_cases:' to 'tests:'",
-            ))
+            results.append(
+                self.make_result(
+                    file=rel,
+                    message="Uses 'test_cases' key but SCRAPI expects 'tests' — all tests will be silently skipped",
+                    fix="Rename 'test_cases:' to 'tests:'",
+                )
+            )
         if "tool_name" in data and "tests" not in data:
-            results.append(self.make_result(
-                file=rel,
-                message="Uses top-level 'tool_name' (old format) — SCRAPI expects 'tool' on each test case inside 'tests'",
-                fix="Restructure: move tool_name into each test case as 'tool:', rename 'test_cases:' to 'tests:'",
-            ))
+            results.append(
+                self.make_result(
+                    file=rel,
+                    message="Uses top-level 'tool_name' (old format) — SCRAPI expects 'tool' on each test case inside 'tests'",
+                    fix="Restructure: move tool_name into each test case as 'tool:', rename 'test_cases:' to 'tests:'",
+                )
+            )
         return results
 
 
@@ -331,7 +394,9 @@ class InvalidMatchType(Rule):
         "fuzzy": "semantic",
     }
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         if not _is_golden(file_path):
             return []
         data = _parse_yaml(content)
@@ -349,14 +414,22 @@ class InvalidMatchType(Rule):
                     if not isinstance(arg_val, dict):
                         continue
                     match_type = arg_val.get("$matchType")
-                    if match_type is None or match_type in self.VALID_MATCH_TYPES:
+                    if (
+                        match_type is None
+                        or match_type in self.VALID_MATCH_TYPES
+                    ):
                         continue
                     suggestion = self.COMMON_TYPOS.get(match_type)
-                    fix = (f'Did you mean "{suggestion}"?' if suggestion
-                           else f"Valid values: {', '.join(sorted(self.VALID_MATCH_TYPES))}")
-                    results.append(self.make_result(
-                        file=rel,
-                        message=f"Conv '{conv_name}' turn {turn_num}: arg '{arg_name}' has invalid $matchType '{match_type}'",
-                        fix=fix,
-                    ))
+                    fix = (
+                        f'Did you mean "{suggestion}"?'
+                        if suggestion
+                        else f"Valid values: {', '.join(sorted(self.VALID_MATCH_TYPES))}"
+                    )
+                    results.append(
+                        self.make_result(
+                            file=rel,
+                            message=f"Conv '{conv_name}' turn {turn_num}: arg '{arg_name}' has invalid $matchType '{match_type}'",
+                            fix=fix,
+                        )
+                    )
         return results

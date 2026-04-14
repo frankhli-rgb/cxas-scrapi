@@ -42,9 +42,7 @@ class MainVisualizer:
 
     def _build_tools_tree(self) -> Tree:
         """Build a Rich Tree summarising tools and webhooks."""
-        root = Tree(
-            "🛠️ [bold orange3]Agent Tools & Webhooks[/bold orange3]"
-        )
+        root = Tree("🛠️ [bold orange3]Agent Tools & Webhooks[/bold orange3]")
 
         tools = self.data.get("tools", [])
         if tools:
@@ -72,9 +70,9 @@ class MainVisualizer:
                         f"{escape(tool_data['openApiSpec']['textSchema'])}"
                     )
                 if "dataStoreSpec" in tool_data or "dataStoreTool" in tool_data:
-                    data_store = tool_data.get("dataStoreSpec") or tool_data.get(
-                        "dataStoreTool", {}
-                    )
+                    data_store = tool_data.get(
+                        "dataStoreSpec"
+                    ) or tool_data.get("dataStoreTool", {})
                     tool_node.add("[dim]Type:[/] Data Store")
                     if "dataStoreConnections" in data_store:
                         tool_node.add(
@@ -134,10 +132,10 @@ class MainVisualizer:
 
         try:
             svg_std = dot_standard.pipe(format="svg").decode("utf-8")
-            svg_std = svg_std[svg_std.find("<svg"):]
+            svg_std = svg_std[svg_std.find("<svg") :]
 
             svg_det = dot_detailed.pipe(format="svg").decode("utf-8")
-            svg_det = svg_det[svg_det.find("<svg"):]
+            svg_det = svg_det[svg_det.find("<svg") :]
 
             uid = uuid.uuid4().hex
 
@@ -298,15 +296,11 @@ class MainVisualizer:
         Args:
             prefix: Filename prefix for exported files.
         """
-        dot = HighLevelGraphVisualizer(self.data).build(
-            show_code_blocks=False
-        )
+        dot = HighLevelGraphVisualizer(self.data).build(show_code_blocks=False)
         svg_filename = f"{prefix}_topology.svg"
         dot.render(outfile=svg_filename, format="svg", cleanup=True)
 
-        capture_console = Console(
-            force_terminal=False, width=120, record=True
-        )
+        capture_console = Console(force_terminal=False, width=120, record=True)
         capture_console.print("### Agent Tools & Webhooks ###\n")
         capture_console.print(
             Panel(self._build_tools_tree(), border_style="orange3")
@@ -344,9 +338,8 @@ class MainVisualizer:
 
         try:
             from google.colab import files  # type: ignore[import]
+
             files.download(svg_filename)
             files.download(md_filename)
         except ImportError:
-            print(
-                f"Files saved locally: {svg_filename}, {md_filename}"
-            )
+            print(f"Files saved locally: {svg_filename}, {md_filename}")

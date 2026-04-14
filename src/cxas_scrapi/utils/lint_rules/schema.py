@@ -29,10 +29,16 @@ import yaml
 from google.cloud.ces_v1beta import types
 from google.protobuf import json_format
 
-from cxas_scrapi.utils.linter import LintContext, LintResult, Rule, Severity, rule
-
+from cxas_scrapi.utils.linter import (
+    LintContext,
+    LintResult,
+    Rule,
+    Severity,
+    rule,
+)
 
 # ── Shared helpers (ported from Validator) ───────────────────────────────
+
 
 def _load_json_or_yaml(directory: Path, file_name: str) -> dict:
     """Load config from ``<file_name>.yaml`` or ``<file_name>.json``."""
@@ -60,10 +66,11 @@ def _resolve_paths(data, extra_prefixes=(), base_path=None):
         }
     elif isinstance(data, list):
         return [
-            _resolve_paths(item, extra_prefixes, base_path)
-            for item in data
+            _resolve_paths(item, extra_prefixes, base_path) for item in data
         ]
-    elif isinstance(data, str) and data.endswith((".txt", ".py", ".yaml", ".json")):
+    elif isinstance(data, str) and data.endswith(
+        (".txt", ".py", ".yaml", ".json")
+    ):
         path_to_check = Path(data)
         resolved = False
 
@@ -75,7 +82,11 @@ def _resolve_paths(data, extra_prefixes=(), base_path=None):
 
         if not resolved and extra_prefixes:
             for prefix in extra_prefixes:
-                if data.startswith(prefix) and base_path and prefix in base_path:
+                if (
+                    data.startswith(prefix)
+                    and base_path
+                    and prefix in base_path
+                ):
                     parts = base_path.split(prefix)
                     if parts:
                         alt = Path(parts[0]) / data
@@ -116,8 +127,7 @@ def _validate_fields(data: dict, cls, path: str = "") -> None:
     """Validate required fields and recurse into nested proto messages."""
     required = _get_required_fields(cls)
     missing = [
-        f for f in required
-        if f not in data and _to_camel_case(f) not in data
+        f for f in required if f not in data and _to_camel_case(f) not in data
     ]
     if missing:
         cls_name = getattr(cls, "__name__", str(cls))
@@ -137,7 +147,9 @@ def _validate_fields(data: dict, cls, path: str = "") -> None:
                 for item in field_data if isinstance(field_data, list) else []:
                     if isinstance(item, dict):
                         _validate_fields(item, field.message)
-            elif isinstance(field, proto.fields.Field) and isinstance(field_data, dict):
+            elif isinstance(field, proto.fields.Field) and isinstance(
+                field_data, dict
+            ):
                 _validate_fields(field_data, field.message)
 
 
@@ -146,27 +158,76 @@ def _validate_fields(data: dict, cls, path: str = "") -> None:
 # Each tuple: (rule_id, name, description, target, proto_type,
 #               config_name, extra_prefixes, resolve_paths)
 _RESOURCE_SCHEMAS = [
-    ("V001", "schema-app-valid",
-     "App config conforms to CES proto schema",
-     "app_config", types.App, "app", (), True),
-    ("V002", "schema-agent-valid",
-     "Agent config conforms to CES proto schema",
-     "agent_config", types.Agent, None, ("agents/",), True),
-    ("V003", "schema-tool-valid",
-     "Tool config conforms to CES proto schema",
-     "tool_config", types.Tool, None, ("tools/",), True),
-    ("V004", "schema-toolset-valid",
-     "Toolset config conforms to CES proto schema",
-     "toolset_config", types.Toolset, None, ("toolsets/",), True),
-    ("V005", "schema-guardrail-valid",
-     "Guardrail config conforms to CES proto schema",
-     "guardrail_config", types.Guardrail, None, (), False),
-    ("V006", "schema-evaluation-valid",
-     "Evaluation config conforms to CES proto schema",
-     "evaluation_config", types.Evaluation, None, (), False),
-    ("V007", "schema-eval-expectation-valid",
-     "Evaluation expectation config conforms to CES proto schema",
-     "eval_expectation_config", types.EvaluationExpectation, None, (), False),
+    (
+        "V001",
+        "schema-app-valid",
+        "App config conforms to CES proto schema",
+        "app_config",
+        types.App,
+        "app",
+        (),
+        True,
+    ),
+    (
+        "V002",
+        "schema-agent-valid",
+        "Agent config conforms to CES proto schema",
+        "agent_config",
+        types.Agent,
+        None,
+        ("agents/",),
+        True,
+    ),
+    (
+        "V003",
+        "schema-tool-valid",
+        "Tool config conforms to CES proto schema",
+        "tool_config",
+        types.Tool,
+        None,
+        ("tools/",),
+        True,
+    ),
+    (
+        "V004",
+        "schema-toolset-valid",
+        "Toolset config conforms to CES proto schema",
+        "toolset_config",
+        types.Toolset,
+        None,
+        ("toolsets/",),
+        True,
+    ),
+    (
+        "V005",
+        "schema-guardrail-valid",
+        "Guardrail config conforms to CES proto schema",
+        "guardrail_config",
+        types.Guardrail,
+        None,
+        (),
+        False,
+    ),
+    (
+        "V006",
+        "schema-evaluation-valid",
+        "Evaluation config conforms to CES proto schema",
+        "evaluation_config",
+        types.Evaluation,
+        None,
+        (),
+        False,
+    ),
+    (
+        "V007",
+        "schema-eval-expectation-valid",
+        "Evaluation expectation config conforms to CES proto schema",
+        "eval_expectation_config",
+        types.EvaluationExpectation,
+        None,
+        (),
+        False,
+    ),
 ]
 
 
@@ -176,10 +237,20 @@ class SchemaValid(Rule):
     Parameterized per resource type — instantiated once per entry in
     ``_RESOURCE_SCHEMAS``.
     """
+
     default_severity = Severity.ERROR
 
-    def __init__(self, rule_id, rule_name, desc, rule_target,
-                 proto_type, config_name, extra_prefixes, do_resolve):
+    def __init__(
+        self,
+        rule_id,
+        rule_name,
+        desc,
+        rule_target,
+        proto_type,
+        config_name,
+        extra_prefixes,
+        do_resolve,
+    ):
         self.id = rule_id
         self.name = rule_name
         self.description = desc
@@ -189,7 +260,9 @@ class SchemaValid(Rule):
         self._extra_prefixes = extra_prefixes
         self._do_resolve = do_resolve
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         resource_dir = file_path if file_path.is_dir() else file_path.parent
         config_name = self._config_name or resource_dir.name
         rel = str(resource_dir)
@@ -216,18 +289,31 @@ class SchemaValid(Rule):
             obj = self._proto_type()
             json_format.ParseDict(data, obj._pb, ignore_unknown_fields=False)
         except Exception as e:
-            return [self.make_result(rel, f"Proto schema validation failed: {e}")]
+            return [
+                self.make_result(rel, f"Proto schema validation failed: {e}")
+            ]
 
         return []
 
 
 # Register one rule per resource type
-for _id, _name, _desc, _target, _proto, _cfg, _pfx, _resolve in _RESOURCE_SCHEMAS:
+for (
+    _id,
+    _name,
+    _desc,
+    _target,
+    _proto,
+    _cfg,
+    _pfx,
+    _resolve,
+) in _RESOURCE_SCHEMAS:
     cls = type(
         f"SchemaValid_{_id}",
         (SchemaValid,),
-        {"__init__": lambda self, rid=_id, rn=_name, rd=_desc, rt=_target,
-                            rp=_proto, rc=_cfg, rpfx=_pfx, rr=_resolve:
-            SchemaValid.__init__(self, rid, rn, rd, rt, rp, rc, rpfx, rr)},
+        {
+            "__init__": lambda self, rid=_id, rn=_name, rd=_desc, rt=_target, rp=_proto, rc=_cfg, rpfx=_pfx, rr=_resolve: SchemaValid.__init__(
+                self, rid, rn, rd, rt, rp, rc, rpfx, rr
+            )
+        },
     )
     rule("schema")(cls)

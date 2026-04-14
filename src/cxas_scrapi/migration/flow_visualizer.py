@@ -59,7 +59,8 @@ class FlowDependencyResolver:
             playbook_data = playbook_entry.get("playbook", playbook_entry)
             self.name_map[
                 self._get_resource_id(
-                    playbook_data.get("name") or playbook_entry.get("playbookId")
+                    playbook_data.get("name")
+                    or playbook_entry.get("playbookId")
                 )
             ] = playbook_data.get("displayName", "Unknown")
         for flow_entry in full_agent_data.get("flows", []):
@@ -85,8 +86,12 @@ class FlowDependencyResolver:
         (e.g. ``intent``, ``messages``, ``form``), indicating a Type 2 flow.
         """
         conversational_keys = {
-            "intent", "triggerIntentId", "messages",
-            "staticUserResponse", "form", "slots",
+            "intent",
+            "triggerIntentId",
+            "messages",
+            "staticUserResponse",
+            "form",
+            "slots",
         }
         if isinstance(obj, dict):
             if any(key in obj for key in conversational_keys):
@@ -178,10 +183,9 @@ class FlowDependencyResolver:
             "flow_type": 1,
         }
 
-        if (
-            self._is_conversational_flow(flow_data)
-            or self._is_conversational_flow(pages_data)
-        ):
+        if self._is_conversational_flow(
+            flow_data
+        ) or self._is_conversational_flow(pages_data):
             dependencies["flow_type"] = 2
 
         self._scan_routes(
@@ -213,9 +217,9 @@ class FlowDependencyResolver:
             )
 
             if "form" in page or "slots" in page:
-                params = page.get("form", {}).get(
-                    "parameters", []
-                ) + page.get("slots", [])
+                params = page.get("form", {}).get("parameters", []) + page.get(
+                    "slots", []
+                )
                 for param in params:
                     entity_type_id = self._get_resource_id(
                         param.get("entityType")
@@ -259,7 +263,9 @@ class FlowTreeVisualizer:
         self.flow = context_data["flow"]
         self.page_names: Dict[str, str] = {}
         for page_wrapper in self.context.get("pages", []):
-            if "key" in page_wrapper and "displayName" in page_wrapper.get("value", {}):
+            if "key" in page_wrapper and "displayName" in page_wrapper.get(
+                "value", {}
+            ):
                 self.page_names[page_wrapper["key"]] = page_wrapper["value"][
                     "displayName"
                 ]
@@ -283,9 +289,7 @@ class FlowTreeVisualizer:
 
     def _get_target_display(self, route: Dict[str, Any]) -> str:
         handler = route.get("transitionEventHandler", route)
-        target_page = handler.get("targetPageId") or handler.get(
-            "targetPage"
-        )
+        target_page = handler.get("targetPageId") or handler.get("targetPage")
         if target_page:
             page_id = target_page.split("/")[-1]
             return (
@@ -293,9 +297,7 @@ class FlowTreeVisualizer:
                 f"{self.page_names.get(page_id, page_id)}[/]"
             )
 
-        target_flow = handler.get("targetFlowId") or handler.get(
-            "targetFlow"
-        )
+        target_flow = handler.get("targetFlowId") or handler.get("targetFlow")
         if target_flow:
             flow_id = target_flow.split("/")[-1]
             return (
@@ -313,9 +315,7 @@ class FlowTreeVisualizer:
                 f"{self.context['name_map'].get(playbook_id, playbook_id)}[/]"
             )
 
-        if handler.get("triggerFulfillment") or handler.get(
-            "beforeTransition"
-        ):
+        if handler.get("triggerFulfillment") or handler.get("beforeTransition"):
             return "[dim]Stay on Page[/]"
         return "[red]End Flow[/]"
 
@@ -363,9 +363,9 @@ class FlowTreeVisualizer:
                     wh_def = webhook_value
                     break
 
-            tag = fulfillment.get("tag") or fulfillment.get(
-                "function", {}
-            ).get("name", "")
+            tag = fulfillment.get("tag") or fulfillment.get("function", {}).get(
+                "name", ""
+            )
             wh_display_name = (
                 wh_def.get("displayName", wh_id) if wh_def else wh_id
             )
@@ -407,9 +407,7 @@ class FlowTreeVisualizer:
                     f"{self._get_intent_display(intent_ref)}[/]"
                 )
             elif "condition" in route:
-                cond_str = route.get(
-                    "conditionString", str(route["condition"])
-                )
+                cond_str = route.get("conditionString", str(route["condition"]))
                 trigger = f"If: [dim]{escape(cond_str)}[/]"
             else:
                 trigger = "Always"
@@ -489,9 +487,9 @@ class FlowTreeVisualizer:
                     "On Entry",
                 )
 
-            params = page.get("form", {}).get(
-                "parameters", []
-            ) + page.get("slots", [])
+            params = page.get("form", {}).get("parameters", []) + page.get(
+                "slots", []
+            )
             if params:
                 form_node = page_node.add("[dim]Parameter Collection[/dim]")
                 for param in params:

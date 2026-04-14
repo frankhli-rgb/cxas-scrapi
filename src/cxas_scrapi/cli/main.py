@@ -1147,8 +1147,13 @@ def get_parser() -> argparse.ArgumentParser:
     parser_lint.add_argument(
         "--only",
         choices=[
-            "instructions", "callbacks", "tools",
-            "evals", "config", "structure", "schema",
+            "instructions",
+            "callbacks",
+            "tools",
+            "evals",
+            "config",
+            "structure",
+            "schema",
         ],
         help="Only run a specific linter category.",
     )

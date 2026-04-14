@@ -231,7 +231,7 @@ class ConversationHistory(Common):
             name = conversation_id
         else:
             name = f"{self.app_name}/conversations/{conversation_id}"
-        
+
         request = types.GetConversationRequest(name=name)
         return self.client.get_conversation(request=request)
 

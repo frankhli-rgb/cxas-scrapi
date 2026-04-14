@@ -30,7 +30,10 @@ from pydantic import BaseModel, Field, TypeAdapter
 
 from cxas_scrapi.core.sessions import Sessions
 from cxas_scrapi.core.variables import Variables
-from cxas_scrapi.utils.eval_utils import evaluate_expectations, ExpectationStatus
+from cxas_scrapi.utils.eval_utils import (
+    evaluate_expectations,
+    ExpectationStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -501,7 +504,7 @@ class TurnEvals:
                 genai_client=self.genai_client,
                 model_name=model_name,
                 trace=trace_chunks,
-                expectations=llm_expectations
+                expectations=llm_expectations,
             )
 
             for r in llm_results:
@@ -630,8 +633,7 @@ class TurnEvals:
                                         "test_name": case.name,
                                         "turn": step.turn,
                                         "user": (
-                                            step.user
-                                            or f"Event: {step.event}"
+                                            step.user or f"Event: {step.event}"
                                         ),
                                         "status": r["status"],
                                         "errors": (
@@ -681,7 +683,7 @@ class TurnEvals:
                                 genai_client=self.genai_client,
                                 model_name=model_name,
                                 trace=full_conversation_trace,
-                                expectations=llm_expectations
+                                expectations=llm_expectations,
                             )
 
                             for r in llm_results:

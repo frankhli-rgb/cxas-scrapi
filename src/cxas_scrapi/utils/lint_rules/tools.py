@@ -22,9 +22,15 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from cxas_scrapi.utils.linter import LintContext, LintResult, Rule, Severity, rule
+from cxas_scrapi.utils.linter import (
+    LintContext,
+    LintResult,
+    Rule,
+    Severity,
+    rule,
+)
 
-FUNC_DEF_RE = re.compile(r'def\s+(\w+)\s*\(([^)]*)\)')
+FUNC_DEF_RE = re.compile(r"def\s+(\w+)\s*\(([^)]*)\)")
 
 
 def _load_tool_config(file_path: Path) -> tuple[Optional[dict], Optional[Path]]:
@@ -47,17 +53,23 @@ def _load_tool_config(file_path: Path) -> tuple[Optional[dict], Optional[Path]]:
 class MissingAgentAction(Rule):
     id = "T001"
     name = "tool-error-pattern"
-    description = "Tool must return agent_action on error for deterministic recovery"
+    description = (
+        "Tool must return agent_action on error for deterministic recovery"
+    )
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         if "agent_action" not in content:
-            return [self.make_result(
-                file=rel,
-                message="Missing agent_action error return pattern",
-                fix='Add: return {"agent_action": "error message for agent to relay"}',
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message="Missing agent_action error return pattern",
+                    fix='Add: return {"agent_action": "error message for agent to relay"}',
+                )
+            ]
         return []
 
 
@@ -68,14 +80,18 @@ class MissingDocstring(Rule):
     description = "Tool missing docstring — CES uses this as tool description"
     default_severity = Severity.WARNING
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         if '"""' not in content and "'''" not in content:
-            return [self.make_result(
-                file=rel,
-                message="Missing docstring — CES uses tool docstrings for invocation routing",
-                fix="Add a descriptive docstring explaining when and how the LLM should use this tool",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message="Missing docstring — CES uses tool docstrings for invocation routing",
+                    fix="Add a descriptive docstring explaining when and how the LLM should use this tool",
+                )
+            ]
         return []
 
 
@@ -86,17 +102,22 @@ class MissingTypeHints(Rule):
     description = "Tool function arguments lack type hints"
     default_severity = Severity.INFO
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         fn_match = FUNC_DEF_RE.search(content)
         if fn_match:
             args_str = fn_match.group(2)
             if args_str.strip() and ":" not in args_str:
-                return [self.make_result(
-                    file=rel, line=1,
-                    message="Function arguments lack type hints",
-                    fix="Add type hints: def tool_name(arg: str, count: int) -> dict:",
-                )]
+                return [
+                    self.make_result(
+                        file=rel,
+                        line=1,
+                        message="Function arguments lack type hints",
+                        fix="Add type hints: def tool_name(arg: str, count: int) -> dict:",
+                    )
+                ]
         return []
 
 
@@ -107,24 +128,32 @@ class FunctionNameMismatch(Rule):
     description = "Tool function name should match tool directory name"
     default_severity = Severity.WARNING
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         tool_dir_name = file_path.parent.parent.name
 
         fn_match = FUNC_DEF_RE.search(content)
         if not fn_match:
-            return [self.make_result(
-                file=rel, line=1,
-                message="No function definition found in tool file",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    line=1,
+                    message="No function definition found in tool file",
+                )
+            ]
 
         actual_fn = fn_match.group(1)
         if actual_fn != tool_dir_name:
-            return [self.make_result(
-                file=rel, line=1,
-                message=f"Function named '{actual_fn}', expected '{tool_dir_name}' (matching directory)",
-                fix=f"Rename to: def {tool_dir_name}(...):",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    line=1,
+                    message=f"Function named '{actual_fn}', expected '{tool_dir_name}' (matching directory)",
+                    fix=f"Rename to: def {tool_dir_name}(...):",
+                )
+            ]
         return []
 
 
@@ -132,16 +161,23 @@ class FunctionNameMismatch(Rule):
 class HighCardinalityArgs(Rule):
     id = "T005"
     name = "tool-high-cardinality"
-    description = "High-cardinality input arguments reduce deterministic tool selection"
+    description = (
+        "High-cardinality input arguments reduce deterministic tool selection"
+    )
     default_severity = Severity.INFO
 
     HIGH_CARDINALITY_PATTERNS = [
-        (r'timestamp', "timestamp — hard for voice users to express"),
-        (r'latitude|longitude|coordinates', "coordinates — high cardinality"),
-        (r'session_id|request_id|trace_id', "internal ID — not voice-expressible"),
+        (r"timestamp", "timestamp — hard for voice users to express"),
+        (r"latitude|longitude|coordinates", "coordinates — high cardinality"),
+        (
+            r"session_id|request_id|trace_id",
+            "internal ID — not voice-expressible",
+        ),
     ]
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         fn_match = FUNC_DEF_RE.search(content)
         if not fn_match:
             return []
@@ -167,15 +203,21 @@ class ExcessiveReturnData(Rule):
     default_severity = Severity.INFO
 
     RETURN_PATTERNS = [
-        (r'return\s+response\.json\(\)',
-         "Returning raw API response — may include data the LLM doesn't need",
-         "Filter the response to only include fields the LLM needs for decision-making"),
-        (r'return\s+json\.loads\(',
-         "Returning parsed JSON directly — consider filtering to relevant fields only",
-         "Only return data that the LLM needs to see"),
+        (
+            r"return\s+response\.json\(\)",
+            "Returning raw API response — may include data the LLM doesn't need",
+            "Filter the response to only include fields the LLM needs for decision-making",
+        ),
+        (
+            r"return\s+json\.loads\(",
+            "Returning parsed JSON directly — consider filtering to relevant fields only",
+            "Only return data that the LLM needs to see",
+        ),
     ]
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         return [
             self.make_result(file=rel, message=msg, fix=fix)
@@ -191,7 +233,9 @@ class ToolNameNotSnakeCase(Rule):
     description = "Tool JSON name/displayName must be snake_case (no spaces or mixed case)"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         tool_config, json_path = _load_tool_config(file_path)
         if not tool_config:
             return []
@@ -202,11 +246,13 @@ class ToolNameNotSnakeCase(Rule):
             value = tool_config.get(field_name, "")
             if value and (" " in value or value != value.lower()):
                 snake = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
-                results.append(self.make_result(
-                    file=rel,
-                    message=f"Tool {field_name} '{value}' is not snake_case",
-                    fix=f'Change to: "{field_name}": "{snake}"',
-                ))
+                results.append(
+                    self.make_result(
+                        file=rel,
+                        message=f"Tool {field_name} '{value}' is not snake_case",
+                        fix=f'Change to: "{field_name}": "{snake}"',
+                    )
+                )
         return results
 
 
@@ -217,7 +263,9 @@ class ToolDisplayNameUnreferenced(Rule):
     description = "Tool displayName not referenced by any agent's tools array"
     default_severity = Severity.WARNING
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         tool_config, json_path = _load_tool_config(file_path)
         if not tool_config:
             return []
@@ -242,9 +290,11 @@ class ToolDisplayNameUnreferenced(Rule):
 
         if not referenced:
             rel = str(json_path.relative_to(context.project_root))
-            return [self.make_result(
-                file=rel,
-                message=f"Tool displayName '{display_name}' not found in any agent's tools array",
-                fix="Add this tool to the relevant agent's JSON config, or remove the tool if unused",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message=f"Tool displayName '{display_name}' not found in any agent's tools array",
+                    fix="Add this tool to the relevant agent's JSON config, or remove the tool if unused",
+                )
+            ]
         return []
