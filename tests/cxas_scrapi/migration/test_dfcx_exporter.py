@@ -4,11 +4,11 @@ import io
 import json
 import zipfile
 import pytest
-from cxas_scrapi.migration.dfcx_exporter import CXExportAgent
+from cxas_scrapi.migration.dfcx_exporter import DFCXAgentExporter
 
 
 def test_process_zip_content_minimal():
-    extractor = CXExportAgent()
+    extractor = DFCXAgentExporter()
     agent_id = (
         "projects/test-project/locations/global/agents/test-agent"
     )

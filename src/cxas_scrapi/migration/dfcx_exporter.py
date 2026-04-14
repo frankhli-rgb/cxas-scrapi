@@ -18,7 +18,7 @@ from google.protobuf.json_format import MessageToDict
 logger = logging.getLogger(__name__)
 
 
-class BaseDialogflowCXClient:
+class BaseDFCXClient:
     """Base class for Dialogflow CX API clients to handle common logic."""
 
     def _get_client_options(self, resource_id: str) -> Optional[Dict[str, str]]:
@@ -40,7 +40,7 @@ class BaseDialogflowCXClient:
         return endpoint
 
 
-class CXExportAgent(BaseDialogflowCXClient):
+class DFCXAgentExporter(BaseDFCXClient):
     """Client for exporting Dialogflow CX Agents."""
 
     def process_zip_content(
@@ -366,7 +366,7 @@ class CXExportAgent(BaseDialogflowCXClient):
         return self.process_zip_content(response.agent_content, agent_id)
 
 
-class CXAgents(BaseDialogflowCXClient):
+class DFCXAgents(BaseDFCXClient):
     """Client for interacting with Dialogflow CX Agents."""
 
     def get_agent(self, agent_id: str) -> Optional[Dict[str, Any]]:
@@ -386,7 +386,7 @@ class CXAgents(BaseDialogflowCXClient):
             return None
 
 
-class CXPlaybooks(BaseDialogflowCXClient):
+class DFCXPlaybooks(BaseDFCXClient):
     """Client for interacting with Dialogflow CX Playbooks."""
 
     def list_playbooks(self, agent_id: str) -> List[Dict[str, Any]]:
@@ -406,7 +406,7 @@ class CXPlaybooks(BaseDialogflowCXClient):
             return []
 
 
-class CXTools(BaseDialogflowCXClient):
+class DFCXTools(BaseDFCXClient):
     """Client for interacting with Dialogflow CX Tools."""
 
     def list_tools(self, agent_id: str) -> List[Dict[str, Any]]:
@@ -426,7 +426,7 @@ class CXTools(BaseDialogflowCXClient):
             return []
 
 
-class CXGenerativeSettings(BaseDialogflowCXClient):
+class DFCXGenerativeSettings(BaseDFCXClient):
     """Client for interacting with Dialogflow CX Agent GenerativeSettings."""
 
     def get_generative_settings(
@@ -464,11 +464,11 @@ class ConversationalAgentsAPI:
     """Facade class to access all Dialogflow CX resources for migration."""
 
     def __init__(self):
-        self.agents = CXAgents()
-        self.playbooks = CXPlaybooks()
-        self.tools = CXTools()
-        self.generative_settings = CXGenerativeSettings()
-        self.export_agent = CXExportAgent()
+        self.agents = DFCXAgents()
+        self.playbooks = DFCXPlaybooks()
+        self.tools = DFCXTools()
+        self.generative_settings = DFCXGenerativeSettings()
+        self.export_agent = DFCXAgentExporter()
 
     def fetch_full_agent_details(
         self, agent_id: str, use_export: bool = False
