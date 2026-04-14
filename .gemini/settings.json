@@ -1,6 +1,6 @@
 {
   "tools": {
-    "truncateToolOutputThreshold": 0 // Disable truncation
+    "truncateToolOutputThreshold": 0
   },
   "hooks": {
     "AfterTool": [
@@ -10,7 +10,7 @@
           {
             "name": "post-agent-update",
             "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/post-agent-update.sh",
+            "command": "$GEMINI_PROJECT_DIR/.agents/skills/cxas-agent-foundry/hooks/post-agent-update.sh",
             "description": "Auto-pull from CXAS and sync callbacks after update_agent calls",
             "timeout": 5000
           }
@@ -24,49 +24,19 @@
           {
             "name": "pre-agent-push",
             "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/pre-agent-push.sh",
+            "command": "$GEMINI_PROJECT_DIR/.agents/skills/cxas-agent-foundry/hooks/pre-agent-push.sh",
             "description": "Block push if local files are stale vs platform (drift detection)",
             "timeout": 30000
           },
           {
             "name": "pre-agent-push-lint",
             "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/pre-agent-push-lint.sh",
+            "command": "$GEMINI_PROJECT_DIR/.agents/skills/cxas-agent-foundry/hooks/pre-agent-push-lint.sh",
             "description": "Lint before pushing to CXAS — block on errors",
             "timeout": 30000
-          },
-          {
-            "name": "block-script-via-shell",
-            "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/block-script-via-shell.sh",
-            "description": "Block shell heredoc/redirect creation of .py scripts",
-            "timeout": 5000
-          }
-        ]
-      },
-      {
-        "matcher": "write_file|replace",
-        "hooks": [
-          {
-            "name": "block-script-creation",
-            "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/block-script-creation.sh",
-            "description": "Block creation of throwaway .py scripts",
-            "timeout": 5000
           }
         ]
       }
-    ]
-  },
-  "skills": {
-    "disabled": [
-      "skill-creator"
-    ]
-  },
-  "hooksConfig": {
-    "disabled": [
-      "block-script-via-shell",
-      "block-script-creation"
     ]
   }
 }
