@@ -189,7 +189,7 @@ class HardcodedData(Rule):
         rel = str(file_path.relative_to(context.project_root))
         options = context.options.get("I006", {})
         custom = options.get("patterns", None)
-        patterns = [(p, "hardcoded data") for p in custom] if custom else self.DEFAULT_PATTERNS
+        patterns = [(p, "data") for p in custom] if custom else self.DEFAULT_PATTERNS
 
         results = []
         for i, line in enumerate(content.split("\n"), 1):
