@@ -49,6 +49,11 @@ def set_session_state(_action_trigger: str = "",
         context.state["_escalation_topic"] = _escalation_topic
         updated["_escalation_topic"] = _escalation_topic
 
+    if not updated:
+        return {
+            "agent_action": "At least one parameter must be provided to set_session_state."
+        }
+
     return {
         "status": "success",
         "updated_variables": updated,

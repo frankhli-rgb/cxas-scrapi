@@ -2,7 +2,7 @@
     "name": "root-agent-id",
     "displayName": "root_agent",
     "instruction": "agents/root_agent/instruction.txt",
-    "tools": ["set_session_state", "payload_update_tool", "lookup_account", "troubleshoot_faq", "end_session"],
+    "tools": ["set_session_state", "lookup_account", "end_session"],
     "childAgents": ["troubleshoot_agent"],
     "beforeAgentCallbacks": [{"pythonCode": "agents/root_agent/before_agent_callbacks/before_agent_callbacks_01/python_code.py"}],
     "beforeModelCallbacks": [{"pythonCode": "agents/root_agent/before_model_callbacks/before_model_callbacks_01/python_code.py"}],
