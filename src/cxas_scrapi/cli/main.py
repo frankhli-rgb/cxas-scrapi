@@ -37,7 +37,7 @@ from cxas_scrapi.evals.tool_evals import ToolEvals
 from cxas_scrapi.cli.app import (
     app_pull,
     app_push,
-    app_validate,
+    app_lint,
     app_create,
     app_branch,
     apps_list,
@@ -1129,34 +1129,75 @@ def get_parser() -> argparse.ArgumentParser:
     _add_project_location_args(parser_push)
     parser_push.set_defaults(func=app_push)
 
-    # Parser for 'validate'
-    parser_validate = subparsers.add_parser(
-        "validate", help="Validate an app directory structure."
+    # Parser for 'lint'
+    parser_lint = subparsers.add_parser(
+        "lint",
+        help="Lint an app directory for best practices and structural issues.",
     )
-    parser_validate.add_argument(
-        "--app", required=False, help="Path to the app directory."
+    parser_lint.add_argument(
+        "--app-dir",
+        default=".",
+        help="Path to the app directory to lint (default: current directory).",
     )
-    parser_validate.add_argument(
-        "--agent", required=False, help="Path to the agent directory."
+    parser_lint.add_argument(
+        "--fix",
+        action="store_true",
+        help="Show fix suggestions for each issue.",
     )
-    parser_validate.add_argument(
-        "--tool", required=False, help="Path to the tool directory."
+    parser_lint.add_argument(
+        "--only",
+        choices=[
+            "instructions", "callbacks", "tools",
+            "evals", "config", "structure", "schema",
+        ],
+        help="Only run a specific linter category.",
     )
-    parser_validate.add_argument(
-        "--toolset", required=False, help="Path to the toolset directory."
+    parser_lint.add_argument(
+        "--rule",
+        type=str,
+        help="Run specific rules only (comma-separated IDs, e.g. I003,C005).",
     )
-    parser_validate.add_argument(
-        "--guardrail", required=False, help="Path to the guardrail directory."
+    parser_lint.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Output results as JSON.",
     )
-    parser_validate.add_argument(
-        "--evaluation", required=False, help="Path to the evaluation directory."
+    parser_lint.add_argument(
+        "--list-rules",
+        action="store_true",
+        help="List all available lint rules.",
     )
-    parser_validate.add_argument(
-        "--evaluation_expectations",
-        required=False,
-        help="Path to the evaluation expectations directory.",
+    parser_lint.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Run only structure and config rules.",
     )
-    parser_validate.set_defaults(func=app_validate)
+    parser_lint.add_argument(
+        "--agent",
+        help="Validate a single agent directory against CES schema.",
+    )
+    parser_lint.add_argument(
+        "--tool",
+        help="Validate a single tool directory against CES schema.",
+    )
+    parser_lint.add_argument(
+        "--toolset",
+        help="Validate a single toolset directory against CES schema.",
+    )
+    parser_lint.add_argument(
+        "--guardrail",
+        help="Validate a single guardrail directory against CES schema.",
+    )
+    parser_lint.add_argument(
+        "--evaluation",
+        help="Validate a single evaluation directory against CES schema.",
+    )
+    parser_lint.add_argument(
+        "--evaluation-expectations",
+        help="Validate a single evaluation expectations directory against CES schema.",
+    )
+    parser_lint.set_defaults(func=app_lint)
 
     # Parser for 'create'
     parser_create = subparsers.add_parser("create", help="Create a new app.")

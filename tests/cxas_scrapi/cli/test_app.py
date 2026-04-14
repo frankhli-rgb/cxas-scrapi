@@ -282,182 +282,168 @@ def test_app_delete_missing_args(mock_apps_client, capsys):
     assert "Error: Must provide either --app_name OR" in captured.out
 
 
-def test_app_validate_success(capsys):
-    args = argparse.Namespace(agent="dummy_agent_dir")
-
-    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
-        mock_instance = mock_validator_class.return_value
-        mock_instance.validate_agent.return_value = True
-
-        cli_app.app_validate(args)
-
-        mock_instance.validate_agent.assert_called_once_with("dummy_agent_dir")
-        captured = capsys.readouterr()
-        assert "Validation successful." in captured.out
+_LINT_RESOURCE_DEFAULTS = dict(
+    agent=None, tool=None, toolset=None,
+    guardrail=None, evaluation=None, evaluation_expectations=None,
+)
 
 
-def test_app_validate_failure(capsys):
-    args = argparse.Namespace(agent="dummy_agent_dir")
-
-    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
-        mock_instance = mock_validator_class.return_value
-        mock_instance.validate_agent.side_effect = ValueError(
-            "Invalid structure"
-        )
-
-        with pytest.raises(SystemExit) as excinfo:
-            cli_app.app_validate(args)
-
-        assert excinfo.value.code == 1
-        captured = capsys.readouterr()
-        assert "Validation failed: Invalid structure" in captured.out
-
-
-def test_app_validate_tool_success(capsys):
-    args = argparse.Namespace(agent=None, tool="dummy_tool_dir")
-
-    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
-        mock_instance = mock_validator_class.return_value
-        mock_instance.validate_tool.return_value = True
-
-        cli_app.app_validate(args)
-
-        mock_instance.validate_tool.assert_called_once_with("dummy_tool_dir")
-        captured = capsys.readouterr()
-        assert "Validation successful." in captured.out
-
-
-def test_app_validate_tool_failure(capsys):
-    args = argparse.Namespace(agent=None, tool="dummy_tool_dir")
-
-    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
-        mock_instance = mock_validator_class.return_value
-        mock_instance.validate_tool.side_effect = ValueError(
-            "Invalid structure"
-        )
-
-        with pytest.raises(SystemExit) as excinfo:
-            cli_app.app_validate(args)
-
-        assert excinfo.value.code == 1
-        captured = capsys.readouterr()
-        assert "Validation failed: Invalid structure" in captured.out
-
-
-def test_app_validate_toolset_success(capsys):
-    args = argparse.Namespace(
-        agent=None, tool=None, toolset="dummy_toolset_dir"
+def _lint_args(tmp_path=None, **overrides):
+    """Build an argparse.Namespace with all lint flags defaulted."""
+    defaults = dict(
+        app_dir=str(tmp_path) if tmp_path else ".",
+        list_rules=False,
+        json_output=False,
+        validate_only=False,
+        only=None,
+        rule=None,
+        fix=False,
+        **_LINT_RESOURCE_DEFAULTS,
     )
-
-    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
-        mock_instance = mock_validator_class.return_value
-        mock_instance.validate_toolset.return_value = True
-
-        cli_app.app_validate(args)
-
-        mock_instance.validate_toolset.assert_called_once_with(
-            "dummy_toolset_dir"
-        )
-        captured = capsys.readouterr()
-        assert "Validation successful." in captured.out
+    defaults.update(overrides)
+    return argparse.Namespace(**defaults)
 
 
-def test_app_validate_toolset_failure(capsys):
-    args = argparse.Namespace(
-        agent=None, tool=None, toolset="dummy_toolset_dir"
+def _make_lint_app(tmp_path, agents=None):
+    """Helper to create a minimal app for lint testing."""
+    (tmp_path / "app.json").write_text(
+        '{"name": "test-app", "displayName": "Test App", "rootAgent": "root_agent"}'
     )
-
-    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
-        mock_instance = mock_validator_class.return_value
-        mock_instance.validate_toolset.side_effect = ValueError(
-            "Invalid structure"
+    (tmp_path / "agents").mkdir()
+    for name in (agents or ["root_agent"]):
+        agent_dir = tmp_path / "agents" / name
+        agent_dir.mkdir()
+        (agent_dir / "instruction.txt").write_text(
+            "<role>test</role><persona>test</persona>"
+            "<taskflow><subtask name='main'><step>do it</step></subtask></taskflow>"
+        )
+        (agent_dir / f"{name}.json").write_text(
+            f'{{"displayName": "{name}", "tools": ["end_session"]}}'
         )
 
-        with pytest.raises(SystemExit) as excinfo:
-            cli_app.app_validate(args)
 
-        assert excinfo.value.code == 1
-        captured = capsys.readouterr()
-        assert "Validation failed: Invalid structure" in captured.out
-
-
-def test_app_validate_guardrail_success(capsys):
-    args = argparse.Namespace(
-        agent=None, tool=None, toolset=None, guardrail="dummy_guardrail_dir"
-    )
-
-    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
-        mock_instance = mock_validator_class.return_value
-        mock_instance.validate_guardrail.return_value = True
-
-        cli_app.app_validate(args)
-
-        mock_instance.validate_guardrail.assert_called_once_with(
-            "dummy_guardrail_dir"
-        )
-        captured = capsys.readouterr()
-        assert "Validation successful." in captured.out
-
-
-def test_app_validate_guardrail_failure(capsys):
-    args = argparse.Namespace(
-        agent=None, tool=None, toolset=None, guardrail="dummy_guardrail_dir"
-    )
-
-    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
-        mock_instance = mock_validator_class.return_value
-        mock_instance.validate_guardrail.side_effect = ValueError(
-            "Invalid structure"
-        )
-
-        with pytest.raises(SystemExit) as excinfo:
-            cli_app.app_validate(args)
-
-        assert excinfo.value.code == 1
-        captured = capsys.readouterr()
-        assert "Validation failed: Invalid structure" in captured.out
-
-
-def test_app_validate_app_success(capsys):
-    args = argparse.Namespace(app="dummy_app_dir", agent=None)
-
-    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
-        mock_instance = mock_validator_class.return_value
-        mock_instance.validate_app.return_value = True
-
-        cli_app.app_validate(args)
-
-        mock_instance.validate_app.assert_called_once_with("dummy_app_dir")
-        captured = capsys.readouterr()
-        assert "Validation successful." in captured.out
-
-
-def test_app_validate_app_failure(capsys):
-    args = argparse.Namespace(app="dummy_app_dir", agent=None)
-
-    with mock.patch("cxas_scrapi.cli.app.Validator") as mock_validator_class:
-        mock_instance = mock_validator_class.return_value
-        mock_instance.validate_app.side_effect = ValueError("Invalid structure")
-
-        with pytest.raises(SystemExit) as excinfo:
-            cli_app.app_validate(args)
-
-        assert excinfo.value.code == 1
-        captured = capsys.readouterr()
-        assert "Validation failed: Invalid structure" in captured.out
-
-
-def test_app_validate_no_args(capsys):
-    args = argparse.Namespace(
-        app=None, agent=None, tool=None, toolset=None, guardrail=None
-    )
+def test_app_lint_list_rules(capsys):
+    args = _lint_args(list_rules=True)
 
     with pytest.raises(SystemExit) as excinfo:
-        cli_app.app_validate(args)
+        cli_app.app_lint(args)
+
+    assert excinfo.value.code == 0
+    captured = capsys.readouterr()
+    assert "I001" in captured.out
+    assert "V001" in captured.out
+    assert "Available Rules" in captured.out
+
+
+def test_app_lint_no_app_found(capsys, tmp_path):
+    args = _lint_args(tmp_path)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli_app.app_lint(args)
 
     assert excinfo.value.code == 1
     captured = capsys.readouterr()
-    assert (
-        "Error: Please specify --app, --agent, --tool, --toolset, or --guardrail to validate."
-        in captured.out
+    assert "ERROR: No app directory found" in captured.out
+
+
+def test_app_lint_clean_app(capsys, tmp_path):
+    _make_lint_app(tmp_path)
+    args = _lint_args(tmp_path)
+
+    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_lint(args)
+
+    assert excinfo.value.code == 0
+    captured = capsys.readouterr()
+    assert "Lint PASSED" in captured.out
+
+
+def test_app_lint_with_errors(capsys, tmp_path):
+    (tmp_path / "app.json").write_text(
+        '{"name": "test", "displayName": "Test", "rootAgent": "root_agent"}'
     )
+    (tmp_path / "agents").mkdir()
+    agent_dir = tmp_path / "agents" / "root_agent"
+    agent_dir.mkdir()
+    (agent_dir / "instruction.txt").write_text("No XML tags here.")
+    (agent_dir / "root_agent.json").write_text(
+        '{"displayName": "root_agent", "tools": ["end_session"]}'
+    )
+
+    args = _lint_args(tmp_path)
+
+    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_lint(args)
+
+    assert excinfo.value.code == 1
+    captured = capsys.readouterr()
+    assert "Lint FAILED" in captured.out
+
+
+def test_app_lint_json_output(capsys, tmp_path):
+    _make_lint_app(tmp_path)
+    args = _lint_args(tmp_path, json_output=True)
+
+    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_lint(args)
+
+    assert excinfo.value.code == 0
+    captured = capsys.readouterr()
+    import json
+    parsed = json.loads(captured.out)
+    assert isinstance(parsed, list)
+
+
+def test_app_lint_validate_only(capsys, tmp_path):
+    _make_lint_app(tmp_path)
+    args = _lint_args(tmp_path, json_output=True, validate_only=True)
+
+    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_lint(args)
+
+    assert excinfo.value.code == 0
+    captured = capsys.readouterr()
+    import json
+    results = json.loads(captured.out)
+    valid_prefixes = ("A", "S", "V")
+    for r in results:
+        assert any(r["rule_id"].startswith(p) for p in valid_prefixes), \
+            f"Expected config/structure/schema rule, got {r['rule_id']}"
+
+
+def test_app_lint_only_filter(capsys, tmp_path):
+    _make_lint_app(tmp_path)
+    args = _lint_args(tmp_path, json_output=True, only="config")
+
+    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_lint(args)
+
+    assert excinfo.value.code == 0
+    captured = capsys.readouterr()
+    import json
+    results = json.loads(captured.out)
+    for r in results:
+        assert r["rule_id"].startswith("A"), \
+            f"Expected only A-rules with --only config, got {r['rule_id']}"
+
+
+def test_app_lint_rule_filter(capsys, tmp_path):
+    _make_lint_app(tmp_path)
+    args = _lint_args(tmp_path, json_output=True, rule="I001")
+
+    with mock.patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
+        with pytest.raises(SystemExit) as excinfo:
+            cli_app.app_lint(args)
+
+    assert excinfo.value.code == 0
+    captured = capsys.readouterr()
+    import json
+    results = json.loads(captured.out)
+    for r in results:
+        assert r["rule_id"] == "I001", \
+            f"Expected only I001 with --rule I001, got {r['rule_id']}"
