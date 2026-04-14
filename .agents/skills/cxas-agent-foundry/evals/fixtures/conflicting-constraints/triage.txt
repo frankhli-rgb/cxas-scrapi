@@ -1,0 +1,28 @@
+triage-results.py -- golden: profanity_escalation (5 runs)
+===========================================================
+
+Run Results:
+  run_1: FAIL  (text=PASS, tools=FAIL)
+  run_2: FAIL  (text=PASS, tools=FAIL)
+  run_3: PASS  (text=PASS, tools=PASS)
+  run_4: FAIL  (text=PASS, tools=FAIL)
+  run_5: FAIL  (text=PASS, tools=FAIL)
+
+Pass rate: 1/5 (20%)
+
+Failure category: TOOL_MISSING
+
+Failure details:
+  run_1, turn 1: expected tool call end_session not found
+    agent responded with redirect text, no escalation tools called
+  run_2, turn 1: expected tool call end_session not found
+  run_4, turn 1: expected tool call end_session not found
+  run_5, turn 1: expected tool call end_session not found
+
+Notes:
+  - Agent text is polite and on-topic in all runs (text passes)
+  - Agent redirects user to service topics instead of escalating
+  - Golden expects: end_session + payload_update_tool on profanity
+  - System prompt may have conflicting instructions:
+    1. "Always try to help the customer with their request"
+    2. "Escalate immediately if user uses profanity"

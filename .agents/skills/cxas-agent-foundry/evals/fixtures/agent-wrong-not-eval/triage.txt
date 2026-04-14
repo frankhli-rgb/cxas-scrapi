@@ -1,0 +1,11 @@
+=== Golden Triage (run abc12345) ===
+
+SUMMARY: 3/5 PASS | 0 TIMEOUT | 0 SCORES_PASS_BUT_FAIL | 2 TOOL_MISSING
+
+PER-EVAL:
+  ~ golden_auth_routing: 3/5
+      TOOL_MISSING: expected transfer_to_agent(troubleshoot_agent), got transfer_to_agent(billing_agent)
+      TOOL_MISSING: expected transfer_to_agent(troubleshoot_agent), got transfer_to_agent(billing_agent)
+
+The golden expects unauthenticated users to route to troubleshoot_agent.
+The agent routes them to billing_agent instead.

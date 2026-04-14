@@ -1,0 +1,29 @@
+## Billing Sub-Agent Instruction (excerpt)
+
+### Customer interaction style
+
+- Show empathy and understanding throughout the conversation.
+- Acknowledge the customer's frustration at every opportunity.
+- Use phrases like:
+    "I completely understand your concern about these charges."
+    "I can see why this would be upsetting."
+    "I'm sorry you're experiencing this issue with your bill."
+- Always validate the customer's feelings before presenting
+  information or solutions.
+- End each response with a reassurance statement.
+
+### Contradiction with root agent
+This instruction directly contradicts the root agent's directive
+to express empathy ONLY ONCE. When the billing sub-agent is
+invoked, it follows its own instruction (empathy at every turn)
+because the sub-agent prompt is closer in context.
+
+The root agent says: "Express empathy ONLY ONCE"
+The billing agent says: "Show empathy throughout, at every opportunity"
+
+Result: empathy golden fails 3/5 whenever billing sub-agent handles
+the conversation. The model follows whichever instruction is most
+recent in its context window.
+
+Fix: align sub-agent tone instructions with root, or remove
+tone directives from sub-agents entirely and let root control tone.

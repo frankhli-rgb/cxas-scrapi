@@ -1,0 +1,25 @@
+=== Transcript: golden_silence_handling (FAIL) ===
+
+Turn 1:
+  User: <event>session start</event>
+  Agent: "Hi, how can I help you today?"
+
+Turn 2:
+  User: "I need help with my account"
+  Agent: "Sure, I can help with that. What's going on with your account?"
+
+Turn 3:
+  User: <context>no user activity detected for 15 seconds.</context>
+  Agent: "Based on your account, I can see you have a balance of $45.20. Would you like to make a payment?"
+
+  PROBLEM: Agent hallucinated an account lookup and balance instead of
+  acknowledging the silence. There is no before_model_callback handling
+  the "no user activity" signal. The LLM treated silence as implicit
+  consent and made up a response.
+
+Turn 4:
+  User: <context>no user activity detected for 15 seconds.</context>
+  Agent: "I also see you have a pending order. Would you like me to check on that?"
+
+  PROBLEM: Agent continued hallucinating. No silence counter, no repeat
+  of last message, no escalation path.

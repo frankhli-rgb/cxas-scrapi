@@ -1,0 +1,28 @@
+triage-results.py -- golden: account_lookup (5 runs)
+=====================================================
+
+Run Results:
+  run_1: FAIL  (text=FAIL, tools=FAIL)
+  run_2: FAIL  (text=FAIL, tools=FAIL)
+  run_3: FAIL  (text=FAIL, tools=FAIL)
+  run_4: FAIL  (text=FAIL, tools=FAIL)
+  run_5: FAIL  (text=FAIL, tools=FAIL)
+
+Pass rate: 0/5 (0%)
+
+Failure category: TEXT_MISMATCH + TOOL_MISSING
+
+Failure details:
+  All runs, turn 1:
+    expected text: greeting + account summary
+    observed text: "I'm sorry, I can't find your account. Could you
+      provide your account number or phone number?"
+    expected tools: [get_account_details]
+    observed tools: [] (none called)
+
+Notes:
+  - Agent never calls get_account_details in any run
+  - Agent consistently says it cannot find the account
+  - 0/5 pass rate suggests a config issue, not flakiness
+  - Check session_parameters -- agent may not be receiving
+    auth context needed to look up the account

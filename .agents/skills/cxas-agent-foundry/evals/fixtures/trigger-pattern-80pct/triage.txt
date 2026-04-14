@@ -1,0 +1,27 @@
+triage-results.py -- golden: billing_escalation (5 runs)
+=========================================================
+
+Run Results:
+  run_1: PASS  (text=PASS, tools=PASS)
+  run_2: PASS  (text=PASS, tools=PASS)
+  run_3: FAIL  (text=PASS, tools=FAIL)
+  run_4: PASS  (text=PASS, tools=PASS)
+  run_5: PASS  (text=PASS, tools=PASS)
+
+Pass rate: 4/5 (80%)
+
+Failure category: TOOL_MISSING
+
+Failure details:
+  run_3, turn 2:
+    expected tools: [set_escalation_state, payload_update_tool]
+    observed tools: [] (none called)
+    agent text present and correct (semantic_score=0.91)
+
+Notes:
+  - 4/5 runs pass -- agent calls set_escalation_state on turn 1,
+    which triggers before_agent_callback to inject escalation tools
+  - In run_3, agent skips set_escalation_state and goes straight
+    to transfer text without calling any tools
+  - Pattern: agent sometimes produces correct text without the
+    required tool sequence that enables the callback-injected tools

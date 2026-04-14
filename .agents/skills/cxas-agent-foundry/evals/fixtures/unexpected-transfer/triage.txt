@@ -1,0 +1,28 @@
+TRIAGE REPORT - Escalation Golden (profanity_escalation_01)
+===========================================================
+Status: FAIL (3/5 runs)
+Category: UNEXPECTED_TOOL_CALL
+
+Failure Pattern:
+  - Agent calls transfer_to_agent(billing_agent) AND end_session in same turn
+  - Expected: only end_session + escalation text
+  - Got: routing decision + session termination simultaneously
+
+Passing Runs (2/5):
+  - Agent correctly escalates with end_session only
+  - No unexpected transfer_to_agent calls
+
+Failing Runs (3/5):
+  - Turn 3: user sends hostile input
+  - Turn 3 response: transfer_to_agent(agent_name="billing_agent")
+  - Turn 3 response: end_session(reason="escalation")
+  - LLM made a routing decision AND an escalation decision in one turn
+
+Root Cause Hypothesis:
+  LLM interprets escalation as "send to another agent" and picks
+  billing_agent from the agent list, then also fires end_session.
+  The routing and action are not separated.
+
+Recommended Fix:
+  Handle escalation entirely in before_model_callback to prevent
+  the LLM from making routing decisions alongside the action.

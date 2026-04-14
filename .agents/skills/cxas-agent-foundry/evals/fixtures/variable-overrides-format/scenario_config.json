@@ -1,0 +1,14 @@
+{
+  "displayName": "auth-flow-scenario",
+  "description": "Test authenticated user billing flow",
+  "scenario": {
+    "task": "You are an authenticated customer calling about a $45.99 charge on your bill. Ask the agent to explain the charge.",
+    "maxTurns": 10,
+    "taskCompletionBehavior": "TASK_SATISFIED"
+  },
+  "variableOverrides": {
+    "auth_status": "authenticated",
+    "user_role": "primary_account_holder"
+  },
+  "_comment": "BUG: variableOverrides is at the top level instead of inside the scenario object. The platform silently ignores it here — it must be nested under scenario."
+}

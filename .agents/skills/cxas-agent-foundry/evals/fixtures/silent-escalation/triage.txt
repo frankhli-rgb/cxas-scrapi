@@ -1,0 +1,29 @@
+triage-results.py -- golden: fraud_escalation (5 runs)
+=======================================================
+
+Run Results:
+  run_1: FAIL  (text=FAIL, tools=PASS)
+  run_2: FAIL  (text=FAIL, tools=PASS)
+  run_3: FAIL  (text=FAIL, tools=PASS)
+  run_4: PASS  (text=PASS, tools=PASS)
+  run_5: FAIL  (text=FAIL, tools=PASS)
+
+Pass rate: 1/5 (20%)
+
+Failure category: TEXT_MISMATCH
+
+Failure details:
+  run_1, turn 2: semantic_score=0.0
+    expected text containing: "transferring you to our fraud team"
+    observed: "" (empty string)
+  run_2, turn 2: semantic_score=0.0
+    observed: "" (empty string)
+  run_3, turn 2: semantic_score=0.0
+    observed: "" (empty string)
+  run_5, turn 2: semantic_score=0.0
+    observed: "" (empty string)
+
+Notes:
+  - Tools pass in all runs (end_session + payload_update both called correctly)
+  - Agent produces no text before calling end_session in 4/5 runs
+  - run_4 is the only run where agent says goodbye before ending session

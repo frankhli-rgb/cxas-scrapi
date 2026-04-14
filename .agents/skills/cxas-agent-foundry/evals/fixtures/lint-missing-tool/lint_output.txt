@@ -1,0 +1,12 @@
+$ python3 scripts/lint.py agents/telecom-support/
+
+Running agent linter v2.1...
+
+agents/telecom-support/instruction.md
+  Line 47: "If the customer needs a technician, use schedule_technician to book"
+  [S002] Tool 'schedule_technician' referenced in instruction but NOT in agent tool list.
+         Agent has: [get_subscriber, check_outage, create_ticket, end_session]
+         LLM will silently improvise when this tool is missing.
+
+Summary: 1 error, 0 warnings
+Lint FAILED — fix S002 errors before pushing.

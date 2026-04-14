@@ -1,0 +1,29 @@
+golden_id: account_lookup
+description: Agent greets authenticated user and shows account summary
+
+session_parameters:
+  auth_status: "UNKNOWN"
+  user_role: "UNKNOWN"
+  account_id: "ACCT-99281"
+  channel: "chat"
+  language: "en"
+
+turns:
+  - turn: 1
+    user_input: "Hi, I'd like to check my account"
+    expected_tools:
+      - tool_name: get_account_details
+        args:
+          account_id: "ACCT-99281"
+    expected_response_contains:
+      - "welcome"
+      - "account"
+
+# NOTE: auth_status and user_role are both set to "UNKNOWN".
+# The agent's before_agent_callback checks these fields to decide
+# whether the user is authenticated. With "UNKNOWN", the agent
+# treats the user as unauthenticated and refuses to look up
+# account details.
+#
+# Fix: set auth_status to "AUTHENTICATED" and user_role to "PRIMARY"
+# to match what a real authenticated session would provide.

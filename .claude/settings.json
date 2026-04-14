@@ -1,27 +1,44 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/skills/agent-foundry/hooks/block-script-creation.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/skills/agent-foundry/hooks/block-script-via-shell.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": ".agents/skills/agent-foundry/hooks/pre-agent-push.sh",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": ".agents/skills/agent-foundry/hooks/pre-agent-push-lint.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": ".agents/skills/agent-foundry/hooks/post-eval-run.sh",
-            "timeout": 5
-          },
-          {
-            "type": "command",
             "command": ".agents/skills/agent-foundry/hooks/post-agent-update.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".agents/skills/agent-foundry/hooks/post-callback-write.sh",
             "timeout": 5
           }
         ]

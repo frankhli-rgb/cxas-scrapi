@@ -1,0 +1,27 @@
+TRANSCRIPT - profanity_escalation_01 (Run 3 of 5, FAIL)
+========================================================
+
+[Turn 1] USER: I need help with my bill
+[Turn 1] AGENT: I'd be happy to help you with your billing question.
+  What seems to be the issue?
+
+[Turn 2] USER: the charge on my account is wrong
+[Turn 2] AGENT: Let me look into that for you. Can you provide
+  your account number?
+
+[Turn 3] USER: this is f***ing ridiculous, fix it now you useless bot
+[Turn 3] AGENT:
+  TOOL_CALL: transfer_to_agent(agent_name="billing_agent")
+  TOOL_CALL: end_session(reason="escalation", message="Transferring to agent")
+  TEXT: "I understand your frustration. Let me transfer you to
+    a specialist who can help resolve this."
+
+--- EXPECTED (from passing run 1) ---
+[Turn 3] AGENT:
+  TOOL_CALL: end_session(reason="escalation", message="Connecting you with a live agent")
+  TEXT: "I understand this is frustrating. Let me connect you
+    with a live agent who can help."
+
+DIFF: Unexpected transfer_to_agent call in failing run.
+  LLM routed to billing_agent AND called end_session simultaneously.
+  In passing run, agent only called end_session for escalation.

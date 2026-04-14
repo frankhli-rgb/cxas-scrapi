@@ -1,0 +1,30 @@
+TRIAGE REPORT - Escalation Coverage (multi-agent)
+==================================================
+Status: PARTIAL FAIL
+Category: TOOL_MISSING
+
+Root Agent Escalation: 5/5 PASS
+  - Profanity detected, end_session(reason="escalation") called
+  - All runs consistent
+
+Billing Agent Escalation: 0/5 PASS
+  - Profanity detected, NO escalation tools called
+  - Agent redirects conversation instead
+  - Category: TOOL_MISSING on all billing_agent turns
+
+Failure Pattern:
+  When user is routed to billing_agent and sends hostile input,
+  the escalation callback never fires. The billing_agent has no
+  before_model_callback configured -- only root_agent does.
+
+  Root agent callbacks do NOT propagate to sub-agents.
+  Each agent in a multi-agent setup needs its own callbacks.
+
+Affected Evals:
+  - profanity_escalation_01 (root): PASS
+  - profanity_escalation_02 (billing): FAIL
+  - profanity_escalation_03 (billing): FAIL
+
+Recommended Fix:
+  Add the same escalation callback to all agents that handle
+  user messages, not just the root agent.

@@ -1,0 +1,99 @@
+# gecxlint.yaml — GECX Agent Linter configuration
+# All rules are enabled at their default severity. Override per-rule below.
+# Run `python .agents/skills/cxas-agent-foundry/scripts/lint.py --list-rules` to see all available rules.
+
+# Path to CXAS app directory (falls back to gecx-config.json → app_dir)
+app_dir: cxas_app/
+
+# Path to evals directory
+evals_dir: evals/
+
+# Rule severity overrides
+# Values: error, warning, info, off
+rules:
+  # Instruction rules
+  # I001: error      # Required XML structure (<role>, <persona>, <taskflow>)
+  # I002: error      # Taskflow must contain <subtask> or <step>
+  # I003: warning    # Excessive IF/ELSE logic (should be in callbacks)
+  # I004: warning    # Negative conditions in triggers
+  # I005: warning    # conditional_logic block for intent classification
+  # I006: warning    # Hardcoded data (phone numbers, addresses, prices)
+  # I007: info       # Instruction too long (>3000 words)
+  # I008: error      # Invalid {@AGENT: ...} reference
+  # I009: error      # Invalid {@TOOL: ...} reference
+  # I010: error      # Wrong agent reference syntax
+  # I011: error      # Wrong tool reference syntax
+  # I012: warning    # Tool in agent JSON but not referenced in instruction
+  # I013: error      # Tool referenced in instruction but not in agent JSON
+
+  # Callback rules
+  # C001: error      # Wrong function name for callback type
+  # C002: error      # Wrong argument count
+  # C003: error      # camelCase function name
+  # C004: warning    # Returns dict instead of LlmResponse
+  # C005: warning    # Hardcoded phrase list for intent detection
+  # C006: warning    # Bare except without logging
+  # C007: info       # tools.* call naming convention
+  # C008: error      # Missing typing import (Optional, Iterator, etc.)
+  # C009: error      # Wrong callback signature (missing/wrong type annotations)
+  # C010: error      # Invalid Python syntax
+
+  # Tool rules
+  # T001: error      # Missing agent_action error return
+  # T002: error      # Missing docstring
+  # T003: info       # Missing type hints
+  # T004: warning    # Function name doesn't match tool directory
+  # T005: info       # High-cardinality input arguments
+  # T006: info       # Excessive return data
+  # T007: error      # Tool name/displayName not snake_case
+  # T008: warning    # Tool displayName not referenced by any agent
+  # T009: error      # **kwargs in function signature (silently dropped on import)
+  # T010: error      # Invalid Python syntax
+  # T011: error      # None as default value (silently dropped on import)
+
+  # Eval rules
+  # E001: error      # Invalid YAML
+  # E002: error      # Missing 'conversations' key (goldens)
+  # E003: warning    # Tool call references non-existent tool
+  # E004: warning    # Session parameter not in declared variables
+  # E005: error      # Duplicate YAML keys in same turn
+  # E006: warning    # Golden with tool_calls but no session_parameters
+  # E007: error      # Golden turn missing 'agent' field
+  # E008: error      # Golden 'agent' field uses $matchType (must be plain string)
+  # E009: warning    # Golden missing expectations
+  # E010: error      # Tool test YAML uses 'test_cases' instead of 'tests'
+  # E011: error      # Invalid $matchType value in golden tool_calls args
+
+  # App/agent config rules
+  # A001: error      # Invalid JSON
+  # A002: error      # Missing required fields
+  # A003: error      # Agent JSON references non-existent tool
+  # A004: error      # Agent missing instruction.txt
+  # A005: error      # Root agent missing end_session tool
+
+  # Structure rules (cross-file validation)
+  # S001: error      # Variable declarations missing description/schema
+  # S002: error      # Instruction references tool not in agent's tool list
+  # S003: error      # Child agent reference points to non-existent agent
+  # S004: error      # Callback file path in agent JSON doesn't exist
+
+# Rule-specific options
+options:
+  I007:
+    max_words: 3000
+  I006:
+    patterns:
+      - '\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'    # phone numbers
+      - '\$\d+(\.\d{2})?'                    # prices
+
+# File patterns to skip entirely
+ignore:
+  - "cxas_app/**/test_*.py"
+  - "cxas_app/**/__pycache__/**"
+
+# Per-file rule overrides (disable specific rules for specific files)
+# per_file:
+#   "cxas_app/*/agents/root_agent/instruction.txt":
+#     I007: off      # Root agent instruction is intentionally long
+#   "evals/simulations/*.yaml":
+#     E002: off      # Simulations don't have 'conversations' key

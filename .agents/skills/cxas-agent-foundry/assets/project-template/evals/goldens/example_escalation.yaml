@@ -1,0 +1,78 @@
+# =============================================================================
+# GOLDEN EVAL: Escalation via Trigger Pattern
+#
+# WHY this is a golden (not a sim):
+#   - Escalation is callback-driven (before_model_callback intercepts the
+#     trigger and returns deterministic tool calls)
+#   - The text and tool calls are fixed by the callback, not the LLM
+#
+# KEY PATTERNS DEMONSTRATED:
+#   1. Escalation golden tests the FULL trigger pattern end-to-end:
+#      instruction → set_session_state → before_model_callback → payload + end_session
+#   2. Tool calls match what the callback returns (not what the LLM might call)
+#   3. $matchType: "ignore" for summary (free-text, varies)
+#   4. Callback-driven text is deterministic — can use exact match
+# =============================================================================
+
+common_session_parameters:
+  account_id: "9820598207"
+  customer_id: "4444444"
+
+conversations:
+  - conversation: escalation_customer_request
+    session_parameters: {}
+    turns:
+      - user: "Hi"
+        agent: "Welcome to Acme Corp support. How can I help you today?"
+
+      - user: "I want to speak to a real person."
+        # The instruction tells the LLM to call set_session_state with
+        # _action_trigger = "escalate". On the NEXT model call, the
+        # before_model_callback intercepts and returns the response below.
+        tool_calls:
+          - action: set_session_state
+            args:
+              _action_trigger: "escalate"
+              _escalation_reason:
+                $matchType: "semantic"
+                $matchValue: "Customer requested to speak with a human agent"
+                $originalValue: ""
+              _escalation_topic:
+                $matchType: "ignore"
+                $matchValue: ""
+                $originalValue: ""
+
+      # This turn is the callback's deterministic response.
+      # The user doesn't say anything — this is the model call that gets
+      # intercepted by before_model_callback.
+      - user: ""
+        agent: "I understand. Let me connect you with a specialist who can help. Please hold for a moment."
+        tool_calls:
+          - action: payload_update_tool
+            args:
+              escalation_reason:
+                $matchType: "semantic"
+                $matchValue: "Customer requested to speak with a human agent"
+                $originalValue: ""
+              main_topic:
+                $matchType: "ignore"
+                $matchValue: ""
+                $originalValue: ""
+              summary:
+                # WHY ignore? Summary is free-text and varies. Testing its
+                # exact content is brittle and adds no value.
+                $matchType: "ignore"
+                $matchValue: ""
+                $originalValue: ""
+          - action: end_session
+            args:
+              session_escalated: true
+
+    expectations:
+      - "The agent must acknowledge the customer's request to speak to a human"
+      - "The agent must call set_session_state with _action_trigger set to escalate"
+      - "The agent must call payload_update_tool with an escalation reason"
+      - "The agent must end the session with session_escalated = true"
+      - "The agent must say a farewell message before ending the session"
+
+    tags: [P0, HIGH, FR-2.1, escalation]

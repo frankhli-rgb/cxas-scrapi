@@ -1,0 +1,2187 @@
+{
+  "skill_name": "cxas-agent-foundry",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "inspect-and-create-evals",
+      "prompt": "I have an agent on the platform, can you set up evals for it?",
+      "expected_output": "Inspects agent, checks callback for variable handling, creates goldens + sims",
+      "assertions": [
+        {
+          "text": "Uses inspect-app.py or equivalent to inspect the agent",
+          "type": "tool_usage"
+        },
+        {
+          "text": "References the interview guide or asks about requirements",
+          "type": "workflow"
+        },
+        {
+          "text": "Creates golden YAML for deterministic flows",
+          "type": "output"
+        },
+        {
+          "text": "Creates simulation YAML for open-ended flows",
+          "type": "output"
+        },
+        {
+          "text": "Checks before_agent_callback for derived vs override-safe variables",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "eval_name": "run-and-triage-failures",
+      "prompt": "run the evals and tell me whats broken",
+      "expected_output": "Uses run-all-evals.py, triages with triage-results.py, reads transcripts",
+      "assertions": [
+        {
+          "text": "Uses run-all-evals.py to run all eval types",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Uses triage-results.py to categorize failures",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Reads transcripts before attributing failures to flakiness",
+          "type": "workflow"
+        },
+        {
+          "text": "Distinguishes platform issues from agent issues",
+          "type": "correctness"
+        },
+        {
+          "text": "Generates a combined or iteration report",
+          "type": "output"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "eval_name": "fix-failing-escalation",
+      "prompt": "profanity escalation is failing, tools are missing",
+      "expected_output": "Reads transcript, checks tool availability, uses trigger pattern",
+      "assertions": [
+        {
+          "text": "Reads the actual failure transcript before proposing fixes",
+          "type": "workflow"
+        },
+        {
+          "text": "Checks whether the tool is in the agent's tool list",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT add hardcoded phrase matching to callbacks",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Follows LLM detects / callbacks execute principle",
+          "type": "correctness"
+        },
+        {
+          "text": "Re-runs with --runs 5",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "eval_name": "bootstrap-existing-agent",
+      "prompt": "i already have evals on the platform, help me set up a proper suite",
+      "expected_output": "Detects bootstrap entry point, pulls existing evals, preserves them",
+      "assertions": [
+        {
+          "text": "Detects 'existing app with evals' entry point",
+          "type": "workflow"
+        },
+        {
+          "text": "Pulls existing evals from platform before creating new ones",
+          "type": "workflow"
+        },
+        {
+          "text": "Presents existing evals to user for review",
+          "type": "workflow"
+        },
+        {
+          "text": "Does NOT delete existing platform evals",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Generates TDD with both existing and new evals",
+          "type": "output"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 5,
+      "eval_name": "golden-vs-sim-decision",
+      "prompt": "should the KB troubleshooting flow be a golden or sim?",
+      "expected_output": "Recommends sim because KB returns varying results",
+      "assertions": [
+        {
+          "text": "Recommends simulation, not golden",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains KB returns varying results",
+          "type": "reasoning"
+        },
+        {
+          "text": "References the decision criteria from interview guide",
+          "type": "workflow"
+        },
+        {
+          "text": "Suggests golden only for deterministic parts (routing)",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 6,
+      "eval_name": "tune-scoring-thresholds",
+      "prompt": "goldens failing but agent is doing the right thing, scores are 2/4",
+      "expected_output": "Confirms agent correct, suggests app-thresholds.py, last resort",
+      "assertions": [
+        {
+          "text": "Confirms agent behavior correct before threshold changes",
+          "type": "workflow"
+        },
+        {
+          "text": "Uses app-thresholds.py",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Explains thresholds are a last resort",
+          "type": "reasoning"
+        },
+        {
+          "text": "Suggests lowering similarity from 3 to 2",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 7,
+      "eval_name": "diagnose-silent-escalation",
+      "prompt": "the escalation eval is failing on text, can you look at this?",
+      "expected_output": "Identifies multi-model-call pattern, recommends after_model_callback",
+      "assertions": [
+        {
+          "text": "Identifies silent tool calls / multi-model-call pattern",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends after_model_callback",
+          "type": "correctness"
+        },
+        {
+          "text": "Mentions text_or_transcript() for audio safety",
+          "type": "correctness"
+        },
+        {
+          "text": "Mentions callback_context.events for cross-call text check",
+          "type": "correctness"
+        },
+        {
+          "text": "References gecx-design-guide",
+          "type": "workflow"
+        }
+      ],
+      "files": [
+        "evals/fixtures/silent-escalation/triage.txt",
+        "evals/fixtures/silent-escalation/golden_result.json",
+        "evals/fixtures/silent-escalation/transcript.txt"
+      ]
+    },
+    {
+      "id": 8,
+      "eval_name": "update-evals-after-requirement-change",
+      "prompt": "requirements changed, spanish speakers should go to a bilingual agent now instead of escalating. update the evals",
+      "expected_output": "Updates TDD first, modifies affected evals, adds new ones",
+      "assertions": [
+        {
+          "text": "Updates TDD before modifying evals",
+          "type": "workflow"
+        },
+        {
+          "text": "Identifies which existing evals are affected",
+          "type": "workflow"
+        },
+        {
+          "text": "Modifies golden to match new routing",
+          "type": "correctness"
+        },
+        {
+          "text": "Adds new evals for untested flows",
+          "type": "output"
+        },
+        {
+          "text": "Runs affected evals after updating",
+          "type": "workflow"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 9,
+      "eval_name": "routing-ambiguity",
+      "prompt": "help me with my agent",
+      "expected_output": "Asks clarifying question",
+      "assertions": [
+        {
+          "text": "Asks a clarifying question",
+          "type": "workflow"
+        },
+        {
+          "text": "Offers build/run/debug options",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 10,
+      "eval_name": "callback-sync-after-change",
+      "prompt": "i changed a callback, what do i need to do",
+      "expected_output": "Mentions sync-callbacks.py, hook auto-sync, update tests, run tests",
+      "assertions": [
+        {
+          "text": "Mentions sync-callbacks.py",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Mentions post-agent-update hook auto-syncs",
+          "type": "correctness"
+        },
+        {
+          "text": "Says to add or update tests",
+          "type": "workflow"
+        },
+        {
+          "text": "Says to run callback tests",
+          "type": "workflow"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 11,
+      "eval_name": "fix-conflicting-constraints",
+      "prompt": "the profanity eval keeps failing, agent redirects instead of escalating",
+      "expected_output": "Identifies guideline vs taskflow conflict",
+      "assertions": [
+        {
+          "text": "Identifies the conflict between guideline and taskflow step",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains LLM may prioritize guideline over taskflow",
+          "type": "reasoning"
+        },
+        {
+          "text": "Recommends narrowing the guideline, not removing it",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT add keyword detection in callbacks",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/conflicting-constraints/triage.txt",
+        "evals/fixtures/conflicting-constraints/transcript.txt"
+      ]
+    },
+    {
+      "id": 12,
+      "eval_name": "fix-instruction-complexity",
+      "prompt": "i added a counter for unintelligible responses but now its worse",
+      "expected_output": "Identifies counter as anti-pattern, recommends natural language",
+      "assertions": [
+        {
+          "text": "Identifies state-tracked counting reduces reliability",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends 'On the FIRST... On the SECOND...' pattern",
+          "type": "correctness"
+        },
+        {
+          "text": "References simpler instructions principle",
+          "type": "reasoning"
+        },
+        {
+          "text": "Does NOT recommend adding more complexity",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 13,
+      "eval_name": "fix-callback-no-text-before-escalation",
+      "prompt": "agent sometimes says please hold and sometimes just silently ends, look at the trace",
+      "expected_output": "Recommends after_model_callback with events API",
+      "assertions": [
+        {
+          "text": "Recommends after_model_callback to inject text before end_session",
+          "type": "correctness"
+        },
+        {
+          "text": "Warns about multi-model-call turns",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends callback_context.events for cross-call check",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends text_or_transcript() for audio",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT just say 'add text to instruction'",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/silent-escalation/triage.txt",
+        "evals/fixtures/silent-escalation/transcript.txt"
+      ]
+    },
+    {
+      "id": 14,
+      "eval_name": "fix-callback-empty-tool-args",
+      "prompt": "payload update tool is getting called with empty args, look at this",
+      "expected_output": "Defense in depth: docstrings + state fallback + trigger pattern",
+      "assertions": [
+        {
+          "text": "Recommends better docstrings with (REQUIRED)",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends tool-level state fallback",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends trigger pattern as backup",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend hide_tool()",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/empty-tool-args/triage.txt",
+        "evals/fixtures/empty-tool-args/golden_result.json",
+        "evals/fixtures/empty-tool-args/transcript.txt"
+      ]
+    },
+    {
+      "id": 15,
+      "eval_name": "fix-golden-wrong-session-params",
+      "prompt": "auth routing golden failing, agent says cant find account",
+      "expected_output": "Checks session params override callback-derived variables",
+      "assertions": [
+        {
+          "text": "Checks whether session params override callback-derived variables",
+          "type": "correctness"
+        },
+        {
+          "text": "Identifies overriding derived variables short-circuits callback",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends reading before_agent_callback source",
+          "type": "workflow"
+        },
+        {
+          "text": "Recommends removing the override",
+          "type": "correctness"
+        }
+      ],
+      "files": [
+        "evals/fixtures/wrong-session-params/triage.txt",
+        "evals/fixtures/wrong-session-params/golden_config.yaml"
+      ]
+    },
+    {
+      "id": 16,
+      "eval_name": "fix-golden-should-be-sim",
+      "prompt": "troubleshooting golden keeps failing, different text each run but tools pass",
+      "expected_output": "Convert to sim, don't loosen golden",
+      "assertions": [
+        {
+          "text": "Recommends converting to simulation, not loosening golden",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains KB responses inherently vary",
+          "type": "reasoning"
+        },
+        {
+          "text": "Suggests golden for deterministic parts only",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT suggest lowering threshold as the fix",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/flaky-golden-text/triage.txt",
+        "evals/fixtures/flaky-golden-text/transcript.txt"
+      ]
+    },
+    {
+      "id": 17,
+      "eval_name": "architecture-when-to-use-callbacks",
+      "prompt": "agent sometimes forgets to call end_session after auth check fails, should i make the instruction stronger?",
+      "expected_output": "Move to callback, not stronger instruction",
+      "assertions": [
+        {
+          "text": "Identifies as callback territory (flag check + fixed response)",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains why: no LLM judgment needed = callback",
+          "type": "reasoning"
+        },
+        {
+          "text": "Recommends before_agent_callback or before_model_callback",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend adding MUST/ALWAYS to instruction",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 18,
+      "eval_name": "architecture-multi-agent-split",
+      "prompt": "agent is mixing up billing and troubleshooting flows, instruction is 4000 words",
+      "expected_output": "Split into multi-agent with root router + sub-agents",
+      "assertions": [
+        {
+          "text": "Recommends multi-agent architecture",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains instruction following degrades with length",
+          "type": "reasoning"
+        },
+        {
+          "text": "Isolates each domain into sub-agents",
+          "type": "correctness"
+        },
+        {
+          "text": "References gecx-design-guide architecture guidance",
+          "type": "workflow"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 19,
+      "eval_name": "architecture-trigger-pattern",
+      "prompt": "escalation works 80% of the time, look at this trace",
+      "expected_output": "Trigger pattern: LLM sets state, callback returns tools",
+      "assertions": [
+        {
+          "text": "Recommends trigger pattern",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains LLM detects / callback executes separation",
+          "type": "reasoning"
+        },
+        {
+          "text": "State-setting tool must be in agent's tool list",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends after_model recovery",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT just say 'make instruction clearer'",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/trigger-pattern-80pct/triage.txt",
+        "evals/fixtures/trigger-pattern-80pct/golden_result.json",
+        "evals/fixtures/trigger-pattern-80pct/transcript.txt"
+      ]
+    },
+    {
+      "id": 20,
+      "eval_name": "golden-truncation-gotcha",
+      "prompt": "i removed a turn from my golden yaml and pushed but the platform still has the old turns",
+      "expected_output": "Explains update_evaluation merges turns, must delete+recreate",
+      "assertions": [
+        {
+          "text": "Identifies that update_evaluation() merges turns, doesn't replace them",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends deleting the eval and recreating it to truncate",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend just pushing again or using a different update method",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 21,
+      "eval_name": "audio-scoring-differences",
+      "prompt": "my scenario evals show 0% in audio mode but they pass in text mode",
+      "expected_output": "Explains audio scoring differences: --audio flag, expect_criteria, evaluation_status",
+      "assertions": [
+        {
+          "text": "Explains that taskCompleted is broken in audio mode for scenarios",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends using --audio flag for scenario scoring",
+          "type": "correctness"
+        },
+        {
+          "text": "Mentions expect_criteria (LLM judges) over expect_tools for audio",
+          "type": "correctness"
+        },
+        {
+          "text": "Clarifies that goldens use evaluation_status directly, not --audio",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 22,
+      "eval_name": "hook-blocking-diagnosis",
+      "prompt": "i cant push my agent code, something keeps blocking it",
+      "expected_output": "Identifies hook as the blocker, reads lint output, fixes the errors",
+      "assertions": [
+        {
+          "text": "Identifies that a pre-push hook is blocking the operation",
+          "type": "correctness"
+        },
+        {
+          "text": "Checks which hook blocked (lint or drift detection)",
+          "type": "workflow"
+        },
+        {
+          "text": "Reads the lint/error output to understand what needs fixing",
+          "type": "workflow"
+        },
+        {
+          "text": "Recommends fixing the underlying issue, not bypassing the hook",
+          "type": "correctness"
+        }
+      ],
+      "files": [
+        "evals/fixtures/hook-blocking/lint_output.txt"
+      ]
+    },
+    {
+      "id": 23,
+      "eval_name": "iteration-report-workflow",
+      "prompt": "we made a bunch of changes to fix the escalation, how do we track what we did",
+      "expected_output": "Uses run-and-report.py to run evals + generate report in one command",
+      "assertions": [
+        {
+          "text": "Recommends run-and-report.py as the iteration command",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Includes --message flag for documenting what changed",
+          "type": "correctness"
+        },
+        {
+          "text": "Mentions --auto-revert for automatic rollback on regression",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 24,
+      "eval_name": "full-build-from-scratch",
+      "prompt": "i have a PRD for a customer support agent, build it",
+      "expected_output": "Interview for requirements, write TDD, wait for approval, then build",
+      "assertions": [
+        {
+          "text": "Routes to Build sub-skill",
+          "type": "workflow"
+        },
+        {
+          "text": "Starts with interview/requirements gathering, not building",
+          "type": "workflow"
+        },
+        {
+          "text": "Writes a TDD before creating anything",
+          "type": "workflow"
+        },
+        {
+          "text": "Waits for user approval of TDD before building",
+          "type": "workflow"
+        },
+        {
+          "text": "References the interview guide for the process",
+          "type": "workflow"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 25,
+      "eval_name": "tool-test-failing",
+      "prompt": "my get_subscriber tool test is failing, response path not found",
+      "expected_output": "Routes to debug, checks if tool schema changed, fixes assertion",
+      "assertions": [
+        {
+          "text": "Routes to Debug sub-skill",
+          "type": "workflow"
+        },
+        {
+          "text": "Checks if the tool's response schema changed",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends updating the jsonpath in the test expectation",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend changing the tool itself as the first fix",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 26,
+      "eval_name": "callback-test-lifecycle",
+      "prompt": "write callback tests for this agent",
+      "expected_output": "Uses sync-callbacks.py, follows test pattern with mocks, covers per-type guidance",
+      "assertions": [
+        {
+          "text": "Uses sync-callbacks.py to pull callback code from platform",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Follows the mock injection test pattern (import python_code, MagicMock)",
+          "type": "correctness"
+        },
+        {
+          "text": "Covers what to test per callback type (before_agent, before_model, after_model)",
+          "type": "correctness"
+        },
+        {
+          "text": "Creates symlinks from agents/ to tests/",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 27,
+      "eval_name": "scenario-task-not-completed",
+      "prompt": "sim says task not completed but the agent handled it fine",
+      "expected_output": "Success criteria too narrow, add 'X counts as successful'",
+      "assertions": [
+        {
+          "text": "Identifies success criteria as too narrow",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends adding 'X counts as a successful outcome' to task description",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend changing agent behavior",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 28,
+      "eval_name": "unexpected-agent-transfer",
+      "prompt": "agent transfers to billing when it should just escalate, look at this",
+      "expected_output": "Handle action entirely in before_model_callback to prevent routing",
+      "assertions": [
+        {
+          "text": "Identifies that LLM is routing AND acting simultaneously",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends handling the action entirely in before_model_callback",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains that the callback prevents the LLM from making routing decisions alongside the action",
+          "type": "reasoning"
+        },
+        {
+          "text": "Does NOT recommend just adding 'do not transfer' to the instruction",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/unexpected-transfer/triage.txt",
+        "evals/fixtures/unexpected-transfer/transcript.txt"
+      ]
+    },
+    {
+      "id": 29,
+      "eval_name": "callback-gap-multi-agent",
+      "prompt": "escalation works from root but not when user is in the billing agent",
+      "expected_output": "Root callbacks don't fire on sub-agents, add callback to all agents",
+      "assertions": [
+        {
+          "text": "Identifies that root agent callbacks don't fire when user is on a sub-agent",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends adding the same callback to all agents that handle user messages",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend routing back to root for escalation",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/callback-gap-multi-agent/triage.txt",
+        "evals/fixtures/callback-gap-multi-agent/transcript.txt"
+      ]
+    },
+    {
+      "id": 30,
+      "eval_name": "scores-pass-but-fail",
+      "prompt": "all my scores pass but the eval still says FAIL, look at this",
+      "expected_output": "Platform scoring inconsistency, use triage-results.py to identify",
+      "assertions": [
+        {
+          "text": "Identifies this as a platform scoring inconsistency, not an agent issue",
+          "type": "correctness"
+        },
+        {
+          "text": "References triage-results.py SCORES_PASS_BUT_FAIL category",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Explains the hallucination scorer can cause this even when disabled",
+          "type": "reasoning"
+        },
+        {
+          "text": "Does NOT recommend changing the agent to fix a platform bug",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/scores-pass-but-fail/triage.txt",
+        "evals/fixtures/scores-pass-but-fail/golden_result.json"
+      ]
+    },
+    {
+      "id": 31,
+      "eval_name": "interview-requirements-gathering",
+      "prompt": "i want to build an agent that helps customers with their orders",
+      "expected_output": "Should start an interview to gather requirements, not jump to building",
+      "assertions": [
+        {
+          "text": "Routes to Build sub-skill",
+          "type": "workflow"
+        },
+        {
+          "text": "Asks clarifying questions about what the agent should do (not just starts building)",
+          "type": "workflow"
+        },
+        {
+          "text": "Asks about requirements source (PRD, spec doc, or interview)",
+          "type": "workflow"
+        },
+        {
+          "text": "Does NOT write a TDD or create an app before understanding requirements",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 32,
+      "eval_name": "guardrails-blocking-escalation",
+      "prompt": "profanity escalation doesnt work, agent just says it cant process the request",
+      "expected_output": "Guardrails intercept before agent instructions \u2014 lower threshold or adjust guardrail config",
+      "assertions": [
+        {
+          "text": "Identifies guardrails as intercepting before agent instructions execute",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends checking/adjusting guardrail configuration (threshold or safe categories)",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend changing the agent instruction as the primary fix",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/guardrails-blocking/triage.txt",
+        "evals/fixtures/guardrails-blocking/transcript.txt"
+      ]
+    },
+    {
+      "id": 33,
+      "eval_name": "hallucination-from-examples",
+      "prompt": "agent keeps suggesting restart wifi even though the KB tool didnt return that step",
+      "expected_output": "Example phrases in instruction cause hallucination \u2014 remove them",
+      "assertions": [
+        {
+          "text": "Identifies that example phrases in the instruction are being echoed as real steps",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends removing example troubleshooting phrases from the instruction",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains agent should only suggest steps grounded in tool output",
+          "type": "reasoning"
+        },
+        {
+          "text": "Does NOT recommend adding more examples or a longer instruction",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/hallucination-from-examples/triage.txt",
+        "evals/fixtures/hallucination-from-examples/transcript.txt"
+      ]
+    },
+    {
+      "id": 34,
+      "eval_name": "sim-user-off-script",
+      "prompt": "sim user keeps bringing up billing when the test is about troubleshooting",
+      "expected_output": "Task description too vague \u2014 add 'MUST cooperate fully' and restrict topics",
+      "assertions": [
+        {
+          "text": "Identifies the sim task description as too vague",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends adding directive language like 'MUST cooperate fully' or 'Do NOT bring up other topics'",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend changing the agent to handle off-topic sim behavior",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/sim-off-script/triage.txt",
+        "evals/fixtures/sim-off-script/transcript.txt"
+      ]
+    },
+    {
+      "id": 35,
+      "eval_name": "max-turns-exhausted",
+      "prompt": "my sim eval keeps timing out before finishing in audio mode",
+      "expected_output": "max_turns too low for audio \u2014 increase by 4-6 turns",
+      "assertions": [
+        {
+          "text": "Identifies max_turns as too low",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends increasing max_turns, noting audio needs 4-6 extra turns",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend shortening the agent's responses as the fix",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/max-turns-exhausted/triage.txt"
+      ]
+    },
+    {
+      "id": 36,
+      "eval_name": "wholesale-instruction-rewrite",
+      "prompt": "i cleaned up the instruction to be shorter and now goldens went from 90% to 40%",
+      "expected_output": "Wholesale rewrites lose context the LLM relies on \u2014 revert and make targeted edits",
+      "assertions": [
+        {
+          "text": "Identifies wholesale rewrite as the cause of regression",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends reverting to the original and making small targeted edits instead",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains the LLM relies on verbose context, examples, and phrasing",
+          "type": "reasoning"
+        },
+        {
+          "text": "Does NOT recommend further simplification",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/wholesale-rewrite/before_instruction.txt",
+        "evals/fixtures/wholesale-rewrite/after_instruction.txt"
+      ]
+    },
+    {
+      "id": 37,
+      "eval_name": "transcript-as-golden-antipattern",
+      "prompt": "i captured the agents responses and made them into goldens, they pass but sims fail on the same flow",
+      "expected_output": "Circular testing \u2014 goldens should be ideal PRD behavior, not captured behavior",
+      "assertions": [
+        {
+          "text": "Identifies captured transcripts as circular testing",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains goldens should represent ideal PRD behavior, not current agent behavior",
+          "type": "reasoning"
+        },
+        {
+          "text": "Recommends rewriting goldens from the PRD/requirements",
+          "type": "correctness"
+        }
+      ],
+      "files": [
+        "evals/fixtures/transcript-as-golden/golden.yaml",
+        "evals/fixtures/transcript-as-golden/triage.txt"
+      ]
+    },
+    {
+      "id": 38,
+      "eval_name": "cross-agent-instruction-contradiction",
+      "prompt": "root agent says empathy once but billing agent keeps being empathetic every turn",
+      "expected_output": "Sub-agent instruction contradicts root \u2014 align them",
+      "assertions": [
+        {
+          "text": "Identifies contradiction between root and sub-agent instructions",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends aligning sub-agent instruction with root agent policy",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend changing the root agent's policy to match the sub-agent",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/cross-agent-contradiction/root_instruction_snippet.txt",
+        "evals/fixtures/cross-agent-contradiction/billing_instruction_snippet.txt"
+      ]
+    },
+    {
+      "id": 39,
+      "eval_name": "auxiliary-tool-reordering",
+      "prompt": "golden fails randomly on tool calls even though all the right tools are called, look at this",
+      "expected_output": "Auxiliary tool reordering \u2014 remove non-core tools from golden expectations",
+      "assertions": [
+        {
+          "text": "Identifies LLM reordering auxiliary tools as the cause of flaky failures",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends removing auxiliary/classification tool calls from golden expectations",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends keeping only core behavior tools (routing, escalation, diagnostic)",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend fixing the tool call order in the instruction",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/auxiliary-tool-reorder/triage.txt",
+        "evals/fixtures/auxiliary-tool-reorder/golden_config.yaml"
+      ]
+    },
+    {
+      "id": 40,
+      "eval_name": "negative-trigger-confusion",
+      "prompt": "agent keeps checking for home internet even when customer has a phone issue",
+      "expected_output": "Negative condition in trigger confuses LLM \u2014 use positive triggers, separate step",
+      "assertions": [
+        {
+          "text": "Identifies the negative condition ('NOT home internet') in the trigger as the problem",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends using positive triggers only",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends putting the excluded category as a separate earlier step",
+          "type": "correctness"
+        }
+      ],
+      "files": [
+        "evals/fixtures/negative-trigger/triage.txt",
+        "evals/fixtures/negative-trigger/instruction_snippet.txt"
+      ]
+    },
+    {
+      "id": 41,
+      "eval_name": "build-verification-gates",
+      "prompt": "i built the agent, how do i verify its working before writing evals",
+      "expected_output": "Run the 7 verification gates from build-verification.md",
+      "assertions": [
+        {
+          "text": "References the build verification gates",
+          "type": "workflow"
+        },
+        {
+          "text": "Mentions verification steps like lint, agent hierarchy check, tool associations, smoke tests",
+          "type": "correctness"
+        },
+        {
+          "text": "Says to complete verification before writing evals",
+          "type": "workflow"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 42,
+      "eval_name": "agent-wrong-fix-agent-not-eval",
+      "prompt": "auth routing golden is failing, agent routes to billing instead of troubleshoot. should i update the golden?",
+      "expected_output": "Fix the agent routing, do NOT update the golden to expect billing",
+      "assertions": [
+        {
+          "text": "Identifies the agent routing as wrong (not the eval)",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends fixing the agent instruction or routing logic",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend updating the golden to match the wrong behavior",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Explains goldens represent the contract with the user \u2014 weakening them defeats their purpose",
+          "type": "reasoning"
+        }
+      ],
+      "files": [
+        "evals/fixtures/agent-wrong-not-eval/triage.txt"
+      ]
+    },
+    {
+      "id": 43,
+      "eval_name": "eval-wrong-update-eval-not-agent",
+      "prompt": "outage golden is failing but the agent response looks correct, the test data changed",
+      "expected_output": "Update the golden \u2014 agent is correct, eval expectation is stale",
+      "assertions": [
+        {
+          "text": "Reads the transcript and confirms agent behavior is correct",
+          "type": "workflow"
+        },
+        {
+          "text": "Identifies the eval expectation as stale (test data changed)",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends updating the golden expected text to match the new correct behavior",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend changing the agent to match the old expectation",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/eval-wrong-not-agent/triage.txt"
+      ]
+    },
+    {
+      "id": 44,
+      "eval_name": "eval-update-after-agent-fix",
+      "prompt": "we just fixed the escalation callback to use standard text, but the golden still expects the old text",
+      "expected_output": "Update the golden to match the new callback text \u2014 the agent fix is correct",
+      "assertions": [
+        {
+          "text": "Recognizes the agent fix is intentional and correct",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends updating the golden expected text to match the new callback output",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend reverting the callback fix",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Mentions re-running with --runs 5 to verify the updated golden passes consistently",
+          "type": "workflow"
+        }
+      ],
+      "files": [
+        "evals/fixtures/eval-needs-update-after-fix/triage.txt"
+      ]
+    },
+    {
+      "id": 45,
+      "eval_name": "silence-not-handled",
+      "prompt": "agent makes up responses when the customer is silent on a voice call, look at this",
+      "expected_output": "Add silence handling callback \u2014 detect no-input signal, repeat last message, end after 3 strikes",
+      "assertions": [
+        {
+          "text": "Identifies the 'no user activity' signal pattern from the platform",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends handling silence in before_model_callback, not instruction",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends repeating the last agent message on first/second silence",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends ending the session after 3 consecutive silences",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend telling the LLM to 'wait for user input'",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/silence-not-handled/transcript.txt"
+      ]
+    },
+    {
+      "id": 46,
+      "eval_name": "greeting-varies-every-run",
+      "prompt": "greeting golden keeps failing, agent says different things each time",
+      "expected_output": "Move greeting to before_model_callback for deterministic response",
+      "assertions": [
+        {
+          "text": "Recommends moving greeting to a callback (before_model_callback)",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains LLM paraphrases instruction text, callback guarantees exact greeting",
+          "type": "reasoning"
+        },
+        {
+          "text": "References the session start event detection pattern",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend just adding stronger wording to the instruction",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/greeting-varies/triage.txt"
+      ]
+    },
+    {
+      "id": 47,
+      "eval_name": "check-experiment-log-before-fixing",
+      "prompt": "escalation goldens are stuck at 67%, what should i try next",
+      "expected_output": "Reads experiment_log.md, avoids all 4 previously failed approaches, proposes something new",
+      "assertions": [
+        {
+          "text": "Reads the experiment log to understand what was already tried",
+          "type": "workflow"
+        },
+        {
+          "text": "Does NOT recommend simplifying the instruction (failed in iteration 2)",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Does NOT recommend hardcoded phrase matching in callbacks (failed in iteration 3)",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Does NOT recommend hide_tool() (failed in iteration 4)",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Does NOT recommend negative trigger conditions (failed in iteration 5)",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Proposes an approach NOT in the experiment log (e.g., check tool availability, trigger pattern, priority ordering)",
+          "type": "correctness"
+        }
+      ],
+      "files": [
+        "evals/fixtures/previous-attempts/experiment_log.md",
+        "evals/fixtures/previous-attempts/triage.txt"
+      ]
+    },
+    {
+      "id": 48,
+      "eval_name": "auto-revert-on-regression",
+      "prompt": "i made a change and pass rate dropped from 90% to 60%, what happened",
+      "expected_output": "Investigate why it regressed, consider reverting, use triage to understand",
+      "assertions": [
+        {
+          "text": "Investigates why the pass rate dropped (reads triage or transcripts)",
+          "type": "workflow"
+        },
+        {
+          "text": "Distinguishes between agent regression and infrastructure issues",
+          "type": "correctness"
+        },
+        {
+          "text": "Mentions reverting or --auto-revert as an option for real regressions",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Does NOT recommend pushing forward without understanding the cause",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 49,
+      "eval_name": "switch-project",
+      "prompt": "switch to the humana project",
+      "expected_output": "Explains .active-project and how to switch projects",
+      "assertions": [
+        {
+          "text": "Mentions .active-project file as the mechanism for tracking the current project",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains how to switch projects (update .active-project or use the switch command)",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 50,
+      "eval_name": "create-new-project",
+      "prompt": "i need to set up a new voice agent for a bank",
+      "expected_output": "Copies project template, asks about modality, sets model for voice",
+      "assertions": [
+        {
+          "text": "Copies the project template to create a new named project folder",
+          "type": "workflow"
+        },
+        {
+          "text": "Asks about modality (voice vs text)",
+          "type": "workflow"
+        },
+        {
+          "text": "Sets model to gemini-3.1-flash-live for voice modality",
+          "type": "correctness"
+        },
+        {
+          "text": "Creates a named project folder for the bank agent",
+          "type": "output"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 51,
+      "eval_name": "lint-catches-missing-tool",
+      "prompt": "lint says instruction references a tool not in the agent's tool list",
+      "expected_output": "Identifies S002, recommends adding tool to agent, explains silent improvisation",
+      "assertions": [
+        {
+          "text": "Identifies the S002 lint rule as the relevant error",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends adding the tool to the agent's tool list (not removing from instruction)",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains the LLM silently improvises when a referenced tool is missing",
+          "type": "reasoning"
+        }
+      ],
+      "files": [
+        "evals/fixtures/lint-missing-tool/lint_output.txt"
+      ]
+    },
+    {
+      "id": 52,
+      "eval_name": "smart-auto-revert-platform-issue",
+      "prompt": "pass rate dropped after my change but triage shows all failures are timeouts",
+      "expected_output": "Does NOT revert (platform issue), recommends re-running after stabilization",
+      "assertions": [
+        {
+          "text": "Does NOT recommend reverting the change (failures are platform-side, not agent-side)",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Identifies all failures as TIMEOUT / platform infrastructure issues",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends re-running evals after the platform stabilizes",
+          "type": "correctness"
+        }
+      ],
+      "files": [
+        "evals/fixtures/auto-revert-platform/triage.txt"
+      ]
+    },
+    {
+      "id": 53,
+      "eval_name": "smart-auto-revert-mixed-signal",
+      "prompt": "goldens dropped but sims improved after my change",
+      "expected_output": "Does NOT auto-revert (mixed signal), recommends investigating golden expectations",
+      "assertions": [
+        {
+          "text": "Does NOT recommend auto-reverting (mixed signal means the change has value)",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Recommends investigating whether golden expectations need updating",
+          "type": "correctness"
+        },
+        {
+          "text": "Notes that sim improvement means real conversations handle better",
+          "type": "reasoning"
+        }
+      ],
+      "files": [
+        "evals/fixtures/auto-revert-mixed/triage.txt"
+      ]
+    },
+    {
+      "id": 54,
+      "eval_name": "modality-model-selection",
+      "prompt": "i need a text-only chatbot, what model should i use",
+      "expected_output": "Recommends gemini-3-flash for text, sets modality and default_channel",
+      "assertions": [
+        {
+          "text": "Recommends gemini-3-flash (not the -live variant) for text-only",
+          "type": "correctness"
+        },
+        {
+          "text": "Sets modality to text",
+          "type": "correctness"
+        },
+        {
+          "text": "Sets default_channel to text",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 55,
+      "eval_name": "fix-escalation-variation-wrong-args",
+      "prompt": "escalation calls the right tool but with wrong arguments, look at this",
+      "expected_output": "Better docstrings, state fallback, does NOT recommend hide_tool",
+      "assertions": [
+        {
+          "text": "Recommends better tool docstrings with (REQUIRED) markers",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends state fallback in tool code to recover correct values",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend hide_tool()",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/wrong-tool-args/triage.txt"
+      ]
+    },
+    {
+      "id": 56,
+      "eval_name": "callback-vs-instruction-edge-case",
+      "prompt": "agent needs to check if its after business hours and say we're closed. should this be instruction or callback?",
+      "expected_output": "Recommends callback \u2014 time check is deterministic, no LLM judgment needed",
+      "assertions": [
+        {
+          "text": "Recommends callback (not instruction) for business hours check",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains time check is deterministic \u2014 no LLM judgment needed",
+          "type": "reasoning"
+        },
+        {
+          "text": "Explains flag check + fixed response = callback territory",
+          "type": "reasoning"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 57,
+      "eval_name": "golden-failing-agent-correct-phrasing",
+      "prompt": "golden fails on text but the agent's response is actually better than what the golden expects",
+      "expected_output": "Confirm agent is correct, update golden text, do NOT lower threshold",
+      "assertions": [
+        {
+          "text": "Confirms agent behavior is correct first before making changes",
+          "type": "workflow"
+        },
+        {
+          "text": "Updates golden text to match the improved agent response",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT lower the threshold as the fix",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 58,
+      "eval_name": "debug-with-no-prior-context",
+      "prompt": "evals are failing, i just started working on this agent",
+      "expected_output": "Inspects agent first, then triages, then reads transcripts before diagnosing",
+      "assertions": [
+        {
+          "text": "Runs inspect-app.py first to understand the agent before diagnosing",
+          "type": "workflow"
+        },
+        {
+          "text": "Runs triage-results.py to categorize the failures",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Reads transcripts before diagnosing root causes",
+          "type": "workflow"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 59,
+      "eval_name": "multiple-failures-prioritize",
+      "prompt": "everything is broken, goldens at 40%, sims at 20%, callbacks failing too",
+      "expected_output": "Start with callbacks (fastest, most precise), then goldens, then sims",
+      "assertions": [
+        {
+          "text": "Starts with callback tests first (fastest feedback loop, most precise)",
+          "type": "workflow"
+        },
+        {
+          "text": "Fixes foundational issues (callbacks) before LLM-dependent ones (goldens, sims)",
+          "type": "correctness"
+        },
+        {
+          "text": "Addresses goldens before sims (deterministic before open-ended)",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 60,
+      "eval_name": "instruction-too-long",
+      "prompt": "agent keeps ignoring the last few steps in the taskflow",
+      "expected_output": "Instruction length causes LLM to lose focus on later steps",
+      "assertions": [
+        {
+          "text": "Identifies instruction length as a possible cause (LLM loses focus on later steps)",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends checking instruction length",
+          "type": "workflow"
+        },
+        {
+          "text": "Suggests moving lower-priority steps to sub-agents or dynamic prompting",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 61,
+      "eval_name": "fix-after-scrapi-update",
+      "prompt": "i updated scrapi and now my callbacks are crashing with AttributeError",
+      "expected_output": "Check for API changes, check changelog, do NOT revert scrapi",
+      "assertions": [
+        {
+          "text": "Checks for API changes (method renames, attribute changes) in scrapi",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends checking the scrapi changelog for breaking changes",
+          "type": "workflow"
+        },
+        {
+          "text": "Does NOT recommend reverting scrapi as the first fix",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 62,
+      "eval_name": "when-to-truncate-golden",
+      "prompt": "my golden has 5 turns but only the first 3 are deterministic, last 2 vary",
+      "expected_output": "Truncate golden at turn 3, use sim for remaining turns",
+      "assertions": [
+        {
+          "text": "Recommends truncating the golden at turn 3 (last deterministic turn)",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends using a sim for the remaining non-deterministic turns",
+          "type": "correctness"
+        },
+        {
+          "text": "Mentions delete+recreate for truncation (update merges, doesn't replace)",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 63,
+      "eval_name": "first-time-setup-no-venv",
+      "prompt": "build me an agent for customer support",
+      "expected_output": "Detects no .venv, runs setup.sh before attempting any build work",
+      "assertions": [
+        {
+          "text": "Checks for .venv/ existence before routing to build",
+          "type": "workflow"
+        },
+        {
+          "text": "Runs .agents/skills/cxas-agent-foundry/scripts/setup.sh (not ./setup.sh)",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Does NOT attempt to create agents, tools, or evals before setup completes",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Activates the virtualenv after setup",
+          "type": "workflow"
+        }
+      ],
+      "files": [],
+      "setup": {
+        "remove": [
+          ".venv/"
+        ]
+      }
+    },
+    {
+      "id": 64,
+      "eval_name": "setup-venv-exists-no-config",
+      "prompt": "create evals for my agent",
+      "expected_output": "Detects missing gecx-config.json, runs setup.sh --configure",
+      "assertions": [
+        {
+          "text": "Detects that .venv/ exists but gecx-config.json is missing",
+          "type": "workflow"
+        },
+        {
+          "text": "Runs setup.sh --configure (not full setup)",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Does NOT reinstall cxas-scrapi when it is already installed",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Proceeds to routing after config is created",
+          "type": "workflow"
+        }
+      ],
+      "files": [],
+      "setup": {
+        "require": [
+          ".venv/"
+        ],
+        "remove": [
+          "gecx-config.json"
+        ]
+      }
+    },
+    {
+      "id": 65,
+      "eval_name": "returning-user-skips-onboarding",
+      "prompt": "run the evals",
+      "expected_output": "Detects existing setup, skips onboarding, routes directly to run",
+      "assertions": [
+        {
+          "text": "Does NOT run setup.sh when .venv/ and gecx-config.json both exist",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Routes directly to the Run sub-skill",
+          "type": "workflow"
+        },
+        {
+          "text": "Uses run-all-evals.py or scrapi-eval-runner.py",
+          "type": "tool_usage"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 66,
+      "eval_name": "progressive-disclosure-references",
+      "prompt": "i have a PRD, build an agent from it",
+      "expected_output": "Loads interview-guide first, does NOT load all references upfront",
+      "assertions": [
+        {
+          "text": "Loads interview-guide.md during requirements gathering",
+          "type": "workflow"
+        },
+        {
+          "text": "Does NOT load gecx-design-guide.md before starting the interview",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Does NOT load api-reference.md before the build step",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Does NOT load all 5+ references in the first step",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 67,
+      "eval_name": "quick-verification-first-build",
+      "prompt": "i just built the agent, is it working?",
+      "expected_output": "Runs quick verification (lint, smoke test, inspect) not full 7 gates",
+      "assertions": [
+        {
+          "text": "Runs lint.py as a verification step",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Runs a smoke test via Sessions API",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Runs inspect-app.py to confirm structure",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Mentions full 7-gate verification is available for production readiness",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 68,
+      "eval_name": "debug-cxas-sync-drift",
+      "prompt": "I made changes locally and also edited the agent on the platform. Now when I push I'm getting conflicts. How do I get back in sync?",
+      "expected_output": "Recommends cxas pull to reconcile, then merge, then push",
+      "assertions": [
+        {
+          "text": "Recommends cxas pull before attempting resolution",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Explains the pull \u2192 merge \u2192 push workflow for reconciling diverged state",
+          "type": "workflow"
+        },
+        {
+          "text": "Does NOT tell the user to force-push or skip reconciliation",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Explains platform edits and local edits must be reconciled, not overwritten",
+          "type": "reasoning"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 69,
+      "eval_name": "debug-yaml-dump-corruption",
+      "prompt": "I updated my golden YAML with a Python script and now the eval is broken. The YAML parses fine though.",
+      "expected_output": "Identifies yaml.dump() as the likely cause \u2014 reformats, mangles strings, loses comments",
+      "assertions": [
+        {
+          "text": "Identifies yaml.dump() as the likely cause (reformats, mangles strings, loses comments)",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends targeted edits instead of yaml.dump() for hand-written YAML",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT suggest the YAML is valid just because it parses",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/yaml-dump-corruption/before.yaml",
+        "evals/fixtures/yaml-dump-corruption/after.yaml"
+      ]
+    },
+    {
+      "id": 70,
+      "eval_name": "debug-eval-deleted-during-run",
+      "prompt": "I deleted some failing evals while the run was still going and now my results are showing ERROR state.",
+      "expected_output": "Identifies deleting evals during active runs as the cause, recommends waiting for COMPLETED",
+      "assertions": [
+        {
+          "text": "Identifies deleting evals during active runs as the cause of ERROR state",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends waiting for run to reach COMPLETED state before deleting evals",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT suggest deleting more evals or force-stopping the run as a fix",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 71,
+      "eval_name": "build-lint-callback-violations",
+      "prompt": "Lint is showing callback errors and warnings. What should I fix first?",
+      "expected_output": "Interprets each violation, prioritizes errors (C002 wrong args, C003 camelCase) over warnings (C004-C006), suggests re-running lint",
+      "assertions": [
+        {
+          "text": "Correctly interprets each callback violation code from the lint output",
+          "type": "correctness"
+        },
+        {
+          "text": "Prioritizes errors (C002 wrong args, C003 camelCase) over warnings (C004 return type, C005 hardcoded phrases, C006 bare except)",
+          "type": "workflow"
+        },
+        {
+          "text": "Suggests re-running lint after fixes",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Does NOT suggest disabling the lint rules",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/lint-callback/lint_output.txt"
+      ]
+    },
+    {
+      "id": 72,
+      "eval_name": "build-lint-instruction-violations",
+      "prompt": "My agent instructions are triggering a wall of lint errors. Can you help me prioritize which to fix first?",
+      "expected_output": "Triages by severity \u2014 conflicting rules before ambiguity before length",
+      "assertions": [
+        {
+          "text": "Triages by severity \u2014 conflicting rules before ambiguity before length",
+          "type": "workflow"
+        },
+        {
+          "text": "Does NOT suggest disabling the lint rules",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Recommends fixing issues in the instruction, not suppressing warnings",
+          "type": "correctness"
+        }
+      ],
+      "files": [
+        "evals/fixtures/lint-instruction/lint_output.txt"
+      ]
+    },
+    {
+      "id": 73,
+      "eval_name": "build-lint-tool-violations",
+      "prompt": "Lint says my tool definitions have issues. What should I fix first?",
+      "expected_output": "Prioritizes T001 error (missing agent_action) over T002 warning (missing docstring) over T003/T004 info",
+      "assertions": [
+        {
+          "text": "Prioritizes T001 (missing agent_action error return) as the most critical fix",
+          "type": "workflow"
+        },
+        {
+          "text": "Explains that T002 (missing docstring) affects tool routing because CES uses docstrings for invocation decisions",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains what each tool lint rule checks",
+          "type": "correctness"
+        }
+      ],
+      "files": [
+        "evals/fixtures/lint-tool/lint_output.txt"
+      ]
+    },
+    {
+      "id": 74,
+      "eval_name": "run-custom-llm-judge",
+      "prompt": "I want to add a custom evaluation criterion that checks whether my agent maintains a professional tone throughout the conversation. How do I set that up?",
+      "expected_output": "Walks through creating an evaluation expectation with an LLM judge prompt",
+      "assertions": [
+        {
+          "text": "Walks through creating an evaluation expectation with an LLM judge prompt",
+          "type": "workflow"
+        },
+        {
+          "text": "References evaluation expectations from creating-evals.md",
+          "type": "correctness"
+        },
+        {
+          "text": "Creates a specific, testable judge prompt (not vague)",
+          "type": "output"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 75,
+      "eval_name": "debug-toolset-tools-missing",
+      "prompt": "I added a new tool to my agent but it's not showing up when I test the agent. The tool definition looks correct.",
+      "expected_output": "Checks deployment status, tool ID correctness, and toolset assignment systematically",
+      "assertions": [
+        {
+          "text": "Checks deployment status, tool ID correctness, and toolset assignment",
+          "type": "workflow"
+        },
+        {
+          "text": "Uses inspect-app.py to verify tool associations",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Does NOT suggest recreating the tool from scratch as a first step",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Identifies common root causes (wrong toolset, undeployed, wrong agent association)",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 76,
+      "eval_name": "debug-task-completion-behavior",
+      "prompt": "My scenario evals show tasks as completed even though the agent clearly didn't finish. I checked the taskCompletionBehavior in my config and it's set to TASK_COMPLETION_BEHAVIOR_UNSPECIFIED. Could that be the issue?",
+      "expected_output": "Identifies taskCompletionBehavior misconfiguration, recommends changing to TASK_SATISFIED",
+      "assertions": [
+        {
+          "text": "Confirms that TASK_COMPLETION_BEHAVIOR_UNSPECIFIED is the problem",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends changing to TASK_SATISFIED",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT suggest adjusting scoring thresholds to compensate",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Provides the exact config change needed",
+          "type": "output"
+        }
+      ],
+      "files": [
+        "evals/fixtures/task-completion-behavior/scenario_config.json"
+      ]
+    },
+    {
+      "id": 77,
+      "eval_name": "run-capture-golden-transcripts",
+      "prompt": "I want to see what the agent actually says for my golden flows before writing the expected text. Is there a way to capture that?",
+      "expected_output": "Recommends capture-golden-transcripts.py, warns about circular testing",
+      "assertions": [
+        {
+          "text": "Recommends capture-golden-transcripts.py to replay user turns against the live agent",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Warns that captured transcripts should be used as REFERENCE, not copied verbatim as golden expected text",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains goldens should represent ideal PRD behavior, not current agent behavior",
+          "type": "reasoning"
+        },
+        {
+          "text": "Does NOT suggest using the captured transcript directly as the golden",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 78,
+      "eval_name": "debug-voice-persona-config",
+      "prompt": "My audio evals sound robotic and unnatural. How do I configure the sim user's voice for audio evals?",
+      "expected_output": "Explains persona speech configuration via app.evaluationPersonas and PATCH",
+      "assertions": [
+        {
+          "text": "Explains persona configuration lives in app.evaluationPersonas",
+          "type": "correctness"
+        },
+        {
+          "text": "Shows how to configure persona via app PATCH API",
+          "type": "workflow"
+        },
+        {
+          "text": "Mentions voice name, language code, and speaking rate as configurable options",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT suggest changing the agent instruction to compensate for voice quality",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 79,
+      "eval_name": "build-matchtype-configuration",
+      "prompt": "My golden tool call keeps failing because the summary arg text varies each run, but the tool call itself is correct. How do I make it less strict?",
+      "expected_output": "Use $matchType directives \u2014 ignore for free-text, semantic for meaning-based, contains for keywords",
+      "assertions": [
+        {
+          "text": "Recommends $matchType directive on the varying parameter",
+          "type": "correctness"
+        },
+        {
+          "text": "Recommends 'ignore' for free-text fields like summary",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains the $matchType/$matchValue/$originalValue JSON structure",
+          "type": "correctness"
+        },
+        {
+          "text": "Mentions semantic, ignore, contains, and regexp as available match types",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend lowering the app-level scoring threshold as the fix",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/matchtype-config/golden_snippet.yaml"
+      ]
+    },
+    {
+      "id": 80,
+      "eval_name": "debug-variable-overrides-format",
+      "prompt": "My scenario eval is ignoring the session variables I set. The agent acts like it doesn't know the customer is authenticated.",
+      "expected_output": "Checks variableOverrides placement and format \u2014 must be inside scenario object, not top-level",
+      "assertions": [
+        {
+          "text": "Checks whether variableOverrides is placed inside the scenario object (not top-level)",
+          "type": "correctness"
+        },
+        {
+          "text": "Verifies variable names match what the before_agent_callback expects",
+          "type": "workflow"
+        },
+        {
+          "text": "Checks if the callback derives the variable from a profile identifier (override would be skipped)",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT suggest changing the agent instruction to handle missing variables",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/variable-overrides-format/scenario_config.json"
+      ]
+    },
+    {
+      "id": 81,
+      "eval_name": "debug-tool-returning-errors",
+      "prompt": "My agent keeps saying 'I encountered an error' instead of giving a real response. The tool works fine when I test it directly.",
+      "expected_output": "Check tool error handling, agent_action return pattern, and session context differences",
+      "assertions": [
+        {
+          "text": "Checks the tool's error handling and return format (agent_action pattern)",
+          "type": "correctness"
+        },
+        {
+          "text": "Checks whether the tool works differently in agent context vs direct execution (session variables, auth)",
+          "type": "workflow"
+        },
+        {
+          "text": "Recommends using execute-tool directly via SCRAPI to isolate the issue",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Does NOT recommend changing the agent instruction to suppress error messages",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 82,
+      "eval_name": "run-combined-report-generation",
+      "prompt": "I need to share eval results with my manager. How do I generate a report that covers both goldens and sims?",
+      "expected_output": "Uses generate-combined-report.py with --golden-run and --sim-results flags",
+      "assertions": [
+        {
+          "text": "Recommends generate-combined-report.py for stakeholder-ready reports",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Explains the --golden-run and --sim-results flags for combining both eval types",
+          "type": "correctness"
+        },
+        {
+          "text": "Mentions --golden-modality and --sim-modality flags for audio reports",
+          "type": "correctness"
+        },
+        {
+          "text": "Notes that run-all-evals.py auto-generates a combined report as well",
+          "type": "correctness"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 83,
+      "eval_name": "build-deep-lint-analysis",
+      "prompt": "I ran the linter but I want a deeper analysis of my instruction quality. Is there a more thorough check?",
+      "expected_output": "Recommends lint.py --deep for LLM-powered Tier 2 analysis",
+      "assertions": [
+        {
+          "text": "Recommends running lint.py with --deep flag for LLM-powered analysis",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Explains that --deep uses Gemini for instruction quality, progressive disclosure, voice naturalness, and routing completeness checks",
+          "type": "correctness"
+        },
+        {
+          "text": "Notes that --deep is slower and should be used after fixing Tier 1 (structural) issues first",
+          "type": "workflow"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 84,
+      "eval_name": "debug-agent-latency",
+      "prompt": "My voice agent takes too long to respond. Users are hanging up before the agent finishes. How do I diagnose this?",
+      "expected_output": "Enable latency reports for audio runs, check tool response times, consider instruction length",
+      "assertions": [
+        {
+          "text": "Recommends enabling latency reports for audio eval runs (p50/p90/p99 breakdowns)",
+          "type": "tool_usage"
+        },
+        {
+          "text": "Checks tool response times as a common cause of high latency",
+          "type": "workflow"
+        },
+        {
+          "text": "Checks instruction length \u2014 longer instructions increase first-response latency",
+          "type": "correctness"
+        },
+        {
+          "text": "Does NOT recommend just telling the agent to respond faster in the instruction",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 85,
+      "eval_name": "extra-turns-after-golden",
+      "prompt": "my golden auth eval keeps failing even though all the turns match. The triage shows tools=1/1 and all sem scores are 4. What's going on?",
+      "expected_output": "Identifies EXTRA_TURNS - agent transfers to sub-agent after golden ends, producing extra output the golden doesn't cover",
+      "assertions": [
+        {
+          "text": "Identifies the extra turns (agent transfer + sub-agent response) as the cause of failure",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains that all expected turns pass but extra output causes the overall FAIL",
+          "type": "reasoning"
+        },
+        {
+          "text": "Does NOT recommend changing the agent - the agent behavior is correct",
+          "type": "anti_pattern"
+        },
+        {
+          "text": "Recommends either accepting the golden as auth-only or ending it before the transfer turn",
+          "type": "fix"
+        }
+      ],
+      "files": [
+        "evals/fixtures/extra-turns-after-golden/triage.txt",
+        "evals/fixtures/extra-turns-after-golden/transcript.txt"
+      ]
+    },
+    {
+      "id": 86,
+      "eval_name": "expectation-fail-custom",
+      "prompt": "my greeting golden fails on the custom expectation 'The agent must deliver a warm, natural greeting' but the agent clearly says a greeting on turn 2. Why?",
+      "expected_output": "Identifies EXPECTATION_FAIL - the LLM judge misinterprets the ambiguous expectation",
+      "assertions": [
+        {
+          "text": "Identifies the expectation wording as ambiguous - doesn't specify WHEN the greeting should occur",
+          "type": "correctness"
+        },
+        {
+          "text": "Explains the judge sees the disclosure as the first utterance and evaluates the greeting expectation against it",
+          "type": "reasoning"
+        },
+        {
+          "text": "Recommends rephrasing the expectation to be specific about turn order",
+          "type": "fix"
+        },
+        {
+          "text": "Does NOT recommend removing the HIPAA disclosure to fix the expectation",
+          "type": "anti_pattern"
+        }
+      ],
+      "files": [
+        "evals/fixtures/expectation-fail-custom/triage.txt",
+        "evals/fixtures/expectation-fail-custom/transcript.txt"
+      ]
+    }
+  ]
+}

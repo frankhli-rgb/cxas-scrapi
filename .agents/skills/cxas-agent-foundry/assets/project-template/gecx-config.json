@@ -1,0 +1,15 @@
+{
+  "_comment": [
+    "MODEL SELECTION (set automatically based on modality):",
+    "  Audio/voice agents: model=gemini-3.1-flash-live, modality=audio",
+    "  Text-only agents:   model=gemini-3-flash, modality=text"
+  ],
+  "gcp_project_id": "YOUR_PROJECT_ID",
+  "location": "us",
+  "app_name": "your-app-name",
+  "deployed_app_id": null,
+  "app_dir": "cxas_app/",
+  "model": "gemini-3.1-flash-live",
+  "modality": "audio",
+  "default_channel": "audio"
+}

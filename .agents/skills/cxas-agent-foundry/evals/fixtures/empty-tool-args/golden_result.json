@@ -1,0 +1,34 @@
+{
+  "golden_id": "account_transfer",
+  "run_id": "run_2",
+  "status": "FAIL",
+  "turns": [
+    {
+      "turn": 1,
+      "user_input": "I need to check my billing statement",
+      "observed_agent_response": "I'd be happy to help you with your billing. Let me connect you to the right team.",
+      "text_outcome": "PASS",
+      "tool_calls": [],
+      "tool_outcome": null
+    },
+    {
+      "turn": 2,
+      "user_input": null,
+      "observed_agent_response": "Let me transfer you to our billing department now.",
+      "text_outcome": "PASS",
+      "tool_calls": [
+        {
+          "tool_name": "payload_update_tool",
+          "observed_args": {},
+          "expected_args": {
+            "transfer_target": "billing",
+            "reason": "account_inquiry"
+          }
+        }
+      ],
+      "tool_outcome": "FAIL",
+      "tool_outcome_code": 2,
+      "tool_error": "ARG_MISMATCH: observed args {} do not match expected args"
+    }
+  ]
+}

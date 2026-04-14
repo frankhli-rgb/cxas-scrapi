@@ -1,0 +1,9 @@
+=== Golden Triage (run ghi11111) ===
+
+SUMMARY: 4/5 PASS | 0 TIMEOUT | 0 SCORES_PASS_BUT_FAIL | 1 TEXT_MISMATCH
+
+PER-EVAL:
+  ~ golden_profanity_escalation: 4/5
+      TEXT_MISMATCH: sem=2, expected="I understand your frustration. Please hold while I transfer you to a live agent.", observed="Please hold while I transfer you to a customer representative."
+
+Context: We just changed the before_model_callback to always include a standard transfer message ("Please hold while I transfer you to a customer representative.") instead of relying on the LLM to generate empathetic text. The agent behavior is now correct and deterministic, but the golden still expects the old LLM-generated text.

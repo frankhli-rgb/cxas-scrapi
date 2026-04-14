@@ -1,0 +1,32 @@
+TRIAGE REPORT - billing_flow_golden_03
+=======================================
+Status: FAIL (2 of 5 runs)
+Category: SCORES_PASS_BUT_FAIL
+
+Summary:
+  3/5 runs PASS as expected.
+  2/5 runs have evaluation_status=FAIL despite all semantic scores
+  and tool outcomes passing. No obvious agent failure.
+
+Passing Runs (3/5):
+  - semantic_similarity: 4/4
+  - tool_outcomes: 2/2
+  - hallucination_result: score=1 (Justified)
+  - evaluation_status: PASS
+
+Failing Runs (2/5):
+  - semantic_similarity: 4/4
+  - tool_outcomes: 2/2
+  - hallucination_result: score=-1 (Unknown)
+  - evaluation_status: FAIL
+
+Root Cause:
+  The hallucination scorer returned score=-1 (Unknown) instead of
+  score=1 (Justified). Platform treats Unknown as a failure even
+  when hallucination scoring is not meaningfully configured.
+  This is a platform scoring inconsistency, not an agent issue.
+
+Recommended Fix:
+  Use triage-results.py to identify SCORES_PASS_BUT_FAIL cases.
+  These should be excluded from pass rate calculations or flagged
+  as platform issues, not agent failures.

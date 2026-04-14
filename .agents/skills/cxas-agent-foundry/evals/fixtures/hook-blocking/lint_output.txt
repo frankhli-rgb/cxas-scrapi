@@ -1,0 +1,16 @@
+BLOCKED: Push to CXAS blocked by pre-agent-push-lint.sh
+
+Lint errors found (2 errors, 1 warning):
+
+ERROR [instructions] root_agent/instruction.txt:45
+  Ambiguous trigger: "Customer describes an issue" overlaps with 3 other steps.
+  Each step should have a unique, non-overlapping trigger condition.
+
+ERROR [callbacks] root_agent/before_model_callbacks/before_model/python_code.py:12
+  Undefined variable: `escalation_trigger` (did you mean `_escalation_trigger`?)
+
+WARNING [instructions] root_agent/instruction.txt:78
+  Negative condition in trigger: "NOT home internet" — use a positive trigger
+  and put the exclusion as a separate earlier step.
+
+Fix lint errors before pushing. Run `python .agents/skills/cxas-agent-foundry/scripts/lint.py` for full details.

@@ -1,0 +1,10 @@
+{
+    "name": "lookup_account",
+    "pythonFunction": {
+        "name": "lookup_account",
+        "pythonCode": "tools/lookup_account/python_function/python_code.py",
+        "description": "Looks up customer account details by account ID. Returns account information including balance, plan, and service status. Requires authenticated session."
+    },
+    "executionType": "SYNCHRONOUS",
+    "displayName": "lookup_account"
+}

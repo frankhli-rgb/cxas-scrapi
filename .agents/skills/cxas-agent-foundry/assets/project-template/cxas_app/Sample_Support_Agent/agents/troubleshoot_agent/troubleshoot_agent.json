@@ -1,0 +1,7 @@
+{
+    "name": "sub-agent-id",
+    "displayName": "troubleshoot_agent",
+    "instruction": "agents/troubleshoot_agent/instruction.txt",
+    "tools": ["troubleshoot_faq", "set_session_state", "end_session"],
+    "beforeModelCallbacks": [{"pythonCode": "agents/troubleshoot_agent/before_model_callbacks/before_model_callbacks_01/python_code.py"}]
+}

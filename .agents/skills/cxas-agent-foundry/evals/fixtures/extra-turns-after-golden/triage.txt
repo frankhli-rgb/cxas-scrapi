@@ -1,0 +1,57 @@
+TRIAGE REPORT - member_auth_happy_path
+=======================================
+Status: FAIL (3 of 3 runs)
+Category: EXTRA_TURNS
+
+Summary:
+  All 3 runs have every expected turn passing — semantic similarity
+  scores are 4/4, tool call (authenticate_member) matches with
+  parameter_correctness_score=1.0. But evaluation_status is FAIL
+  on all 3 runs.
+
+Turn-by-turn (run 1):
+  Turn 1: user="<event>session start</event>"
+          expected="This call may be recorded..."
+          actual="This call may be recorded..."
+          sem=4 ✓
+
+  Turn 2: user="I want to check on my benefits"
+          expected="Thank you for calling Humana..."
+          actual="Thank you for calling Humana..."
+          sem=4 ✓
+
+  Turn 3: user="I want to know about my benefits"
+          expected="I'd be happy to help..."
+          actual="I'd be happy to help..."
+          sem=4 ✓
+
+  Turn 4-5: auth collection (DOB, ZIP, member ID) — all sem=4 ✓
+
+  Turn 6: user="H123456789"
+          expected tool: authenticate_member
+          actual tool: authenticate_member (parameter_correctness=1.0) ✓
+          EXTRA: agent says "Great, I've confirmed your identity, Dorothy."
+          EXTRA: agent transfers to member_benefits_agent
+          EXTRA: member_benefits_agent responds "I can help with your benefits..."
+
+Root Cause:
+  The golden ends after the authenticate_member tool call. But the
+  agent continues — it says a confirmation message, transfers to the
+  member_benefits_agent sub-agent, and the sub-agent responds. These
+  extra turns are correct agent behavior (auth → route to sub-agent)
+  but the golden doesn't cover them, so the platform marks FAIL.
+
+  This is NOT an agent bug. The golden is incomplete — it only tests
+  the auth portion of the flow.
+
+Recommended Fix:
+  Option A: Accept this as an auth-only golden. The extra turns show
+  the agent is working correctly (routing after auth). Track these as
+  EXTRA_TURNS in triage, not agent failures.
+
+  Option B: Remove expected text from the last turn (keep only the
+  tool_call expectation). This sometimes reduces the extra-turn penalty
+  but doesn't eliminate it if the platform counts the sub-agent response.
+
+  Do NOT try to add the sub-agent response to the golden — it varies
+  per run and defeats the purpose of a deterministic golden.

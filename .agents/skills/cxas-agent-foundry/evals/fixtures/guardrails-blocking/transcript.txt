@@ -1,0 +1,20 @@
+[turn 1] user: "This is [REDACTED] ridiculous, you [REDACTED] useless bot"
+[turn 1] agent: "I cannot process that request. Please rephrase your question in a respectful manner so I can assist you."
+
+--- Expected behavior (from taskflow) ---
+[turn 1] user: <hostile input>
+[turn 1] before_model_callback fires -> sets context.escalation_required = true
+[turn 1] agent: "I understand you're frustrated. Let me connect you with a specialist who can help."
+[turn 1] tool_call: escalate_to_human(reason="abusive_language", sentiment="negative")
+
+--- What actually happens ---
+The guardrail layer intercepts the input at the platform level.
+The before_model_callback is never invoked.
+The agent emits a hardcoded refusal string that does not come from
+the instruction or taskflow — it comes from the safety filter.
+
+The escalation tool is never called. The customer is stuck in a
+loop of refusals with no path to a human agent.
+
+Fix: exempt the escalation flow from the content filter, or move
+profanity detection into the before_model_callback itself.

@@ -1,0 +1,23 @@
+--- Transcript: fraud_escalation / run_1 ---
+
+[Turn 1]
+USER: Someone made purchases on my account that I didn't authorize
+
+AGENT: I'm sorry to hear that. Let me look into this for you right away.
+
+[Turn 2]
+AGENT: (no text response)
+
+TOOL_CALL: end_session
+  args: {"reason": "escalation"}
+
+TOOL_CALL: payload_update_tool
+  args: {"transfer_target": "fraud", "priority": "high"}
+
+--- end transcript ---
+
+Note: Agent called end_session and payload_update_tool with correct
+args, but produced no visible text response before ending the session.
+The customer would see the chat end abruptly with no explanation.
+Expected behavior: agent should say something like "I'm transferring
+you to our fraud team" before calling end_session.

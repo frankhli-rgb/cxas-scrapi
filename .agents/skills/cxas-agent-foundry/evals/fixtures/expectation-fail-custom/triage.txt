@@ -1,0 +1,47 @@
+TRIAGE REPORT - greeting_hipaa_disclosure
+==========================================
+Status: FAIL (3 of 3 runs)
+Category: EXPECTATION_FAIL
+
+Summary:
+  All turn-level scores pass (semantic similarity 4/4, no tool calls
+  expected). But the golden has a custom expectation "The agent must
+  deliver a warm, natural greeting" which the LLM judge marks as NOT MET.
+
+Turn-by-turn (run 1):
+  Turn 1: user="<event>session start</event>"
+          expected="This call may be recorded for quality and training purposes."
+          actual="This call may be recorded for quality and training purposes."
+          sem=4 ✓
+
+  Turn 2: user="Hello"
+          expected="Thank you for calling Humana. My name is Ava. How can I help you today?"
+          actual="Thank you for calling Humana. My name is Ava. How can I help you today?"
+          sem=4 ✓
+
+Custom Expectation Results:
+  ✓ "The agent must play a call recording disclosure on the first turn"
+    → Met: "The agent's first utterance was 'This call may be recorded...'"
+
+  ✗ "The agent must deliver a warm, natural greeting"
+    → Not Met: "The agent's first utterance was a formal disclosure, not a
+       warm greeting. The actual greeting occurred on the second turn."
+
+Root Cause:
+  The LLM judge evaluated the expectation against the full conversation
+  but interpreted "deliver a warm, natural greeting" as needing to be the
+  agent's FIRST utterance. Since the first utterance is the HIPAA
+  disclosure (by design — it's callback-enforced), the judge marks it
+  as not met, even though the greeting IS delivered on turn 2.
+
+  The expectation wording is ambiguous — it doesn't specify WHEN the
+  greeting should occur, just that it should be delivered.
+
+Recommended Fix:
+  Rephrase the expectation to be unambiguous:
+  BAD:  "The agent must deliver a warm, natural greeting"
+  GOOD: "The agent must follow the disclosure with a greeting on the second turn"
+  GOOD: "The agent's second response must be a warm, natural greeting"
+
+  Do NOT remove the expectation — just make it specific enough that the
+  LLM judge can evaluate it correctly against the conversation turns.

@@ -1,0 +1,25 @@
+conversations:
+- common_session_parameters:
+    x5: 5551234567
+  conversation: auth-routing-happy-path
+  priority: P0
+  tags:
+  - auth
+  - routing
+  turns:
+  - agent: I'd be happy to help you with your billing question. Let me pull up your
+      account.
+    tool_calls:
+    - action: lookup_account
+      parameters:
+        lookup_type: billing
+        phone_number: '5551234567'
+    user: Hi, I need help with my bill
+  - agent: I can see your recent charges. Let me transfer you to our billing specialist
+      who can review the $45.99 charge in detail.
+    tool_calls:
+    - action: transfer_to_agent
+      parameters:
+        agent: billing_agent
+        reason: Customer inquiry about specific charge amount
+    user: Why was I charged $45.99?

@@ -1,0 +1,9 @@
+=== Golden Triage (run def67890) ===
+
+SUMMARY: 3/5 PASS | 0 TIMEOUT | 0 SCORES_PASS_BUT_FAIL | 0 TOOL_MISSING | 2 TEXT_MISMATCH
+
+PER-EVAL:
+  ~ golden_outage_notification: 3/5
+      TEXT_MISMATCH: sem=2, expected="We are currently experiencing an outage in your area. Estimated repair time is 4 hours.", observed="Good news, we've resolved a network issue at your location. If you're still having trouble, try restarting your device."
+
+The agent's response is correct — the outage WAS resolved between when the golden was written and now. The golden expected text references an active outage but the test data profile now returns a resolved outage.

@@ -1,0 +1,29 @@
+triage-results.py -- golden: troubleshooting_wifi (5 runs)
+===========================================================
+
+Run Results:
+  run_1: PASS  (text=PASS, tools=PASS)
+  run_2: FAIL  (text=FAIL, tools=PASS)
+  run_3: PASS  (text=PASS, tools=PASS)
+  run_4: FAIL  (text=FAIL, tools=PASS)
+  run_5: FAIL  (text=FAIL, tools=PASS)
+
+Pass rate: 2/5 (40%)
+
+Failure category: TEXT_MISMATCH
+
+Failure details:
+  run_2, turn 2: semantic_score=0.41
+    expected: troubleshooting steps for router restart
+    observed: troubleshooting steps for DNS configuration
+  run_4, turn 2: semantic_score=0.38
+    observed: troubleshooting steps for firmware update
+  run_5, turn 2: semantic_score=0.44
+    observed: troubleshooting steps for channel congestion
+
+Notes:
+  - Tools pass in ALL runs (kb_search always called correctly)
+  - kb_search returns different articles each run
+  - Agent faithfully follows KB content but KB results vary
+  - Text expected_response is hardcoded to "router restart" steps
+  - Root cause: non-deterministic KB retrieval, not agent behavior

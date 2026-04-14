@@ -1,0 +1,38 @@
+{
+  "golden_id": "fraud_escalation",
+  "run_id": "run_1",
+  "status": "FAIL",
+  "turns": [
+    {
+      "turn": 1,
+      "user_input": "Someone made purchases on my account that I didn't authorize",
+      "observed_agent_response": "I'm sorry to hear that. Let me look into this for you right away.",
+      "text_outcome": "PASS",
+      "tool_calls": [],
+      "tool_outcome": null
+    },
+    {
+      "turn": 2,
+      "user_input": null,
+      "observed_agent_response": "",
+      "expected_agent_response": "I'm transferring you to our fraud team who can assist with unauthorized charges.",
+      "text_outcome": "FAIL",
+      "semantic_score": 0.0,
+      "tool_calls": [
+        {
+          "tool_name": "end_session",
+          "observed_args": {"reason": "escalation"},
+          "expected_args": {"reason": "escalation"},
+          "outcome": "PASS"
+        },
+        {
+          "tool_name": "payload_update_tool",
+          "observed_args": {"transfer_target": "fraud", "priority": "high"},
+          "expected_args": {"transfer_target": "fraud", "priority": "high"},
+          "outcome": "PASS"
+        }
+      ],
+      "tool_outcome": "PASS"
+    }
+  ]
+}

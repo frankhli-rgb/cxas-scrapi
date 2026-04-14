@@ -1,0 +1,44 @@
+--- Transcript: troubleshooting_wifi / run_1 (PASS) ---
+
+[Turn 1]
+USER: My wifi keeps dropping every few minutes
+
+AGENT: I'm sorry to hear that. Let me look up some solutions for you.
+
+TOOL_CALL: kb_search
+  args: {"query": "wifi dropping intermittent"}
+
+TOOL_RESPONSE: {"articles": [{"id": "KB-4021", "title": "Router Restart Procedure", "content": "Step 1: Unplug router for 30 seconds..."}]}
+
+[Turn 2]
+AGENT: Based on our troubleshooting guide, let's start with a router
+restart. Please unplug your router, wait 30 seconds, then plug it
+back in. This resolves intermittent drops in most cases.
+
+--- end transcript ---
+
+
+--- Transcript: troubleshooting_wifi / run_2 (FAIL) ---
+
+[Turn 1]
+USER: My wifi keeps dropping every few minutes
+
+AGENT: I'm sorry about that. Let me find the right troubleshooting
+steps for you.
+
+TOOL_CALL: kb_search
+  args: {"query": "wifi dropping intermittent"}
+
+TOOL_RESPONSE: {"articles": [{"id": "KB-4087", "title": "DNS Configuration Guide", "content": "If experiencing intermittent connectivity, try changing DNS to 8.8.8.8..."}]}
+
+[Turn 2]
+AGENT: This could be a DNS issue. Try updating your DNS settings to
+use 8.8.8.8 as your primary and 8.8.4.4 as secondary. Go to your
+network settings and look for DNS configuration.
+
+--- end transcript ---
+
+Note: Both runs called kb_search correctly. The KB tool returned
+different articles each time. The agent correctly followed the KB
+content in both cases, but the golden's expected text only matches
+the "router restart" path.

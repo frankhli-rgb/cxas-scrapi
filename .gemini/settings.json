@@ -1,4 +1,7 @@
 {
+  "tools": {
+    "truncateToolOutputThreshold": 0 // Disable truncation
+  },
   "hooks": {
     "AfterTool": [
       {
@@ -8,41 +11,8 @@
             "name": "post-agent-update",
             "type": "command",
             "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/post-agent-update.sh",
-            "description": "Auto-pull from CXAS after update_agent calls and remind to sync callbacks",
+            "description": "Auto-pull from CXAS and sync callbacks after update_agent calls",
             "timeout": 5000
-          },
-          {
-            "name": "post-agent-push",
-            "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/post-agent-push.sh",
-            "description": "Remind to commit after cxas-eval push and auto-set app ID",
-            "timeout": 5000
-          },
-          {
-            "name": "post-eval-run",
-            "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/post-eval-run.sh",
-            "description": "Remind to generate combined report after eval runs",
-            "timeout": 5000
-          }
-        ]
-      },
-      {
-        "matcher": "write_file|replace",
-        "hooks": [
-          {
-            "name": "post-callback-write",
-            "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/post-callback-write.sh",
-            "description": "Remind to run callback tests after callback code changes",
-            "timeout": 5000
-          },
-          {
-            "name": "post-agent-edit-lint",
-            "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/post-agent-edit-lint.sh",
-            "description": "Run linter after editing agent files in cxas_app/",
-            "timeout": 15000
           }
         ]
       }
@@ -51,13 +21,6 @@
       {
         "matcher": "run_shell_command",
         "hooks": [
-          {
-            "name": "pre-eval-run",
-            "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/pre-eval-run.sh",
-            "description": "Auto-push local code to CXAS before running evals",
-            "timeout": 30000
-          },
           {
             "name": "pre-agent-push",
             "type": "command",
@@ -85,21 +48,25 @@
         "matcher": "write_file|replace",
         "hooks": [
           {
-            "name": "pre-agent-edit",
-            "type": "command",
-            "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/pre-agent-edit.sh",
-            "description": "Auto-pull from CXAS before editing agent files in cxas_app/",
-            "timeout": 30000
-          },
-          {
             "name": "block-script-creation",
             "type": "command",
             "command": "$GEMINI_PROJECT_DIR/.agents/skills/agent-foundry/hooks/block-script-creation.sh",
-            "description": "Block creation of throwaway .py scripts — use inline python or bundled scripts instead",
+            "description": "Block creation of throwaway .py scripts",
             "timeout": 5000
           }
         ]
       }
+    ]
+  },
+  "skills": {
+    "disabled": [
+      "skill-creator"
+    ]
+  },
+  "hooksConfig": {
+    "disabled": [
+      "block-script-via-shell",
+      "block-script-creation"
     ]
   }
 }

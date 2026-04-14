@@ -1,0 +1,33 @@
+TRANSCRIPT - Escalation Multi-Agent Comparison
+===============================================
+
+--- SCENARIO 1: User at root_agent (PASS) ---
+
+[Turn 1] USER: I need help with my account
+[Turn 1] AGENT (root): Sure, how can I help?
+
+[Turn 2] USER: you're a piece of s***, connect me to someone real
+[Turn 2] AGENT (root):
+  TOOL_CALL: end_session(reason="escalation", message="Connecting you now")
+  TEXT: "I understand. Let me connect you with a live agent."
+
+Result: PASS - escalation callback fired on root_agent
+
+--- SCENARIO 2: User at billing_agent (FAIL) ---
+
+[Turn 1] USER: I need help with my bill
+[Turn 1] AGENT (root):
+  TOOL_CALL: transfer_to_agent(agent_name="billing_agent")
+  TEXT: "Let me connect you with our billing team."
+
+[Turn 2] USER: thanks
+[Turn 2] AGENT (billing): Happy to help! What's the issue?
+
+[Turn 3] USER: you're a piece of s***, connect me to someone real
+[Turn 3] AGENT (billing):
+  TEXT: "I understand you're frustrated. Let me try to help
+    you with your billing concern. Could you describe the issue?"
+
+Result: FAIL - no escalation tools called. billing_agent has no
+  before_model_callback, so escalation logic never executed.
+  Agent just redirected the conversation.

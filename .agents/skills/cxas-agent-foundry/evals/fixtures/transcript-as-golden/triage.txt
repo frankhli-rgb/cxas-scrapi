@@ -1,0 +1,26 @@
+Eval type: golden + sim
+Flow: balance_check
+
+Golden result: 5/5 PASS
+Sim result: 2/5 FAIL
+
+The golden passes every time because it's a captured transcript —
+the model is essentially replaying a memorized interaction with
+hardcoded values (msisdn 27831234567, balance R45.20, data 350MB).
+
+The sim fails because:
+  Run 2: sim profile has msisdn 27839876543, balance R120.00.
+    Agent correctly returns R120.00 but golden expectation checks
+    for "R45.20" -> response_contains FAIL
+  Run 4: sim user says "what's my balance" (not "I'd like to check
+    my balance please") -> agent responds differently but correctly.
+    String match on filler phrases fails.
+
+Problem: This golden is not testing agent BEHAVIOR — it's testing
+whether the agent reproduces one specific transcript verbatim.
+It gives false confidence (5/5 pass) while the sim reveals that
+the agent can't generalize to other profiles.
+
+Fix: rewrite golden to test behavior (tool called, response
+structure) not specific values. Use response_pattern instead
+of response_contains with hardcoded amounts.
