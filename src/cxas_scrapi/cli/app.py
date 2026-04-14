@@ -363,9 +363,14 @@ def apps_get(args: argparse.Namespace) -> None:
 def app_lint(args: argparse.Namespace) -> None:
     """Handles the 'lint' command."""
     from cxas_scrapi.utils.linter import (
-        Discovery, LintConfig, LintContext, LintReport,
+        Discovery,
+        LintConfig,
+        LintContext,
+        LintReport,
         SINGLE_RESOURCE_RULES,
-        build_context, build_registry, run_rules,
+        build_context,
+        build_registry,
+        run_rules,
     )
 
     registry = build_registry()
@@ -417,12 +422,19 @@ def app_lint(args: argparse.Namespace) -> None:
             )
         else:
             import json
-            print(json.dumps([{
-                "file": str(app_dir),
-                "severity": "error",
-                "rule_id": "SETUP",
-                "message": f"No app directory found under {app_dir}",
-            }]))
+
+            print(
+                json.dumps(
+                    [
+                        {
+                            "file": str(app_dir),
+                            "severity": "error",
+                            "rule_id": "SETUP",
+                            "message": f"No app directory found under {app_dir}",
+                        }
+                    ]
+                )
+            )
         sys.exit(1)
 
     context = build_context(project_root, config, discovery)
@@ -452,7 +464,11 @@ def app_lint(args: argparse.Namespace) -> None:
 
     report = LintReport()
     run_rules(
-        registry, config, context, discovery, report,
+        registry,
+        config,
+        context,
+        discovery,
+        report,
         categories=categories,
         specific_rules=specific_rules,
     )

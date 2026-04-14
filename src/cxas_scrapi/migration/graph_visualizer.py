@@ -94,9 +94,7 @@ class HighLevelGraphVisualizer:
         if "intent" in item:
             return f"Intent: {self._get_intent_name(item['intent'])}"
         if "triggerIntentId" in item:
-            return (
-                f"Intent: {self._get_intent_name(item['triggerIntentId'])}"
-            )
+            return f"Intent: {self._get_intent_name(item['triggerIntentId'])}"
         if "condition" in item:
             return f"If: {item.get('conditionString', item['condition'])}"
         if "event" in item:
@@ -140,10 +138,7 @@ class HighLevelGraphVisualizer:
                 )
                 for ref_type, ref_name in matches:
                     ref_clean = ref_name.strip()
-                    if (
-                        "END SESSION" in ref_clean
-                        or "END_FLOW" in ref_clean
-                    ):
+                    if "END SESSION" in ref_clean or "END_FLOW" in ref_clean:
                         self._accumulate_edge(
                             pb_uuid,
                             "END_SESSION",
@@ -185,9 +180,7 @@ class HighLevelGraphVisualizer:
                     specific = f"{wh_uuid}_{tag}"
                     wh_name = self.uuid_to_name.get(wh_uuid, wh_uuid)
                     if specific not in self.uuid_to_name:
-                        self.uuid_to_name[specific] = (
-                            f"{wh_name}\\n[{tag}]"
-                        )
+                        self.uuid_to_name[specific] = f"{wh_name}\\n[{tag}]"
                     self._accumulate_edge(
                         flow_uuid,
                         specific,
@@ -217,9 +210,7 @@ class HighLevelGraphVisualizer:
                     specific = f"{wh_uuid}_{tag}"
                     wh_name = self.uuid_to_name.get(wh_uuid, wh_uuid)
                     if specific not in self.uuid_to_name:
-                        self.uuid_to_name[specific] = (
-                            f"{wh_name}\\n[{tag}]"
-                        )
+                        self.uuid_to_name[specific] = f"{wh_name}\\n[{tag}]"
                     self._accumulate_edge(
                         flow_uuid,
                         specific,
@@ -275,9 +266,7 @@ class HighLevelGraphVisualizer:
                     )
 
             target_page = (
-                handler.get("targetPageId")
-                or handler.get("targetPage")
-                or ""
+                handler.get("targetPageId") or handler.get("targetPage") or ""
             )
             if "END_SESSION" in str(target_page) or "END_FLOW" in str(
                 target_page
@@ -301,9 +290,7 @@ class HighLevelGraphVisualizer:
         Returns:
             A :class:`graphviz.Digraph` ready for rendering or export.
         """
-        self.dot = graphviz.Digraph(
-            comment="Agent Topology", format="svg"
-        )
+        self.dot = graphviz.Digraph(comment="Agent Topology", format="svg")
         self.dot.attr(
             rankdir="LR",
             nodesep="0.3",
@@ -361,9 +348,7 @@ class HighLevelGraphVisualizer:
             name = self.uuid_to_name.get(pb_uuid, pb_uuid)
 
             pen_width = "3" if pb_uuid == entry_uuid else "2"
-            border_color = (
-                "#388e3c" if pb_uuid == entry_uuid else "#1976d2"
-            )
+            border_color = "#388e3c" if pb_uuid == entry_uuid else "#1976d2"
             self.dot.node(
                 pb_uuid,
                 f"📘 {name}",
@@ -392,10 +377,10 @@ class HighLevelGraphVisualizer:
                             is_tool=True,
                         )
 
-            for ref in pb.get("playbookRoutes", []) + pb.get(
-                "flowRoutes", []
-            ):
-                self._accumulate_edge(pb_uuid, self._get_raw_id(ref), "routes to")
+            for ref in pb.get("playbookRoutes", []) + pb.get("flowRoutes", []):
+                self._accumulate_edge(
+                    pb_uuid, self._get_raw_id(ref), "routes to"
+                )
 
             for ref in pb.get("referencedTools", []):
                 self._accumulate_edge(
@@ -414,9 +399,7 @@ class HighLevelGraphVisualizer:
             name = self.uuid_to_name.get(flow_uuid, flow_uuid)
 
             pen_width = "3" if flow_uuid == entry_uuid else "2"
-            border_color = (
-                "#388e3c" if flow_uuid == entry_uuid else "#7b1fa2"
-            )
+            border_color = "#388e3c" if flow_uuid == entry_uuid else "#7b1fa2"
             self.dot.node(
                 flow_uuid,
                 f"🔀 {name}",
@@ -463,9 +446,12 @@ class HighLevelGraphVisualizer:
 
         # Draw accumulated edges
         seen_fringe: set = set()
-        for (src, dst, label, is_tool), conditions in (
-            self.edges_accumulator.items()
-        ):
+        for (
+            src,
+            dst,
+            label,
+            is_tool,
+        ), conditions in self.edges_accumulator.items():
             if len(conditions) > 1 and "Always" in conditions:
                 conditions.remove("Always")
 
@@ -508,11 +494,7 @@ class HighLevelGraphVisualizer:
                     if dst == "END_SESSION"
                     else self.uuid_to_name.get(dst, dst)
                 )
-                base_label = (
-                    label
-                    if label.endswith(" to")
-                    else f"{label} to"
-                )
+                base_label = label if label.endswith(" to") else f"{label} to"
                 actual_label = f"{base_label} {dst_name}"
                 edge_label = (
                     f"{actual_label}\\n({cond_str})"

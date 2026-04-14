@@ -76,7 +76,14 @@ class DFCXAgentExporter(BaseDFCXClient):
                     return None
 
                 # --- MODIFIED: Added maps for Flows and Pages ---
-                intent_map, playbook_map, tool_map, entity_map, webhook_map, flow_map = (
+                (
+                    intent_map,
+                    playbook_map,
+                    tool_map,
+                    entity_map,
+                    webhook_map,
+                    flow_map,
+                ) = (
                     {},
                     {},
                     {},
@@ -86,9 +93,7 @@ class DFCXAgentExporter(BaseDFCXClient):
                 )
                 dir_name_to_full_name, display_name_to_id = {}, {}
 
-                def get_full_name(
-                    resource_type: str, resource_id: str
-                ) -> str:
+                def get_full_name(resource_type: str, resource_id: str) -> str:
                     return f"{agent_id}/{resource_type}/{resource_id}"
 
                 # First pass: Load main components and build maps for all resource types
@@ -107,11 +112,9 @@ class DFCXAgentExporter(BaseDFCXClient):
                     )
 
                     # Other resources are in subfolders: type/name/name.json
-                    is_standard_resource = (
-                        len(path_parts) >= 2
-                        and path_parts[-2]
-                        == path_parts[-1].replace(".json", "")
-                    )
+                    is_standard_resource = len(path_parts) >= 2 and path_parts[
+                        -2
+                    ] == path_parts[-1].replace(".json", "")
 
                     if is_standard_resource or is_webhook:
                         resource_type = path_parts[0]
@@ -160,13 +163,11 @@ class DFCXAgentExporter(BaseDFCXClient):
                                     "pages": [],
                                 }
 
-                            dir_name_to_full_name[
-                                resource_dir_name
-                            ] = full_name
+                            dir_name_to_full_name[resource_dir_name] = full_name
                             if content.get("displayName"):
-                                display_name_to_id[
-                                    content["displayName"]
-                                ] = resource_id
+                                display_name_to_id[content["displayName"]] = (
+                                    resource_id
+                                )
                         except Exception as e:
                             logger.error(
                                 f"    -> ERROR pre-loading {filename}: {e}"
@@ -244,9 +245,9 @@ class DFCXAgentExporter(BaseDFCXClient):
                             with zip_file.open(filename) as f:
                                 ex_content = json.load(f)
                             if "name" in ex_content:
-                                ex_content[
-                                    "name"
-                                ] = f"{full_resource_name}/examples/{ex_content['name']}"
+                                ex_content["name"] = (
+                                    f"{full_resource_name}/examples/{ex_content['name']}"
+                                )
                             playbook_map[full_resource_name].setdefault(
                                 "examples", []
                             ).append(ex_content)
@@ -280,9 +281,7 @@ class DFCXAgentExporter(BaseDFCXClient):
                 for pb_name, pb_data in playbook_map.items():
                     if "referencedPlaybooks" in pb_data:
                         resolved_refs = [
-                            get_full_name(
-                                "playbooks", display_name_to_id[dn]
-                            )
+                            get_full_name("playbooks", display_name_to_id[dn])
                             for dn in pb_data["referencedPlaybooks"]
                             if dn in display_name_to_id
                         ]

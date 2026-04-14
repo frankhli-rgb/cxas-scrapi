@@ -22,10 +22,15 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from cxas_scrapi.utils.linter import LintContext, LintResult, Rule, Severity, rule
+from cxas_scrapi.utils.linter import (
+    LintContext,
+    LintResult,
+    Rule,
+    Severity,
+    rule,
+)
 
-
-TOOL_REF_PATTERN = re.compile(r'\{@TOOL:\s*([^}]+)\}')
+TOOL_REF_PATTERN = re.compile(r"\{@TOOL:\s*([^}]+)\}")
 
 
 def _load_agent_config(file_path: Path) -> Optional[dict]:
@@ -57,12 +62,16 @@ def _find_line(content: str, needle: str) -> Optional[int]:
 class RequiredXmlStructure(Rule):
     id = "I001"
     name = "required-xml-structure"
-    description = "Instruction must contain <role>, <persona>, and <taskflow> tags"
+    description = (
+        "Instruction must contain <role>, <persona>, and <taskflow> tags"
+    )
     default_severity = Severity.ERROR
 
     REQUIRED_TAGS = ["<role>", "<persona>", "<taskflow>"]
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         return [
             self.make_result(
@@ -70,7 +79,8 @@ class RequiredXmlStructure(Rule):
                 message=f"Missing required XML tag: {tag}",
                 fix=f"Add {tag}...{tag.replace('<', '</')} section to instruction",
             )
-            for tag in self.REQUIRED_TAGS if tag not in content
+            for tag in self.REQUIRED_TAGS
+            if tag not in content
         ]
 
 
@@ -81,7 +91,9 @@ class TaskflowChildren(Rule):
     description = "Taskflow must contain <subtask> or <step> children"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         if "<taskflow>" not in content:
             return []
         match = re.search(r"<taskflow>(.*?)</taskflow>", content, re.DOTALL)
@@ -90,11 +102,13 @@ class TaskflowChildren(Rule):
         taskflow = match.group(1)
         if "<subtask" not in taskflow and "<step" not in taskflow:
             rel = str(file_path.relative_to(context.project_root))
-            return [self.make_result(
-                file=rel,
-                message="<taskflow> has no <subtask> or <step> children",
-                fix="Add <subtask name=\"...\"><step>...</step></subtask> inside <taskflow>",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message="<taskflow> has no <subtask> or <step> children",
+                    fix='Add <subtask name="..."><step>...</step></subtask> inside <taskflow>',
+                )
+            ]
         return []
 
 
@@ -102,20 +116,28 @@ class TaskflowChildren(Rule):
 class ExcessiveIfElse(Rule):
     id = "I003"
     name = "excessive-if-else"
-    description = "Excessive IF/ELSE logic in instructions (should be in callbacks)"
+    description = (
+        "Excessive IF/ELSE logic in instructions (should be in callbacks)"
+    )
     default_severity = Severity.WARNING
 
-    IF_ELSE_RE = re.compile(r'\bIF\b.*\bELSE\b', re.IGNORECASE)
+    IF_ELSE_RE = re.compile(r"\bIF\b.*\bELSE\b", re.IGNORECASE)
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
-        count = sum(1 for line in content.split("\n") if self.IF_ELSE_RE.search(line))
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
+        count = sum(
+            1 for line in content.split("\n") if self.IF_ELSE_RE.search(line)
+        )
         if count >= 3:
             rel = str(file_path.relative_to(context.project_root))
-            return [self.make_result(
-                file=rel,
-                message=f"Found {count} IF/ELSE blocks — excessive programmatic logic degrades LLM reliability",
-                fix="Move deterministic branching to callbacks.",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message=f"Found {count} IF/ELSE blocks — excessive programmatic logic degrades LLM reliability",
+                    fix="Move deterministic branching to callbacks.",
+                )
+            ]
         return []
 
 
@@ -127,22 +149,30 @@ class NegativeTriggers(Rule):
     default_severity = Severity.WARNING
 
     NEGATIVE_PATTERNS = [
-        (r'<trigger>.*\bNOT\b.*</trigger>', "NOT in trigger"),
-        (r'<trigger>.*\bis NOT\b.*</trigger>', "is NOT in trigger"),
-        (r'<trigger>.*\bnot\s+(?:a|an|the)\b.*</trigger>', "negation in trigger"),
+        (r"<trigger>.*\bNOT\b.*</trigger>", "NOT in trigger"),
+        (r"<trigger>.*\bis NOT\b.*</trigger>", "is NOT in trigger"),
+        (
+            r"<trigger>.*\bnot\s+(?:a|an|the)\b.*</trigger>",
+            "negation in trigger",
+        ),
     ]
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         results = []
         for pattern, label in self.NEGATIVE_PATTERNS:
             for m in re.finditer(pattern, content, re.IGNORECASE):
-                line_num = content[:m.start()].count("\n") + 1
-                results.append(self.make_result(
-                    file=rel, line=line_num,
-                    message=f"Negative condition in trigger: {label}",
-                    fix="Use positive triggers only. Put the excluded case as a separate, earlier step.",
-                ))
+                line_num = content[: m.start()].count("\n") + 1
+                results.append(
+                    self.make_result(
+                        file=rel,
+                        line=line_num,
+                        message=f"Negative condition in trigger: {label}",
+                        fix="Use positive triggers only. Put the excluded case as a separate, earlier step.",
+                    )
+                )
         return results
 
 
@@ -150,19 +180,23 @@ class NegativeTriggers(Rule):
 class ConditionalLogicBlock(Rule):
     id = "I005"
     name = "conditional-logic-block"
-    description = "conditional_logic blocks for intent classification confuse the LLM"
+    description = (
+        "conditional_logic blocks for intent classification confuse the LLM"
+    )
     default_severity = Severity.WARNING
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         return [
             self.make_result(
                 file=rel,
-                line=content[:m.start()].count("\n") + 1,
+                line=content[: m.start()].count("\n") + 1,
                 message="<conditional_logic> block — LLM gets confused by priority-ordered conditionals",
                 fix="Use separate <step> elements with distinct triggers instead",
             )
-            for m in re.finditer(r'<conditional_logic>', content)
+            for m in re.finditer(r"<conditional_logic>", content)
         ]
 
 
@@ -170,12 +204,14 @@ class ConditionalLogicBlock(Rule):
 class HardcodedData(Rule):
     id = "I006"
     name = "hardcoded-data"
-    description = "Hardcoded data (phone numbers, prices) should come from tools"
+    description = (
+        "Hardcoded data (phone numbers, prices) should come from tools"
+    )
     default_severity = Severity.WARNING
 
     DEFAULT_PATTERNS = [
-        (r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b', "phone number"),
-        (r'\$\d+(?:\.\d{2})?', "price/dollar amount"),
+        (r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b", "phone number"),
+        (r"\$\d+(?:\.\d{2})?", "price/dollar amount"),
     ]
 
     def _should_skip(self, line: str) -> bool:
@@ -185,11 +221,15 @@ class HardcodedData(Rule):
             return True
         return False
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         options = context.options.get("I006", {})
         custom = options.get("patterns", None)
-        patterns = [(p, "data") for p in custom] if custom else self.DEFAULT_PATTERNS
+        patterns = (
+            [(p, "data") for p in custom] if custom else self.DEFAULT_PATTERNS
+        )
 
         results = []
         for i, line in enumerate(content.split("\n"), 1):
@@ -197,11 +237,14 @@ class HardcodedData(Rule):
                 continue
             for pattern, label in patterns:
                 for m in re.finditer(pattern, line):
-                    results.append(self.make_result(
-                        file=rel, line=i,
-                        message=f"Possible hardcoded {label}: '{m.group()}'",
-                        fix="Data should come from tool responses, not hardcoded in instructions",
-                    ))
+                    results.append(
+                        self.make_result(
+                            file=rel,
+                            line=i,
+                            message=f"Possible hardcoded {label}: '{m.group()}'",
+                            fix="Data should come from tool responses, not hardcoded in instructions",
+                        )
+                    )
         return results
 
 
@@ -212,16 +255,20 @@ class InstructionTooLong(Rule):
     description = "Instruction exceeds word count threshold — consider splitting into sub-agents"
     default_severity = Severity.INFO
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         max_words = context.options.get("I007", {}).get("max_words", 3000)
         word_count = len(content.split())
         if word_count > max_words:
             rel = str(file_path.relative_to(context.project_root))
-            return [self.make_result(
-                file=rel,
-                message=f"Instruction is {word_count} words (threshold: {max_words})",
-                fix="Consider splitting into sub-agents to reduce context size",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message=f"Instruction is {word_count} words (threshold: {max_words})",
+                    fix="Consider splitting into sub-agents to reduce context size",
+                )
+            ]
         return []
 
 
@@ -232,17 +279,22 @@ class InvalidAgentRef(Rule):
     description = "Agent reference points to non-existent agent"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         valid = context.all_agent_names | context.all_agent_display_names
-        refs = {ref.strip() for ref in re.findall(r'\{@AGENT:\s*([^}]+)\}', content)}
+        refs = {
+            ref.strip() for ref in re.findall(r"\{@AGENT:\s*([^}]+)\}", content)
+        }
         return [
             self.make_result(
                 file=rel,
                 message=f"{{@AGENT: {ref}}} references non-existent agent",
                 fix=f"Available agents: {', '.join(sorted(valid))}",
             )
-            for ref in refs if ref not in valid
+            for ref in refs
+            if ref not in valid
         ]
 
 
@@ -253,7 +305,9 @@ class InvalidToolRef(Rule):
     description = "Tool reference points to tool not in agent's config"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         return [
             self.make_result(
@@ -266,21 +320,28 @@ class InvalidToolRef(Rule):
         ]
 
 
-def _check_wrong_syntax(rule_obj: Rule, file_path: Path, content: str,
-                         context: LintContext,
-                         patterns: list[tuple[str, str]],
-                         fix: str) -> list[LintResult]:
+def _check_wrong_syntax(
+    rule_obj: Rule,
+    file_path: Path,
+    content: str,
+    context: LintContext,
+    patterns: list[tuple[str, str]],
+    fix: str,
+) -> list[LintResult]:
     """Shared logic for I010 and I011 — detect wrong reference syntax."""
     rel = str(file_path.relative_to(context.project_root))
     results = []
     for i, line in enumerate(content.split("\n"), 1):
         for pattern, label in patterns:
             for m in re.finditer(pattern, line):
-                results.append(rule_obj.make_result(
-                    file=rel, line=i,
-                    message=f"Wrong reference syntax: {label} found: {m.group(0)}",
-                    fix=fix,
-                ))
+                results.append(
+                    rule_obj.make_result(
+                        file=rel,
+                        line=i,
+                        message=f"Wrong reference syntax: {label} found: {m.group(0)}",
+                        fix=fix,
+                    )
+                )
     return results
 
 
@@ -292,14 +353,20 @@ class WrongAgentSyntax(Rule):
     default_severity = Severity.ERROR
 
     WRONG_PATTERNS = [
-        (r'\$\{AGENT:([^}]+)\}', '${AGENT:...}'),
-        (r'(?<!\{)\{AGENT:([^}]+)\}', '{AGENT:...}'),
-        (r'\$\{@AGENT:([^}]+)\}', '${@AGENT:...}'),
+        (r"\$\{AGENT:([^}]+)\}", "${AGENT:...}"),
+        (r"(?<!\{)\{AGENT:([^}]+)\}", "{AGENT:...}"),
+        (r"\$\{@AGENT:([^}]+)\}", "${@AGENT:...}"),
     ]
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         return _check_wrong_syntax(
-            self, file_path, content, context, self.WRONG_PATTERNS,
+            self,
+            file_path,
+            content,
+            context,
+            self.WRONG_PATTERNS,
             fix="Use {@AGENT: Display Name} (with @ sign, spaces in name)",
         )
 
@@ -312,14 +379,20 @@ class WrongToolSyntax(Rule):
     default_severity = Severity.ERROR
 
     WRONG_PATTERNS = [
-        (r'\$\{TOOL:([^}]+)\}', '${TOOL:...}'),
-        (r'(?<!\{)\{TOOL:([^}]+)\}', '{TOOL:...}'),
-        (r'\$\{@TOOL:([^}]+)\}', '${@TOOL:...}'),
+        (r"\$\{TOOL:([^}]+)\}", "${TOOL:...}"),
+        (r"(?<!\{)\{TOOL:([^}]+)\}", "{TOOL:...}"),
+        (r"\$\{@TOOL:([^}]+)\}", "${@TOOL:...}"),
     ]
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         return _check_wrong_syntax(
-            self, file_path, content, context, self.WRONG_PATTERNS,
+            self,
+            file_path,
+            content,
+            context,
+            self.WRONG_PATTERNS,
             fix="Use {@TOOL: Tool Name}",
         )
 
@@ -331,7 +404,9 @@ class UnusedToolInConfig(Rule):
     description = "Tool in agent JSON but not referenced in instruction"
     default_severity = Severity.WARNING
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         config = _load_agent_config(file_path)
         if not config:
             return []
@@ -341,8 +416,9 @@ class UnusedToolInConfig(Rule):
         unused = config_tools - instruction_refs - {"end_session"}
 
         agent_json_rel = str(
-            (file_path.parent / f"{file_path.parent.name}.json")
-            .relative_to(context.project_root)
+            (file_path.parent / f"{file_path.parent.name}.json").relative_to(
+                context.project_root
+            )
         )
         return [
             self.make_result(
@@ -361,7 +437,9 @@ class ToolNotInConfig(Rule):
     description = "Tool referenced in instruction but not in agent JSON"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         config = _load_agent_config(file_path)
         if not config:
             return []

@@ -512,18 +512,20 @@ class EvalUtils(Evaluations):
                 met = exp.get("met_count", 0)
                 outcome_str = "PASS" if not_met == 0 else "FAIL"
 
-                all_metadata.append({
-                    "display_name": exp["display_name"],
-                    "evaluation_run": exp.get("evaluation_run"),
-                    "eval_result_id": exp["eval_result_id"],
-                    "evaluation_status": exp.get("evaluation_status"),
-                    "turn_index": None,
-                    "type": "Custom Expectation",
-                    "expected": exp["expectation"],
-                    "actual": exp["explanation"],
-                    "outcome": outcome_str,
-                    "score": f"{met} / {met + not_met}",
-                })
+                all_metadata.append(
+                    {
+                        "display_name": exp["display_name"],
+                        "evaluation_run": exp.get("evaluation_run"),
+                        "eval_result_id": exp["eval_result_id"],
+                        "evaluation_status": exp.get("evaluation_status"),
+                        "turn_index": None,
+                        "type": "Custom Expectation",
+                        "expected": exp["expectation"],
+                        "actual": exp["explanation"],
+                        "outcome": outcome_str,
+                        "score": f"{met} / {met + not_met}",
+                    }
+                )
 
         for turn in turns:
             outcomes_str = turn.get("expectation_outcomes", "[]")
@@ -622,18 +624,20 @@ class EvalUtils(Evaluations):
                     else:
                         score_val = EvalUtils._map_outcome(raw_score)
 
-                all_metadata.append({
-                    "display_name": turn["display_name"],
-                    "eval_result_id": turn["eval_result_id"],
-                    "evaluation_run": turn.get("evaluation_run"),
-                    "evaluation_status": turn.get("evaluation_status"),
-                    "turn_index": turn["turn_index"],
-                    "type": f,
-                    "expected": e,
-                    "actual": a,
-                    "outcome": outcome_str,
-                    "score": score_val,
-                })
+                all_metadata.append(
+                    {
+                        "display_name": turn["display_name"],
+                        "eval_result_id": turn["eval_result_id"],
+                        "evaluation_run": turn.get("evaluation_run"),
+                        "evaluation_status": turn.get("evaluation_status"),
+                        "turn_index": turn["turn_index"],
+                        "type": f,
+                        "expected": e,
+                        "actual": a,
+                        "outcome": outcome_str,
+                        "score": score_val,
+                    }
+                )
 
                 if raw_outcome == 2 or outcome_str == "FAIL":
                     if f == "Semantic Similarity":
@@ -1308,9 +1312,9 @@ class EvalUtils(Evaluations):
 
         # 2. Check if it already exists
         evals_map = self._get_or_load_evals_map(app_name)
-        existing_resource_name = evals_map.get(
-            "goldens", {}
-        ).get(display_name) or evals_map.get("scenarios", {}).get(display_name)
+        existing_resource_name = evals_map.get("goldens", {}).get(
+            display_name
+        ) or evals_map.get("scenarios", {}).get(display_name)
 
         if existing_resource_name:
             logger.info(
@@ -1398,8 +1402,5 @@ def evaluate_expectations(
         return output.results
     except Exception as e:
 
-        logging.getLogger(__name__).error(
-            f"Error evaluating expectations: {e}"
-        )
+        logging.getLogger(__name__).error(f"Error evaluating expectations: {e}")
         return []
-

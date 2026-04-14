@@ -772,7 +772,7 @@ class ToolEvals:
                 if "toolsets/" in tool_id and "/tools/" in tool_id:
                     # For tools inside a toolset, we need the toolset object to get the schema
                     actual_tool_id, _ = tool_id.split("/tools/")
-                
+
                 tool_obj = self.tools_client.get_tool(actual_tool_id)
                 tool_dict = (
                     type(tool_obj).to_dict(tool_obj)

@@ -24,7 +24,13 @@ import json
 import re
 from pathlib import Path
 
-from cxas_scrapi.utils.linter import LintContext, LintResult, Rule, Severity, rule
+from cxas_scrapi.utils.linter import (
+    LintContext,
+    LintResult,
+    Rule,
+    Severity,
+    rule,
+)
 
 
 @rule("structure")
@@ -34,15 +40,20 @@ class AgentToolReferences(Rule):
     When an instruction tells the LLM to call a tool that isn't in the
     agent's tool list, the LLM can't call it — it silently improvises.
     """
+
     id = "S002"
     name = "agent-tool-references"
-    description = "Instruction references tools that exist in the agent's tool list"
+    description = (
+        "Instruction references tools that exist in the agent's tool list"
+    )
     default_severity = Severity.ERROR
     target = "instruction"
 
-    TOOL_REF_PATTERN = re.compile(r'\{@TOOL[:\s]+([^}]+)\}', re.IGNORECASE)
+    TOOL_REF_PATTERN = re.compile(r"\{@TOOL[:\s]+([^}]+)\}", re.IGNORECASE)
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         agent_dir = file_path.parent
         agent_json = agent_dir / f"{agent_dir.name}.json"
         if not agent_json.exists():
@@ -53,7 +64,9 @@ class AgentToolReferences(Rule):
         except (json.JSONDecodeError, OSError):
             return []
 
-        known_tools = set(agent_config.get("tools", [])) | context.platform_tools
+        known_tools = (
+            set(agent_config.get("tools", [])) | context.platform_tools
+        )
         known_tools_lower = {t.lower() for t in known_tools}
 
         referenced = {
@@ -72,14 +85,16 @@ class AgentToolReferences(Rule):
                 (i for i, line in enumerate(lines, 1) if tool_name in line),
                 None,
             )
-            results.append(self.make_result(
-                str(file_path),
-                f"Instruction references tool '{tool_name}' but it's not in "
-                f"the agent's tool list.",
-                line=line_num,
-                fix=f"Add '{tool_name}' to the tools list in {agent_json.name}, "
+            results.append(
+                self.make_result(
+                    str(file_path),
+                    f"Instruction references tool '{tool_name}' but it's not in "
+                    f"the agent's tool list.",
+                    line=line_num,
+                    fix=f"Add '{tool_name}' to the tools list in {agent_json.name}, "
                     f"or remove the reference from the instruction.",
-            ))
+                )
+            )
         return results
 
 
@@ -95,22 +110,28 @@ def _resolve_path(app_dir: Path, relative_path: str) -> Path:
 
 
 _CALLBACK_TYPES = [
-    "beforeAgentCallbacks", "afterAgentCallbacks",
-    "beforeModelCallbacks", "afterModelCallbacks",
-    "beforeToolCallbacks", "afterToolCallbacks",
+    "beforeAgentCallbacks",
+    "afterAgentCallbacks",
+    "beforeModelCallbacks",
+    "afterModelCallbacks",
+    "beforeToolCallbacks",
+    "afterToolCallbacks",
 ]
 
 
 @rule("structure")
 class CallbackFileReferences(Rule):
     """Agent JSON references callback files that don't exist."""
+
     id = "S003"
     name = "callback-file-references"
     description = "Callback code files referenced in agent JSON exist on disk"
     default_severity = Severity.ERROR
     target = "agent_config"
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         try:
             agent_config = json.loads(content)
         except json.JSONDecodeError:
@@ -125,24 +146,31 @@ class CallbackFileReferences(Rule):
         for code_path in filter(None, code_paths):
             resolved = _resolve_path(context.app_dir, code_path)
             if not resolved.exists():
-                results.append(self.make_result(
-                    str(file_path),
-                    f"Callback references '{code_path}' but file not found",
-                    fix="Create the callback file or fix the path in the agent JSON",
-                ))
+                results.append(
+                    self.make_result(
+                        str(file_path),
+                        f"Callback references '{code_path}' but file not found",
+                        fix="Create the callback file or fix the path in the agent JSON",
+                    )
+                )
         return results
 
 
 @rule("structure")
 class ChildAgentReferences(Rule):
     """Agent JSON references child agents that don't exist."""
+
     id = "S004"
     name = "child-agent-references"
-    description = "Child agent references in agent JSON point to existing agents"
+    description = (
+        "Child agent references in agent JSON point to existing agents"
+    )
     default_severity = Severity.ERROR
     target = "agent_config"
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         try:
             agent_config = json.loads(content)
         except json.JSONDecodeError:
@@ -152,10 +180,12 @@ class ChildAgentReferences(Rule):
         child_agents = agent_config.get("childAgents", [])
         for child_name in child_agents:
             if child_name not in context.all_agent_names:
-                results.append(self.make_result(
-                    str(file_path),
-                    f"References child agent '{child_name}' but no agent directory "
-                    f"found. Available agents: {sorted(context.all_agent_names)}",
-                    fix="Create the agent directory or fix the reference",
-                ))
+                results.append(
+                    self.make_result(
+                        str(file_path),
+                        f"References child agent '{child_name}' but no agent directory "
+                        f"found. Available agents: {sorted(context.all_agent_names)}",
+                        fix="Create the agent directory or fix the reference",
+                    )
+                )
         return results

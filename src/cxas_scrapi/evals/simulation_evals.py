@@ -43,7 +43,7 @@ class Step(pydantic.BaseModel):
     success_criteria: str = ""
     response_guide: str = ""
     max_turns: int = 0
-    
+
     static_utterance: str = ""
     # Variable injects are only supported for the first step
     inject_variables: dict[str, Any] = {}
@@ -155,7 +155,9 @@ class Conversation:
         """Adds a user utterance to the transcript."""
         self.transcript.append(f"User: {user_utterance}")
 
-    def next_user_utterance(self, last_agent_response: str) -> tuple[str, Dict[str, Any]]:
+    def next_user_utterance(
+        self, last_agent_response: str
+    ) -> tuple[str, Dict[str, Any]]:
         """Gets the next user utterance and variables to inject."""
         raise NotImplementedError
 
@@ -189,7 +191,13 @@ class LLMUserConversation(Conversation):
         for step in test_case["steps"]:
             self.steps_progress.append(
                 StepProgress(
-                    step=Step(**{k: v for k, v in step.items() if k != "inject_variables"}),
+                    step=Step(
+                        **{
+                            k: v
+                            for k, v in step.items()
+                            if k != "inject_variables"
+                        }
+                    ),
                     status=StepStatus.NOT_STARTED,
                     justification="",
                 )
@@ -218,13 +226,17 @@ class LLMUserConversation(Conversation):
         ):
             return "", {}
 
-        if self.current_turn == 0: 
+        if self.current_turn == 0:
             if not self.test_case["steps"][0].get("static_utterance", None):
                 return _FIRST_UTTERANCE, {}
-            return self.test_case["steps"][0]["static_utterance"], self.test_case["steps"][0].get("inject_variables", {}) 
+            return self.test_case["steps"][0][
+                "static_utterance"
+            ], self.test_case["steps"][0].get("inject_variables", {})
 
         step_list = self.test_case["steps"]
-        json_step_list = json.dumps([Step(**s).model_dump() for s in step_list], indent=2)
+        json_step_list = json.dumps(
+            [Step(**s).model_dump() for s in step_list], indent=2
+        )
         prompt = llm_user_prompts.LLM_USER_PROMPT.replace(
             "{input_user_config}",
             json_step_list,
@@ -251,7 +263,9 @@ class LLMUserConversation(Conversation):
         self.steps_progress = output.step_progresses
         return output.next_user_utterance, {}
 
-    def next_user_utterance(self, last_agent_response: str = "") -> tuple[str, dict[str, Any]]:
+    def next_user_utterance(
+        self, last_agent_response: str = ""
+    ) -> tuple[str, dict[str, Any]]:
         """Returns the next user utterance from the LLM user."""
         if last_agent_response:
             self._add_agent_response(last_agent_response)
@@ -370,9 +384,7 @@ class SimulationEvals(Apps):
         session_ended = False
 
         chunk_type = (
-            chunk._pb.WhichOneof("data")
-            if hasattr(chunk, "_pb")
-            else None
+            chunk._pb.WhichOneof("data") if hasattr(chunk, "_pb") else None
         )
         if chunk_type == "tool_call":
             tc = chunk.tool_call
@@ -381,8 +393,7 @@ class SimulationEvals(Apps):
             )
             expanded_args = Sessions._expand_pb_struct(tc.args)
             trace_chunks.append(
-                f"Tool Call: {tool_name} with args "
-                f"{expanded_args}"
+                f"Tool Call: {tool_name} with args " f"{expanded_args}"
             )
             if "end_session" in tool_name:
                 session_ended = True
@@ -517,7 +528,9 @@ class SimulationEvals(Apps):
 
             # Get the next simulated user utterance based on the agent's
             # response
-            user_utterance, variables = eval_conv.next_user_utterance(agent_text)
+            user_utterance, variables = eval_conv.next_user_utterance(
+                agent_text
+            )
             if user_utterance:
                 detailed_trace.append(f"User: {user_utterance}")
 

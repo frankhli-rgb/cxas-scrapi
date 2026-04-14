@@ -32,8 +32,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-
 # ── Severity ─────────────────────────────────────────────────────────────
+
 
 class Severity(Enum):
     ERROR = "error"
@@ -51,6 +51,7 @@ class Severity(Enum):
 
 # ── Lint Result ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class LintResult:
     file: str
@@ -61,7 +62,9 @@ class LintResult:
     fix_suggestion: str = ""
 
     def __str__(self):
-        prefix = {"error": "E", "warning": "W", "info": "I"}[self.severity.value]
+        prefix = {"error": "E", "warning": "W", "info": "I"}[
+            self.severity.value
+        ]
         loc = self.file
         if self.line:
             loc += f":{self.line}"
@@ -79,6 +82,7 @@ class LintResult:
 
 
 # ── Lint Report ──────────────────────────────────────────────────────────
+
 
 @dataclass
 class LintReport:
@@ -109,13 +113,17 @@ class LintReport:
                 print(f"         Fix: {r.fix_suggestion}")
 
         info_count = len(self.results) - len(self.errors) - len(self.warnings)
-        print(f"\n  {len(self.errors)} error(s), {len(self.warnings)} warning(s), "
-              f"{info_count} info")
+        print(
+            f"\n  {len(self.errors)} error(s), {len(self.warnings)} warning(s), "
+            f"{info_count} info"
+        )
 
     def to_json(self) -> str:
         return json.dumps([r.to_dict() for r in self.results], indent=2)
 
-    def print_and_exit(self, json_output: bool = False, show_fixes: bool = False) -> None:
+    def print_and_exit(
+        self, json_output: bool = False, show_fixes: bool = False
+    ) -> None:
         """Print results and exit with code 1 if errors, 0 otherwise."""
         import sys
 
@@ -137,6 +145,7 @@ class LintReport:
 
 # ── Rule Base Class ──────────────────────────────────────────────────────
 
+
 class Rule(ABC):
     """Base class for all lint rules.
 
@@ -152,6 +161,7 @@ class Rule(ABC):
       Rules that don't set ``target`` receive the default files for
       their category.
     """
+
     id: str = ""
     name: str = ""
     description: str = ""
@@ -160,12 +170,20 @@ class Rule(ABC):
     target: str = ""
 
     @abstractmethod
-    def check(self, file_path: Path, content: str, context: "LintContext") -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: "LintContext"
+    ) -> list[LintResult]:
         """Run this rule against a file. Returns list of LintResults."""
         ...
 
-    def make_result(self, file: str, message: str, severity: Optional[Severity] = None,
-                    line: Optional[int] = None, fix: str = "") -> LintResult:
+    def make_result(
+        self,
+        file: str,
+        message: str,
+        severity: Optional[Severity] = None,
+        line: Optional[int] = None,
+        fix: str = "",
+    ) -> LintResult:
         return LintResult(
             file=file,
             rule_id=self.id,
@@ -195,6 +213,7 @@ def rule(category: str):
             id = "A001"
             ...
     """
+
     def decorator(cls):
         cls.category = category
         instance = cls()
@@ -202,6 +221,7 @@ def rule(category: str):
             _REGISTERED_IDS.add(instance.id)
             _RULE_REGISTRY[category].append(instance)
         return cls
+
     return decorator
 
 
@@ -218,9 +238,11 @@ def reset_registry() -> None:
 
 # ── Lint Context ─────────────────────────────────────────────────────────
 
+
 @dataclass
 class LintContext:
     """Shared context passed to rules for cross-referencing."""
+
     project_root: Path
     app_dir: Path
     evals_dir: Path
@@ -228,7 +250,9 @@ class LintContext:
     all_agent_display_names: set = field(default_factory=set)
     all_tool_names: set = field(default_factory=set)
     all_tool_dirs: dict = field(default_factory=dict)
-    platform_tools: set = field(default_factory=lambda: {"end_session", "customize_response"})
+    platform_tools: set = field(
+        default_factory=lambda: {"end_session", "customize_response"}
+    )
     options: dict = field(default_factory=dict)
 
     @property
@@ -237,6 +261,7 @@ class LintContext:
 
 
 # ── Rule Registry ────────────────────────────────────────────────────────
+
 
 class RuleRegistry:
     """Holds all registered rules and applies config overrides."""
@@ -273,9 +298,11 @@ class RuleRegistry:
 
 # ── Configuration ────────────────────────────────────────────────────────
 
+
 @dataclass
 class LintConfig:
     """Linter configuration loaded from ``cxaslint.yaml``."""
+
     app_dir: str = "."
     evals_dir: str = "evals/"
     rules: dict[str, Severity] = field(default_factory=dict)
@@ -327,6 +354,7 @@ class LintConfig:
 
 # ── Discovery ────────────────────────────────────────────────────────────
 
+
 class Discovery:
     """Discovers agents, tools, callbacks, evals, and configs in an app directory."""
 
@@ -344,7 +372,9 @@ class Discovery:
         """
         if not self.app_dir.exists():
             return None
-        if (self.app_dir / "app.json").exists() or (self.app_dir / "app.yaml").exists():
+        if (self.app_dir / "app.json").exists() or (
+            self.app_dir / "app.yaml"
+        ).exists():
             return self.app_dir
         for d in self.app_dir.iterdir():
             if d.is_dir() and not d.name.startswith("."):
@@ -399,8 +429,10 @@ class Discovery:
             return []
         result = []
         cb_types = [
-            "before_model_callbacks", "after_model_callbacks",
-            "before_agent_callbacks", "after_agent_callbacks",
+            "before_model_callbacks",
+            "after_model_callbacks",
+            "before_agent_callbacks",
+            "after_agent_callbacks",
         ]
         for agent_dir in sorted(agents_dir.iterdir()):
             if not agent_dir.is_dir():
@@ -457,9 +489,7 @@ class Discovery:
         parent = self.app_root / subdir
         if not parent.exists():
             return {}
-        return {
-            d.name: d for d in sorted(parent.iterdir()) if d.is_dir()
-        }
+        return {d.name: d for d in sorted(parent.iterdir()) if d.is_dir()}
 
     def discover_toolsets(self) -> dict[str, Path]:
         return self._discover_resource_dirs("toolsets")
@@ -490,6 +520,7 @@ SINGLE_RESOURCE_RULES = {
 
 
 # ── Runner ───────────────────────────────────────────────────────────────
+
 
 def build_registry() -> RuleRegistry:
     """Build the rule registry by importing all rule modules.
@@ -569,11 +600,14 @@ def run_rules(
     def _get_rules(category: str) -> list[Rule]:
         if categories and category not in categories:
             return []
-        return [r for r in registry.rules_for_category(category) if should_run(r)]
+        return [
+            r for r in registry.rules_for_category(category) if should_run(r)
+        ]
 
     # Instructions — only instruction.txt files
     instruction_files = {
-        k: v for k, v in discovery.discover_agents().items()
+        k: v
+        for k, v in discovery.discover_agents().items()
         if v.name == "instruction.txt"
     }
     _lint_files(_get_rules("instructions"), instruction_files)

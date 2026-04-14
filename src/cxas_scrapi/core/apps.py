@@ -282,7 +282,9 @@ class Apps(Common):
 
         # Extract the short ID if a full resource name is provided
         # format is: projects/{project_id}/locations/{location}/apps/{app_id}
-        app_id_extracted = app_name.split("/")[-1] if "/" in app_name else app_name
+        app_id_extracted = (
+            app_name.split("/")[-1] if "/" in app_name else app_name
+        )
 
         request_kwargs = {
             "parent": self.parent,

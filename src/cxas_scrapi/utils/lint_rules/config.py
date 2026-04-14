@@ -20,7 +20,13 @@ Validates app.json and agent JSON configuration files.
 import json
 from pathlib import Path
 
-from cxas_scrapi.utils.linter import LintContext, LintResult, Rule, Severity, rule
+from cxas_scrapi.utils.linter import (
+    LintContext,
+    LintResult,
+    Rule,
+    Severity,
+    rule,
+)
 
 
 @rule("config")
@@ -30,15 +36,19 @@ class InvalidJson(Rule):
     description = "Config file must be valid JSON"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         try:
             json.loads(content)
         except json.JSONDecodeError as e:
-            return [self.make_result(
-                file=rel,
-                message=f"Invalid JSON: {e}",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message=f"Invalid JSON: {e}",
+                )
+            ]
         return []
 
 
@@ -49,7 +59,9 @@ class MissingRequiredFields(Rule):
     description = "Config must have required fields (name, displayName)"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
         try:
             data = json.loads(content)
@@ -60,10 +72,12 @@ class MissingRequiredFields(Rule):
         if file_path.name == "app.json":
             for field_name in ["name", "displayName"]:
                 if field_name not in data:
-                    results.append(self.make_result(
-                        file=rel,
-                        message=f"Missing required field: '{field_name}'",
-                    ))
+                    results.append(
+                        self.make_result(
+                            file=rel,
+                            message=f"Missing required field: '{field_name}'",
+                        )
+                    )
         return results
 
 
@@ -74,7 +88,9 @@ class AgentToolNotExists(Rule):
     description = "Agent config references non-existent tool"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
 
         if file_path.name == "app.json":
@@ -88,11 +104,13 @@ class AgentToolNotExists(Rule):
         results = []
         for tool in data.get("tools", []):
             if tool not in context.all_known_tools:
-                results.append(self.make_result(
-                    file=rel,
-                    message=f"Agent config lists tool '{tool}' but it does not exist",
-                    fix=f"Available tools: {', '.join(sorted(context.all_known_tools))}",
-                ))
+                results.append(
+                    self.make_result(
+                        file=rel,
+                        message=f"Agent config lists tool '{tool}' but it does not exist",
+                        fix=f"Available tools: {', '.join(sorted(context.all_known_tools))}",
+                    )
+                )
         return results
 
 
@@ -103,7 +121,9 @@ class AgentMissingInstruction(Rule):
     description = "Agent directory must have an instruction.txt file"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
 
         if file_path.name == "app.json":
@@ -112,11 +132,13 @@ class AgentMissingInstruction(Rule):
         agent_dir = file_path.parent
         instruction = agent_dir / "instruction.txt"
         if not instruction.exists():
-            return [self.make_result(
-                file=rel,
-                message=f"Agent '{agent_dir.name}' has config but no instruction.txt",
-                fix="Create instruction.txt with <role>, <persona>, and <taskflow> sections",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message=f"Agent '{agent_dir.name}' has config but no instruction.txt",
+                    fix="Create instruction.txt with <role>, <persona>, and <taskflow> sections",
+                )
+            ]
         return []
 
 
@@ -127,7 +149,9 @@ class RootAgentMissingEndSession(Rule):
     description = "Root agent must have end_session tool associated"
     default_severity = Severity.ERROR
 
-    def check(self, file_path: Path, content: str, context: LintContext) -> list[LintResult]:
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
         rel = str(file_path.relative_to(context.project_root))
 
         if file_path.name != "app.json":
@@ -154,9 +178,11 @@ class RootAgentMissingEndSession(Rule):
 
         tools = agent_data.get("tools", [])
         if "end_session" not in tools:
-            return [self.make_result(
-                file=rel,
-                message=f"Root agent '{root_agent_name}' is missing 'end_session' tool — the agent cannot terminate conversations",
-                fix="Associate end_session with the root agent via: agents_client.update_agent(agent_name=..., tools=[..., 'end_session'])",
-            )]
+            return [
+                self.make_result(
+                    file=rel,
+                    message=f"Root agent '{root_agent_name}' is missing 'end_session' tool — the agent cannot terminate conversations",
+                    fix="Associate end_session with the root agent via: agents_client.update_agent(agent_name=..., tools=[..., 'end_session'])",
+                )
+            ]
         return []
