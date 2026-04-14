@@ -576,20 +576,20 @@ class TurnEvals:
                         )
                         full_conversation_trace.append(f"User: {user_input}")
                         full_conversation_trace.append(
-                            f"Agent Text: {signals["full_text"].strip()}"
+                            f"Agent Text: {signals['full_text'].strip()}"
                         )
                         for tool in signals["called_tools"]:
                             full_conversation_trace.append(
                                 f"Tool Call: {tool} with args "
-                                f"{signals["tool_inputs"].get(tool, {})}"
+                                f"{signals['tool_inputs'].get(tool, {})}"
                             )
                             full_conversation_trace.append(
                                 f"Tool Response: {tool} with result "
-                                f"{signals["tool_outputs"].get(tool, {})}"
+                                f"{signals['tool_outputs'].get(tool, {})}"
                             )
                         if signals["target_agent"]:
                             full_conversation_trace.append(
-                                f"Agent Transfer: {signals["target_agent"]}"
+                                f"Agent Transfer: {signals['target_agent']}"
                             )
 
                         eval_results = self.validate_turn_test(
@@ -603,7 +603,7 @@ class TurnEvals:
                         print(f"{status}: {case.name} - {step.turn}")
                         for r in eval_results:
                             if r["status"] == "FAILURE":
-                                print(f"  - {r["justification"]}")
+                                print(f"  - {r['justification']}")
 
                         if not eval_results:
                             results.append(
@@ -639,9 +639,9 @@ class TurnEvals:
                                         "actual": r["actual"],
                                         "session_id": test_session_id,
                                         "llm_results": (
-                                            f"{r["expectation"]}: "
-                                            f"{r["status"]} "
-                                            f"({r["justification"]})"
+                                            f"{r['expectation']}: "
+                                            f"{r['status']} "
+                                            f"({r['justification']})"
                                             if not r["expected"]
                                             else ""
                                         ),
@@ -789,8 +789,8 @@ class TurnEvals:
                                     "actual": r["actual"],
                                     "session_id": test_session_id,
                                     "llm_results": (
-                                        f"{r["expectation"]}: {r["status"]} "
-                                        f"({r["justification"]})"
+                                        f"{r['expectation']}: {r['status']} "
+                                        f"({r['justification']})"
                                         if not r["expected"]
                                         else ""
                                     ),

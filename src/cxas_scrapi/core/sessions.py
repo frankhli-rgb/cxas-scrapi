@@ -557,34 +557,6 @@ class Sessions(Common):
                                 )
                             )
 
-            else:
-                # Fallback to high-level outputs if no diagnostic trace is
-                # available
-                text = getattr(output, "text", None)
-                if text:
-                    logging.debug(f"AGENT RESPONSE: {text}")
-                    display(HTML(f"{response_font} {text}"))
-                payload = getattr(output, "payload", None)
-                if payload:
-                    expanded_payload = Sessions._expand_pb_struct(payload)
-                    logging.debug(f"CUSTOM PAYLOAD: {expanded_payload}")
-                    display(HTML(f"{payload_font} {expanded_payload}"))
-
-                tool_calls_msg = getattr(output, "tool_calls", None)
-                if tool_calls_msg and hasattr(tool_calls_msg, "tool_calls"):
-                    for tc in tool_calls_msg.tool_calls:
-                        tool_name = tc.tool or tc.display_name
-                        expanded_args = Sessions._expand_pb_struct(tc.args)
-                        logging.debug(
-                            f"TOOL CALL: {tool_name} -- Args: {expanded_args}"
-                        )
-                        display(
-                            HTML(
-                                f"{tool_call_font} {tool_name} -- "
-                                f"Args: {expanded_args}"
-                            )
-                        )
-
     def async_bidi_run_session(
         self, config: dict, inputs: list[dict[str, Any]]
     ):

@@ -12,48 +12,57 @@ import ast
 from cxas_scrapi import SimulationEvals
 from google import genai
 
-class TeeStdout:
-    _ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+import threading
 
-    def __init__(self, filename, quiet=False):
-        self.filename = filename
-        self.file = None
-        self.stdout = sys.stdout
-        self.quiet = quiet
-        self.buffer = []
+class ThreadLocalStream:
+    def __init__(self, default_stream):
+        self.default_stream = default_stream
+        self.local = threading.local()
 
-    def __enter__(self):
-        self.file = open(self.filename, "w", encoding="utf-8")
-        sys.stdout = self
-        return self
+    def set_stream(self, stream):
+        self.local.stream = stream
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stdout = self.stdout
-        if self.file:
-            self.file.close()
+    def clear_stream(self):
+        if hasattr(self.local, 'stream'):
+            del self.local.stream
+
+    def __getattr__(self, name):
+        if hasattr(self.local, 'stream'):
+            return getattr(self.local.stream, name)
+        return getattr(self.default_stream, name)
 
     def write(self, data):
-        if not self.quiet:
-            self.stdout.write(data)
-        self.buffer.append(data)
-        stripped_data = self._ansi_escape.sub('', data)
-        self.file.write(stripped_data)
+        if hasattr(self.local, 'stream'):
+            self.local.stream.write(data)
+        else:
+            self.default_stream.write(data)
 
     def flush(self):
-        self.stdout.flush()
-        self.file.flush()
+        if hasattr(self.local, 'stream'):
+            self.local.stream.flush()
+        else:
+            self.default_stream.flush()
 
     def isatty(self):
         return True
 
-def run_single_eval(item, evals_dir, app_name, skip_analysis=False):
+thread_local_stdout = ThreadLocalStream(sys.stdout)
+sys.stdout = thread_local_stdout
+
+def run_single_eval(item, evals_dir, app_name, run_index, skip_analysis=False):
     json_path = os.path.join(evals_dir, item)
-    log_path = json_path.replace(".json", ".log")
+    log_path = json_path.replace(".json", f"_run_{run_index}.log")
     session_id = str(uuid.uuid4())
+    colored_trace = ""
+    passed = False
     os.environ["FORCE_COLOR"] = "1"
     os.environ["CLICOLOR_FORCE"] = "1"
     
-    with TeeStdout(log_path, quiet=True) as tee:
+    import io
+    log_stream = io.StringIO()
+    thread_local_stdout.set_stream(log_stream)
+    
+    try:
         print(f"\n==================================================")
         print(f"Running test case: {item}")
         print(f"==================================================")
@@ -68,9 +77,9 @@ def run_single_eval(item, evals_dir, app_name, skip_analysis=False):
         
         report = eval_conv.generate_report()
         
-        # Print full report to tee (so it is stripped for file)
-        print("\n=== Full Report ===", file=tee)
-        print(report, file=tee)
+        # Print full report
+        print("\n=== Full Report ===")
+        print(report)
         
         # Determine pass/fail
         all_goals_completed = all(report.goals_df['status'] == 'Completed')
@@ -80,7 +89,16 @@ def run_single_eval(item, evals_dir, app_name, skip_analysis=False):
         
         passed = all_goals_completed and all_expectations_met
         
-        colored_trace = "".join(tee.buffer)
+        colored_trace = log_stream.getvalue()
+        
+        # Write stripped log to file
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        stripped_content = ansi_escape.sub('', colored_trace)
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(stripped_content)
+            
+    finally:
+        thread_local_stdout.clear_stream()
         
         # Strip the goal progress from the trace for HTML
         trace_marker = "--- Conversation Complete ---"
@@ -92,7 +110,6 @@ def run_single_eval(item, evals_dir, app_name, skip_analysis=False):
         llm_suggestions = ""
         if not passed and not skip_analysis:
             try:
-                tee.flush()
                 with open(log_path, 'r', encoding='utf-8') as f:
                     log_content = f.read()
                     pattern = re.compile(r"TOOL CALL: \[([^\]]+)\] intercept_and_score_reasoning -- Args: (\{.*\})")
@@ -279,6 +296,7 @@ def generate_html_report(results, evals_dir, app_name):
             tr:nth-child(even) { background-color: #f8fafc; }
             .pass { color: #10b981; font-weight: 600; }
             .fail { color: #ef4444; font-weight: 600; }
+            .mixed { color: #f59e0b; font-weight: 600; }
             
             /* Card style for details */
             details.eval-details {
@@ -340,30 +358,41 @@ def generate_html_report(results, evals_dir, app_name):
             </tr>
     """
     
+    grouped_results = {}
     for res in results:
-        name = res['name']
-        passed = res['passed']
-        status_class = "pass" if passed else "fail"
-        status_text = "Pass" if passed else "Fail"
+        if res['name'] not in grouped_results:
+            grouped_results[res['name']] = []
+        grouped_results[res['name']].append(res)
+
+    for name, runs in grouped_results.items():
+        passed_count = sum(1 for r in runs if r['passed'])
+        total_runs = len(runs)
+        status_text = f"{passed_count}/{total_runs} Pass" if total_runs > 1 else ("Pass" if runs[0]['passed'] else "Fail")
+        status_class = "pass" if passed_count == total_runs else ("fail" if passed_count == 0 else "mixed")
         
-        log_rel_path = os.path.join("sim_evals", os.path.basename(res['log_path']))
-        
-        parts = app_name.split("/")
-        project = parts[1]
-        location = parts[3]
-        app_id = parts[5]
-        session_id = res['session_id']
-        
-        console_link = f"https://ces.cloud.google.com/projects/{project}/locations/{location}/apps/{app_id}?panel=conversation_list&id={session_id}&source=LIVE"
-        
+        log_links = []
+        session_links = []
+        for r in runs:
+            run_idx = r.get('run_index', 1)
+            log_rel_path = os.path.join("sim_evals", os.path.basename(r['log_path']))
+            log_links.append(f'<a href="{log_rel_path}" target="_blank">Run {run_idx}</a>')
+            
+            parts = app_name.split("/")
+            project = parts[1]
+            location = parts[3]
+            app_id = parts[5]
+            session_id = r['session_id']
+            console_link = f"https://ces.cloud.google.com/projects/{project}/locations/{location}/apps/{app_id}?panel=conversation_list&id={session_id}&source=LIVE"
+            session_links.append(f'<a href="{console_link}" target="_blank">Run {run_idx}</a>')
+            
         anchor = name.replace(" ", "_").replace(".", "_")
         
         html_content += f"""
             <tr>
                 <td>{name}</td>
                 <td class="{status_class}">{status_text}</td>
-                <td><a href="#{anchor}">View Details</a> (<a href="{log_rel_path}" target="_blank">Log File</a>)</td>
-                <td><a href="{console_link}" target="_blank">Session Link</a></td>
+                <td><a href="#{anchor}">View Details</a> ({", ".join(log_links)})</td>
+                <td>{", ".join(session_links)}</td>
             </tr>
         """
         
@@ -373,24 +402,13 @@ def generate_html_report(results, evals_dir, app_name):
         <h2>Detailed Status</h2>
     """
     
-    for res in results:
-        name = res['name']
+    for name, runs in grouped_results.items():
         anchor = name.replace(" ", "_").replace(".", "_")
         
-        goals_html = res['goals_html']
-        goals_html = goals_html.replace('<td>Completed</td>', '<td class="pass">Completed</td>')
-        goals_html = goals_html.replace('<td>In Progress</td>', '<td class="pass">In Progress</td>')
-        goals_html = goals_html.replace('<td>Not Started</td>', '<td class="fail">Not Started</td>')
-        
-        exp_html = res['expectations_html']
-        if exp_html:
-            exp_html = exp_html.replace('<td>Met</td>', '<td class="pass">Met</td>')
-            exp_html = exp_html.replace('<td>Not Met</td>', '<td class="fail">Not Met</td>')
-            
-        escaped_log = ansi_to_html(res['colored_trace'])
-        
-        status_class = "pass" if res['passed'] else "fail"
-        status_text = "Pass" if res['passed'] else "Fail"
+        passed_count = sum(1 for r in runs if r['passed'])
+        total_runs = len(runs)
+        status_text = f"{passed_count}/{total_runs} Pass" if total_runs > 1 else ("Pass" if runs[0]['passed'] else "Fail")
+        status_class = "pass" if passed_count == total_runs else ("fail" if passed_count == 0 else "mixed")
         
         html_content += f"""
         <details class="eval-details" id="{anchor}">
@@ -399,48 +417,79 @@ def generate_html_report(results, evals_dir, app_name):
                 <span class="eval-status {status_class}">{status_text}</span>
             </summary>
             <div class="eval-content">
-                <h4>Goal Progress</h4>
-                {goals_html}
         """
         
-        if exp_html:
+        for r in runs:
+            run_idx = r.get('run_index', 1)
+            run_status = "Pass" if r['passed'] else "Fail"
+            run_class = "pass" if r['passed'] else "fail"
+            
+            goals_html = r.get('goals_html', '<div>No goal data available due to error.</div>')
+            goals_html = goals_html.replace('<td>Completed</td>', '<td class="pass">Completed</td>')
+            goals_html = goals_html.replace('<td>In Progress</td>', '<td class="pass">In Progress</td>')
+            goals_html = goals_html.replace('<td>Not Started</td>', '<td class="fail">Not Started</td>')
+            
+            exp_html = r.get('expectations_html', '')
+            if exp_html:
+                exp_html = exp_html.replace('<td>Met</td>', '<td class="pass">Met</td>')
+                exp_html = exp_html.replace('<td>Not Met</td>', '<td class="fail">Not Met</td>')
+                
+            escaped_log = ansi_to_html(r['colored_trace'])
+            
             html_content += f"""
-                <h4>Expectations</h4>
-                {exp_html}
+                <details style="margin-bottom: 10px; border: 1px solid #e2e8f0; border-radius: 4px;">
+                    <summary style="padding: 10px; background-color: #f8fafc; cursor: pointer;">
+                        <span>Run {run_idx}</span>
+                        <span class="eval-status {run_class}" style="float: right;">{run_status}</span>
+                    </summary>
+                    <div style="padding: 15px;">
+                        <h4>Goal Progress</h4>
+                        {goals_html}
             """
             
-        analysis_results = res.get('analysis_results', [])
-        if analysis_results:
-            analysis_html = "<h4>Cognitive Diagnostics</h4><ul>"
-            for analysis in analysis_results:
-                issues_str = ", ".join(analysis['issues']) if analysis['issues'] else "None"
-                analysis_html += f"""
-                <li>
-                    <b>Agent:</b> {analysis['agent']}<br/>
-                    <b>Planned Action:</b> {analysis['planned_action']}<br/>
-                    <b>Issues:</b> {issues_str}<br/>
-                    <details style="margin-top: 5px;">
-                        <summary style="font-size: 0.9em; color: #64748b;">View Monologue</summary>
-                        <pre style="background-color: #f8fafc; color: #333; padding: 10px; border: 1px solid #e2e8f0; font-size: 0.85em; max-height: 200px; overflow-y: auto;">{analysis['monologue']}</pre>
-                    </details>
-                </li>
+            if exp_html:
+                html_content += f"""
+                        <h4>Expectations</h4>
+                        {exp_html}
                 """
-            analysis_html += "</ul>"
-            
+                
+            analysis_results = r.get('analysis_results', [])
+            if analysis_results:
+                analysis_html = "<h4>Cognitive Diagnostics</h4><ul>"
+                for analysis in analysis_results:
+                    issues_str = ", ".join(analysis['issues']) if analysis['issues'] else "None"
+                    analysis_html += f"""
+                    <li>
+                        <b>Agent:</b> {analysis['agent']}<br/>
+                        <b>Planned Action:</b> {analysis['planned_action']}<br/>
+                        <b>Issues:</b> {issues_str}<br/>
+                        <details style="margin-top: 5px;">
+                            <summary style="font-size: 0.9em; color: #64748b;">View Monologue</summary>
+                            <pre style="background-color: #f8fafc; color: #333; padding: 10px; border: 1px solid #e2e8f0; font-size: 0.85em; max-height: 200px; overflow-y: auto;">{analysis['monologue']}</pre>
+                        </details>
+                    </li>
+                    """
+                analysis_html += "</ul>"
+                
+                html_content += f"""
+                        {analysis_html}
+                """
+                
+            llm_suggestions = r.get('llm_suggestions', '')
+            if llm_suggestions:
+                html_content += f"""
+                        <h4>Actionable Suggestions</h4>
+                        <pre style="background-color: #f0fdf4; color: #166534; padding: 15px; border: 1px solid #bbf7d0; border-radius: 5px; white-space: pre-wrap; font-family: inherit;">{llm_suggestions}</pre>
+                """
+                
             html_content += f"""
-                {analysis_html}
+                        <h4>Conversation Trace</h4>
+                        <pre>{escaped_log}</pre>
+                    </div>
+                </details>
             """
             
-        llm_suggestions = res.get('llm_suggestions', '')
-        if llm_suggestions:
-            html_content += f"""
-                <h4>Actionable Suggestions</h4>
-                <pre style="background-color: #f0fdf4; color: #166534; padding: 15px; border: 1px solid #bbf7d0; border-radius: 5px; white-space: pre-wrap; font-family: inherit;">{llm_suggestions}</pre>
-            """
-            
-        html_content += f"""
-                <h4>Conversation Trace</h4>
-                <pre>{escaped_log}</pre>
+        html_content += """
             </div>
         </details>
         """
@@ -463,6 +512,7 @@ def main():
     parser.add_argument("--start_index", type=int, default=0, help="Start index of files to run")
     parser.add_argument("--end_index", type=int, default=10, help="End index of files to run")
     parser.add_argument("--skip_analysis", action="store_true", help="Skip cognitive diagnostics and LLM analysis")
+    parser.add_argument("--runs_per_eval", type=int, default=1, help="Number of times to run each evaluation")
     args = parser.parse_args()
 
     evals_dir = os.path.join(args.output_dir, 'sim_evals')
@@ -476,27 +526,33 @@ def main():
     print(f"Running evaluations from index {args.start_index} to {args.end_index} (total files: {len(files)})")
 
     results_list = []
-    with concurrent.futures.ProcessPoolExecutor(max_workers=args.parallelism) as executor:
-        future_to_item = {
-            executor.submit(run_single_eval, item, evals_dir, args.app_name, args.skip_analysis): item
-            for item in files_to_run
-        }
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.parallelism) as executor:
+        future_to_item = {}
+        for item in files_to_run:
+            for run_idx in range(1, args.runs_per_eval + 1):
+                future = executor.submit(run_single_eval, item, evals_dir, args.app_name, run_idx, args.skip_analysis)
+                future_to_item[future] = (item, run_idx)
+                
         for future in concurrent.futures.as_completed(future_to_item):
-            item = future_to_item[future]
+            item, run_idx = future_to_item[future]
             try:
                 result = future.result()
+                result['run_index'] = run_idx
                 results_list.append(result)
-                print(f"Completed: {result['name']} - {'Pass' if result['passed'] else 'Fail'}")
+                print(f"Completed: {result['name']} (Run {run_idx}) - {'Pass' if result['passed'] else 'Fail'}")
             except Exception as exc:
-                print(f"{item} generated an exception: {exc}")
+                print(f"{item} (Run {run_idx}) generated an exception: {exc}")
                 results_list.append({
                     "name": item,
                     "session_id": "N/A",
                     "passed": False,
-                    "log_path": os.path.join(evals_dir, item.replace(".json", ".log")),
+                    "log_path": os.path.join(evals_dir, item.replace(".json", f"_run_{run_idx}.log")),
                     "colored_trace": f"Exception occurred during execution:\n{exc}",
                     "goals_df": pd.DataFrame(columns=['status']),
-                    "expectations_df": None
+                    "expectations_df": None,
+                    "goals_html": "<div>No goal data available due to error.</div>",
+                    "expectations_html": "",
+                    "run_index": run_idx
                 })
 
     generate_html_report(results_list, evals_dir, args.app_name)
