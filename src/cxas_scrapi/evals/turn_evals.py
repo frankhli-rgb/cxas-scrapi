@@ -15,27 +15,49 @@
 # limitations under the License.
 """
 
-from typing import Any, Dict, List, Optional
+import enum
+import json
+import logging
 import os
+import uuid
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 import yaml
 from google import genai
 from google.protobuf.json_format import MessageToDict
-import logging
-import pandas as pd
-import enum
-import json
-import uuid
-
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from cxas_scrapi.core.sessions import Sessions
 from cxas_scrapi.core.variables import Variables
+from cxas_scrapi.utils.dependency_manager import SessionDependencyManager
 from cxas_scrapi.utils.eval_utils import (
-    evaluate_expectations,
     ExpectationStatus,
+    evaluate_expectations,
 )
 
 logger = logging.getLogger(__name__)
+
+class HistoricalContextConfig(BaseModel):
+    """Configuration for historical context, either a raw session ID, a test
+    name, or explicit utterances."""
+    session_id: Optional[str] = None
+    test_name: Optional[str] = None
+    utterances: Optional[List[Dict[str, Any]]] = None
+
+    @model_validator(mode='after')
+    def check_mutually_exclusive(self):
+        fields = [self.session_id, self.test_name, self.utterances]
+        non_none = [f for f in fields if f is not None]
+        if len(non_none) > 1:
+            raise ValueError(
+                "session_id, test_name, and utterances are mutually exclusive"
+            )
+        if len(non_none) == 0:
+            raise ValueError(
+                "One of session_id, test_name, or utterances must be provided"
+            )
+        return self
 
 
 class TurnOperator(str, enum.Enum):
@@ -76,11 +98,20 @@ class TurnTestCase(BaseModel):
     user: Optional[str] = None
     event: Optional[str] = None
     variables: Dict[str, Any] = Field(default_factory=dict)
-    historical_contexts: Optional[List[Dict[str, Any]] | str] = None
+    historical_contexts: Optional[HistoricalContextConfig] = None
     turn_count: Optional[int] = None
     config: Dict[str, Any] = Field(default_factory=dict)
     expectations: list[TurnExpectation | str] = Field(default_factory=list)
     turns: Optional[List[TurnStep]] = None
+
+
+class DependencyResolutionError(Exception):
+    """Exception raised when a test dependency cannot be resolved."""
+
+    def __init__(self, message: str, skip_result: Dict[str, Any]):
+        self.message = message
+        self.skip_result = skip_result
+        super().__init__(self.message)
 
 
 class TurnEvals:
@@ -110,6 +141,9 @@ class TurnEvals:
             location=vertex_location,
             credentials=self.creds,
         )
+
+        # Initialize Test Dependency Manager
+        self.dependency_manager = SessionDependencyManager()
 
     def load_turn_test_cases_from_file(
         self, test_file_path: str
@@ -344,6 +378,53 @@ class TurnEvals:
             "target_agent": target_agent,
         }
 
+    def _resolve_historical_context(self, case: TurnTestCase) -> Optional[Any]:
+        """Resolves historical context for a test case.
+
+        Args:
+            case: The test case containing historical context config.
+
+        Returns:
+            The resolved history (session ID, utterances, or None).
+
+        Raises:
+            DependencyResolutionError: If a dependency cannot be resolved.
+        """
+        if not case.historical_contexts:
+            return None
+
+        if case.historical_contexts.session_id:
+            return case.historical_contexts.session_id
+
+        if case.historical_contexts.utterances:
+            return case.historical_contexts.utterances
+
+        if case.historical_contexts.test_name:
+            test_name = case.historical_contexts.test_name
+            print(f"Resolving dependency: {test_name}")
+            cached_id = self.dependency_manager.resolve_session_id(test_name)
+            if cached_id:
+                print(f"Using cached session ID: {cached_id}")
+                return cached_id
+
+            print(f"Dependency {test_name} not found in cache.")
+            skip_result = {
+                "test_name": case.name,
+                "turn": "",
+                "user": "",
+                "status": "SKIPPED",
+                "errors": f"Missing or failed dependency: {test_name}",
+                "expected": "",
+                "actual": "",
+                "session_id": "",
+                "llm_results": "",
+            }
+            raise DependencyResolutionError(
+                f"Failed to resolve {test_name}", skip_result
+            )
+
+        return None
+
     def validate_turn_test(self, test_case: Any, turn_response: Any):
         """Validates the turn response against defined expectations."""
 
@@ -415,57 +496,55 @@ class TurnEvals:
                 if not isinstance(expected, dict):
                     status = "FAILURE"
                     justification = (
-                        f"TOOL_INPUT failed: expectation value must be a "
-                        f"dictionary."
+                        "TOOL_INPUT failed: expectation value must be a "
+                        "dictionary."
                     )
+                # 1) Try matching against the top-level tool_inputs
+                # container
+                elif self._check_dict_subset(expected, tool_inputs):
+                    pass
                 else:
-                    # 1) Try matching against the top-level tool_inputs
-                    # container
-                    if self._check_dict_subset(expected, tool_inputs):
-                        pass
-                    else:
-                        # 2) Fallback to checking nested argument dicts for
-                        # any tool
-                        match_found = False
-                        for t_name, t_args in tool_inputs.items():
-                            if self._check_dict_subset(expected, t_args):
-                                match_found = True
-                                break
-                        if not match_found:
-                            status = "FAILURE"
-                            justification = (
-                                f"TOOL_INPUT failed: No tool call contained "
-                                f"matching arguments {expected}. Actual tool "
-                                f"inputs: {tool_inputs}"
-                            )
+                    # 2) Fallback to checking nested argument dicts for
+                    # any tool
+                    match_found = False
+                    for _t_name, t_args in tool_inputs.items():
+                        if self._check_dict_subset(expected, t_args):
+                            match_found = True
+                            break
+                    if not match_found:
+                        status = "FAILURE"
+                    justification = (
+                        f"TOOL_INPUT failed: No tool call contained "
+                        f"matching arguments {expected}. Actual tool "
+                        f"inputs: {tool_inputs}"
+                    )
             elif op == TurnOperator.TOOL_OUTPUT:
                 actual = str(tool_outputs)
                 if not isinstance(expected, dict):
                     status = "FAILURE"
                     justification = (
-                        f"TOOL_OUTPUT failed: expectation value must be a "
-                        f"dictionary."
+                        "TOOL_OUTPUT failed: expectation value must be a "
+                        "dictionary."
                     )
+                # 1) Try matching against the top-level tool_outputs
+                # container
+                elif self._check_dict_subset(expected, tool_outputs):
+                    pass
                 else:
-                    # 1) Try matching against the top-level tool_outputs
-                    # container
-                    if self._check_dict_subset(expected, tool_outputs):
-                        pass
-                    else:
-                        # 2) Fallback to checking nested response dicts for
-                        # any tool
-                        match_found = False
-                        for t_name, t_resp in tool_outputs.items():
-                            if self._check_dict_subset(expected, t_resp):
-                                match_found = True
-                                break
-                        if not match_found:
-                            status = "FAILURE"
-                            justification = (
-                                f"TOOL_OUTPUT failed: No tool response "
-                                f"contained matching outputs {expected}. "
-                                f"Actual tool outputs: {tool_outputs}"
-                            )
+                    # 2) Fallback to checking nested response dicts for
+                    # any tool
+                    match_found = False
+                    for _t_name, t_resp in tool_outputs.items():
+                        if self._check_dict_subset(expected, t_resp):
+                            match_found = True
+                            break
+                    if not match_found:
+                        status = "FAILURE"
+                    justification = (
+                        f"TOOL_OUTPUT failed: No tool response "
+                        f"contained matching outputs {expected}. "
+                        f"Actual tool outputs: {tool_outputs}"
+                    )
 
             results.append(
                 {
@@ -524,6 +603,50 @@ class TurnEvals:
 
         return results
 
+    def _topological_sort(
+        self, cases: List[TurnTestCase]
+    ) -> List[TurnTestCase]:
+
+        """Sorts test cases topologically based on their dependencies.
+
+        Args:
+            cases: The list of test cases to sort.
+
+        Returns:
+            A list of test cases in dependency order (parents before children).
+
+        Raises:
+            ValueError: If a circular dependency is detected.
+        """
+        name_to_case = {case.name: case for case in cases}
+        adj = {case.name: [] for case in cases}
+        for case in cases:
+            if case.historical_contexts and case.historical_contexts.test_name:
+                dependency = case.historical_contexts.test_name
+                if dependency in name_to_case:
+                    adj[dependency].append(case.name)
+
+        visited = {name: 0 for name in name_to_case}
+        result = []
+
+        def dfs(u):
+            visited[u] = 1
+            for v in adj[u]:
+                if visited[v] == 1:
+                    raise ValueError(
+                        f"Circular dependency detected involving {u} and {v}"
+                    )
+                if visited[v] == 0:
+                    dfs(v)
+            visited[u] = 2
+            result.append(name_to_case[u])
+
+        for name in name_to_case:
+            if visited[name] == 0:
+                dfs(name)
+
+        return result[::-1]
+
     def run_turn_tests(
         self,
         test_cases: List[TurnTestCase],
@@ -535,8 +658,21 @@ class TurnEvals:
 
         results = []
 
-        for case in test_cases:
+        # Sort test cases topologically to handle dependencies
+        try:
+            sorted_cases = self._topological_sort(test_cases)
+        except ValueError as e:
+            print(f"Error in dependency resolution: {e}")
+            raise
+
+        for case in sorted_cases:
             print(f"Running Turn Test: {case.name}")
+
+            try:
+                resolved_history = self._resolve_historical_context(case)
+            except DependencyResolutionError as e:
+                results.append(e.skip_result)
+                continue
 
             # 1. Create a brand new session ID for true stateless execution
             test_session_id = f"{session_id_prefix}{uuid.uuid4().hex[:8]}"
@@ -569,7 +705,7 @@ class TurnEvals:
                             event=step.event,
                             variables=step.variables,
                             historical_contexts=(
-                                case.historical_contexts
+                                resolved_history
                                 if step is case.turns[0]
                                 else None
                             ),
@@ -740,8 +876,8 @@ class TurnEvals:
                         event=case.event,
                         variables=case.variables,
                         historical_contexts=(
-                            case.historical_contexts
-                            if case.historical_contexts
+                            resolved_history
+                            if resolved_history
                             else None
                         ),
                         turn_count=(
@@ -802,6 +938,18 @@ class TurnEvals:
                                     ),
                                 }
                             )
+
+                # Cache session ID if all turns passed
+                all_passed = True
+                for r in results:
+                    if r["test_name"] == case.name and r["status"] == "FAILURE":
+                        all_passed = False
+                        break
+
+                if all_passed:
+                    self.dependency_manager.cache_session_id(
+                        case.name, test_session_id
+                    )
 
             except Exception as e:
                 print(f"FAILURE: Exception {e}")
