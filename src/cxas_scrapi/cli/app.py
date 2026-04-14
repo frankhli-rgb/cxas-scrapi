@@ -22,12 +22,12 @@ import sys
 import tempfile
 import zipfile
 import io
+from pathlib import Path
 
 from typing import Optional, Any
 
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.common import Common
-from cxas_scrapi.utils.validator import Validator
 
 logger = logging.getLogger(__name__)
 
@@ -360,70 +360,101 @@ def apps_get(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def app_validate(args: argparse.Namespace) -> None:
-    """Handles the 'validate' command."""
-    if getattr(args, "app", None):
-        print(f"Validating app at: {args.app}")
-        try:
-            Validator().validate_app(args.app)
-            print("Validation successful.")
-        except Exception as e:
-            print(f"Validation failed: {e}")
-            sys.exit(1)
-    elif getattr(args, "agent", None):
-        print(f"Validating agent at: {args.agent}")
-        try:
-            Validator().validate_agent(args.agent)
-            print("Validation successful.")
-        except Exception as e:
-            print(f"Validation failed: {e}")
-            sys.exit(1)
-    elif getattr(args, "tool", None):
-        print(f"Validating tool at: {args.tool}")
-        try:
-            Validator().validate_tool(args.tool)
-            print("Validation successful.")
-        except Exception as e:
-            print(f"Validation failed: {e}")
-            sys.exit(1)
-    elif getattr(args, "toolset", None):
-        print(f"Validating toolset at: {args.toolset}")
-        try:
-            Validator().validate_toolset(args.toolset)
-            print("Validation successful.")
-        except Exception as e:
-            print(f"Validation failed: {e}")
-            sys.exit(1)
-    elif getattr(args, "guardrail", None):
-        print(f"Validating guardrail at: {args.guardrail}")
-        try:
-            Validator().validate_guardrail(args.guardrail)
-            print("Validation successful.")
-        except Exception as e:
-            print(f"Validation failed: {e}")
-            sys.exit(1)
-    elif getattr(args, "evaluation", None):
-        print(f"Validating evaluation at: {args.evaluation}")
-        try:
-            Validator().validate_evaluation(args.evaluation)
-            print("Validation successful.")
-        except Exception as e:
-            print(f"Validation failed: {e}")
-            sys.exit(1)
-    elif getattr(args, "evaluation_expectations", None):
-        print(
-            f"Validating evaluation expectations at: {args.evaluation_expectations}"
+def app_lint(args: argparse.Namespace) -> None:
+    """Handles the 'lint' command."""
+    from cxas_scrapi.utils.linter import (
+        Discovery, LintConfig, LintContext, LintReport,
+        SINGLE_RESOURCE_RULES,
+        build_context, build_registry, run_rules,
+    )
+
+    registry = build_registry()
+
+    if getattr(args, "list_rules", False):
+        print("CXAS Agent Linter — Available Rules")
+        print("=" * 60)
+        registry.list_rules()
+        sys.exit(0)
+
+    json_output = getattr(args, "json_output", False)
+    show_fixes = getattr(args, "fix", False)
+
+    # Per-resource validation (--agent, --tool, etc.)
+    for flag, rule_id in SINGLE_RESOURCE_RULES.items():
+        resource_dir = getattr(args, flag, None)
+        if not resource_dir:
+            continue
+        resource_path = Path(resource_dir).resolve()
+        rule_obj = registry.get(rule_id)
+        report = LintReport()
+        context = LintContext(
+            project_root=resource_path.parent,
+            app_dir=resource_path.parent,
+            evals_dir=resource_path.parent,
         )
-        try:
-            Validator().validate_evaluation_expectations(
-                args.evaluation_expectations
+        if not json_output:
+            print(f"Validating {flag}: {resource_path.name}")
+            print("=" * 60)
+        for result in rule_obj.check(resource_path, "", context):
+            report.add(result)
+        report.print_and_exit(json_output, show_fixes)
+        return
+
+    # Full app lint
+    project_root = Path(getattr(args, "app_dir", ".")).resolve()
+    config = LintConfig.load(project_root)
+
+    app_dir = project_root / config.app_dir
+    evals_dir = project_root / config.evals_dir
+    discovery = Discovery(app_dir, evals_dir)
+
+    if not discovery.app_root:
+        if not json_output:
+            print(f"ERROR: No app directory found under {app_dir}")
+            print(
+                "Ensure the directory contains app.json/app.yaml and agents/. "
+                "Use --app-dir to specify the app location."
             )
-            print("Validation successful.")
-        except Exception as e:
-            print(f"Validation failed: {e}")
-            sys.exit(1)
-    else:
-        print(
-            "Error: Please specify --[app, agent, tool, toolset, guardrail, evaluation, evaluation_expectations] to validate."
-        )
+        else:
+            import json
+            print(json.dumps([{
+                "file": str(app_dir),
+                "severity": "error",
+                "rule_id": "SETUP",
+                "message": f"No app directory found under {app_dir}",
+            }]))
         sys.exit(1)
+
+    context = build_context(project_root, config, discovery)
+
+    if not json_output:
+        print(f"Linting app: {discovery.app_root.name}")
+        print("=" * 60)
+        agents = discovery.discover_agents()
+        tools = discovery.discover_tools()
+        callbacks = discovery.discover_callbacks()
+        evals = discovery.discover_evals()
+        print(f"  Agents: {len(agents)}")
+        print(f"  Tools: {len(tools)}")
+        print(f"  Callbacks: {len(callbacks)}")
+        print(f"  Evals: {len(evals)}")
+
+    categories = None
+    if getattr(args, "validate_only", False):
+        categories = ["structure", "config", "schema"]
+    elif getattr(args, "only", None):
+        categories = [args.only]
+
+    specific_rules = None
+    rule_arg = getattr(args, "rule", None)
+    if rule_arg:
+        specific_rules = set(r.strip() for r in rule_arg.split(","))
+
+    report = LintReport()
+    run_rules(
+        registry, config, context, discovery, report,
+        categories=categories,
+        specific_rules=specific_rules,
+    )
+
+    report.print_and_exit(json_output, show_fixes)
