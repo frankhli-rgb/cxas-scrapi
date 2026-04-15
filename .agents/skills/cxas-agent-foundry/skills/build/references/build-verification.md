@@ -23,7 +23,7 @@ GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas pull \
 
 # 3. If lint found issues — fix them locally in cxas_app/, then push back
 GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas push \
-  --agent_dir cxas_app/ \
+  --app-dir cxas_app/ \
   --to projects/$PROJECT_ID/locations/$LOCATION/apps/$APP_ID \
   --project_id $PROJECT_ID --location $LOCATION
 

@@ -90,7 +90,7 @@ jobs:
             -e LOCATION=${{{{ env.LOCATION }}}} \\
 {docker_auth_args}
             agent-image \\
-            ci-test --agent_dir {github_context_path} \\
+            ci-test --app-dir {github_context_path} \\
                       --project_id ${{{{ env.PROJECT_ID }}}} \\
                       --location ${{{{ env.LOCATION }}}} \\
                       --display_name "[CI] PR-${{{{ github.event.pull_request.number }}}} {agent_name}"
@@ -155,7 +155,7 @@ jobs:
 
       - name: Deploy to CX Agent Studio
         run: |
-          cxas push --agent_dir {github_context_path} \\
+          cxas push --app-dir {github_context_path} \\
                          --project_id ${{{{ env.PROJECT_ID }}}} \\
                          --location ${{{{ env.LOCATION }}}} \\
                          --app_id ${{{{ env.APP_ID }}}} \\
@@ -443,7 +443,7 @@ def init_github_action(args: argparse.Namespace) -> None:
     app_name = args.app_name
 
     # Try to extract details from app.yaml if available
-    agent_dir = args.agent_dir if args.agent_dir else "."
+    agent_dir = args.app_dir if args.app_dir else "."
 
     try:
         agent_abs_path = os.path.abspath(agent_dir)
@@ -484,19 +484,15 @@ def init_github_action(args: argparse.Namespace) -> None:
     extracted_location = Common._get_location(app_name) if app_name else None
 
     project_id = (
-        getattr(args, "project_id", None)
-        or extracted_project
-        or "YOUR_PROJECT_ID"
+        getattr(args, "project_id", None) or extracted_project or "YOUR_PROJECT_ID"
     )
     location = getattr(args, "location", None) or extracted_location or "global"
 
     if not app_name:
         app_basename = os.path.basename(os.path.abspath(agent_dir))
-        app_name = (
-            f"projects/{project_id}/locations/{location}/apps/{app_basename}"
-        )
+        app_name = f"projects/{project_id}/locations/{location}/apps/{app_basename}"
         print(
-            f"Warning: No --app_name provided and could not retrieve 'name' from {app_yaml_path}."
+            f"Warning: No --app-name provided and could not retrieve 'name' from {app_yaml_path}."
         )
         print(f"Synthesizing app identifier from directory name: {app_name}")
 
@@ -532,9 +528,7 @@ def init_github_action(args: argparse.Namespace) -> None:
                     "Warning: Cannot setup WIF with placeholder Project ID. Please provide --project_id."
                 )
             else:
-                pool_name = getattr(
-                    args, "wif_pool_name", "github-actions-pool-scrapi"
-                )
+                pool_name = getattr(args, "wif_pool_name", "github-actions-pool-scrapi")
                 auto_wip, auto_sa = _auto_setup_wif(
                     project_id, github_owner, github_repo, pool_name
                 )
@@ -558,8 +552,7 @@ def init_github_action(args: argparse.Namespace) -> None:
 
     # Configure auth blocks
     auth_env = (
-        f'  GCP_WORKLOAD_IDENTITY_PROVIDER: "{wip}"\n'
-        f'  GCP_SERVICE_ACCOUNT: "{sa}"'
+        f'  GCP_WORKLOAD_IDENTITY_PROVIDER: "{wip}"\n' f'  GCP_SERVICE_ACCOUNT: "{sa}"'
     )
     auth_step = f"""      # Authenticate to Google Cloud via Workload Identity Federation
       # See https://github.com/google-github-actions/auth for configuration instructions
@@ -643,9 +636,7 @@ def init_github_action(args: argparse.Namespace) -> None:
             setup_gcloud_step=setup_gcloud_step,
         )
         cleanup_output_path = (
-            os.path.join(
-                os.path.dirname(args.output), f"cleanup_{safe_agent_name}.yml"
-            )
+            os.path.join(os.path.dirname(args.output), f"cleanup_{safe_agent_name}.yml")
             if args.output
             else os.path.join(workflows_dir, f"cleanup_{safe_agent_name}.yml")
         )
@@ -662,9 +653,7 @@ def init_github_action(args: argparse.Namespace) -> None:
         with open(dockerfile_path, "w") as f:
             f.write(DOCKERFILE_TEMPLATE)
     else:
-        print(
-            f"Dockerfile already exists at {dockerfile_path}. Skipping generation."
-        )
+        print(f"Dockerfile already exists at {dockerfile_path}. Skipping generation.")
 
     # Generate requirements.txt if it doesn't exist
     requirements_path = os.path.join(agent_dir, "requirements.txt")
@@ -727,7 +716,7 @@ docker run --rm \
   -e GOOGLE_APPLICATION_CREDENTIALS=/workspace/application_default_credentials.json \
   -v "$ADC_FILE_HOST":/workspace/application_default_credentials.json \
   agent-image \
-  ci-test --agent_dir "$AGENT_DIR" \
+  ci-test --app-dir "$AGENT_DIR" \
             --project_id "$PROJECT_ID" \
             --location "$LOCATION" \
             --display_name "[Local] $(basename "$AGENT_DIR")"
@@ -746,7 +735,7 @@ docker run --rm \
             hook_content = f"""#!/bin/sh
 # CXAS SCRAPI Auto-generated Hook
 echo "Running local tests before push..."
-cxas local-test --agent_dir "{agent_dir}" --project_id "{project_id}" --location "{location}"
+cxas local-test --app-dir "{agent_dir}" --project_id "{project_id}" --location "{location}"
 """
             with open(hook_path, "w") as f:
                 f.write(hook_content)
@@ -756,6 +745,4 @@ cxas local-test --agent_dir "{agent_dir}" --project_id "{project_id}" --location
             os.chmod(hook_path, st.st_mode | stat.S_IEXEC)
             print("Pre-push hook installed successfully.")
         else:
-            print(
-                "Warning: Not a git repository root. Skipping hook installation."
-            )
+            print("Warning: Not a git repository root. Skipping hook installation.")

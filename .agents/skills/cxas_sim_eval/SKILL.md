@@ -59,7 +59,7 @@ Fetches evaluations and the list of tools used by the agent from the CES API.
 Usage:
 ```bash
 python .agents/skills/cxas_sim_eval/scripts/fetch_app_data.py \
-  --app_name "projects/.../locations/.../apps/..." \
+  --app-name "projects/.../locations/.../apps/..." \
   --output_dir /path/to/output_directory
 ```
 
@@ -71,7 +71,7 @@ Fetches the full schemas for all tools available in the app.
 Usage:
 ```bash
 python .agents/skills/cxas_sim_eval/scripts/fetch_tool_schemas.py \
-  --app_name "projects/.../locations/.../apps/..." \
+  --app-name "projects/.../locations/.../apps/..." \
   --output_dir /path/to/output_directory
 ```
 
@@ -98,7 +98,7 @@ If the agent has the `intercept_and_score_reasoning` tool enabled, this script w
 Usage:
 ```bash
 python .agents/skills/cxas_sim_eval/scripts/run_evals.py \
-  --app_name "projects/.../locations/.../apps/..." \
+  --app-name "projects/.../locations/.../apps/..." \
   --output_dir /path/to/output_directory \
   --parallelism 5 \
   --start_index 0 \

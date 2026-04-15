@@ -569,7 +569,7 @@ cxas pull {app_identifier} --project_id {project_id} --location {location} --tar
 # Push Local Files
 # Upload the local agent directory to CXAS:
 ```bash
-cxas push --agent_dir {local_dir} --to {app_identifier} --project_id {project_id} --location {location}
+cxas push --app-dir {local_dir} --to {app_identifier} --project_id {project_id} --location {location}
 ```
 
 # Branch an App

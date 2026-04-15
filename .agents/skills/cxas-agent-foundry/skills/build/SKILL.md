@@ -92,7 +92,7 @@ app = apps.create_app(app_id=app_name, display_name=display_name, ...)
 
 ```bash
 # Push the entire app (agents, tools, callbacks) from local files
-cxas push --agent_dir <project>/cxas_app/<AppName> \
+cxas push --app-dir <project>/cxas_app/<AppName> \
   --to <app_resource_name> \
   --project_id <project_id> --location <location>
 ```

@@ -452,12 +452,12 @@ def test_tools(args: argparse.Namespace) -> None:
 def test_callbacks(args: argparse.Namespace) -> None:
     """Handles the 'test-callbacks' command."""
 
-    print(f"Running callback tests in Agent directory: {args.agent_dir}")
+    print(f"Running callback tests in App directory: {args.app_dir}")
     callback_evals = CallbackEvals()
 
     try:
         results = callback_evals.test_all_callbacks_in_app_dir(
-            app_dir=args.agent_dir,
+            app_dir=args.app_dir,
             agent_name=args.agent_name,
             callback_type=args.callback_type,
             callback_name=args.callback_name,
@@ -465,7 +465,7 @@ def test_callbacks(args: argparse.Namespace) -> None:
             pytest_args=args.pytest_args,
         )
         if results.empty:
-            print(f"No valid callback tests found in {args.agent_dir}")
+            print(f"No valid callback tests found in {args.app_dir}")
             sys.exit(1)
 
         # Check overall status
@@ -550,13 +550,13 @@ def ci_test(args: argparse.Namespace) -> None:
     try:
         # Run test-tools
 
-        test_file = os.path.join(args.agent_dir, "tests", "tool_tests.yaml")
+        test_file = os.path.join(args.app_dir, "tests", "tool_tests.yaml")
         if os.path.exists(test_file):
             print(f"\\n--- Running Tool Tests on {temp_app_name} ---")
             cmd = [
                 "cxas",
                 "test-tools",
-                "--app_name",
+                "--app-name",
                 temp_app_name,
                 "--test_file",
                 test_file,
@@ -585,7 +585,7 @@ def ci_test(args: argparse.Namespace) -> None:
                 cmd = [
                     "cxas",
                     "run",
-                    "--app_name",
+                    "--app-name",
                     temp_app_name,
                     "--evaluation_id",
                     eval_id,
@@ -611,8 +611,10 @@ def ci_test(args: argparse.Namespace) -> None:
 def local_test(args: argparse.Namespace) -> None:
     """Handles the 'local-test' command."""
 
-    agent_dir = os.path.abspath(args.agent_dir)
-    agent_name = os.path.basename(agent_dir.rstrip(os.sep)).lower().replace(" ", "-")
+    agent_dir = os.path.abspath(args.app_dir)
+    agent_name = (
+        os.path.basename(agent_dir.rstrip(os.sep)).lower().replace(" ", "-")
+    )
     tag = f"{agent_name}-local-test"
 
     print(f"Building Docker image for {agent_name}...")
@@ -674,7 +676,7 @@ def local_test(args: argparse.Namespace) -> None:
     inner_cmd = [
         tag,
         "ci-test",
-        "--agent_dir",
+        "--app-dir",
         "/workspace",
         "--project_id",
         args.project_id,
@@ -734,17 +736,17 @@ def get_parser() -> argparse.ArgumentParser:
         help="Generate a GitHub Actions workflow file for testing the agent.",
     )
     parser_init_gh.add_argument(
-        "--agent_dir",
+        "--app-dir",
         help=(
-            "Optional: The path to the agent directory (e.g., 'pilot') "
+            "Optional: The path to the app directory (e.g., 'pilot') "
             "to extract app_name and agent_name from app.yaml."
         ),
     )
     parser_init_gh.add_argument(
-        "--app_name",
+        "--app-name",
         help=(
             "Optional: The CXAS App ID (projects/.../apps/...). "
-            "If missing, extracts from agent_dir/app.yaml."
+            "If missing, extracts from app_dir/app.yaml."
         ),
     )
     parser_init_gh.add_argument(
@@ -819,7 +821,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="Run local tool unit tests against the deployed agent.",
     )
     parser_test_tools.add_argument(
-        "--app_name",
+        "--app-name",
         required=True,
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
@@ -842,9 +844,9 @@ def get_parser() -> argparse.ArgumentParser:
         help="Run local callback unit tests against the deployed agent.",
     )
     parser_test_callbacks.add_argument(
-        "--agent_dir",
+        "--app-dir",
         required=True,
-        help="The path to the agent directory.",
+        help="The path to the app directory.",
     )
     parser_test_callbacks.add_argument(
         "--agent_name",
@@ -880,7 +882,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="Run local callback unit tests against the deployed agent.",
     )
     parser_test_single_callback.add_argument(
-        "--app_name",
+        "--app-name",
         required=True,
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
@@ -917,7 +919,7 @@ def get_parser() -> argparse.ArgumentParser:
         "export", help="Export an evaluation to YAML or JSON format."
     )
     parser_export.add_argument(
-        "--app_name",
+        "--app-name",
         required=True,
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
@@ -950,7 +952,7 @@ def get_parser() -> argparse.ArgumentParser:
         "push-eval", help="Push evaluation(s) from a YAML file to the app."
     )
     parser_push_eval.add_argument(
-        "--app_name",
+        "--app-name",
         required=True,
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
@@ -966,7 +968,7 @@ def get_parser() -> argparse.ArgumentParser:
         "run", help="Run an evaluation and assert results."
     )
     parser_run.add_argument(
-        "--app_name",
+        "--app-name",
         required=True,
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
@@ -1021,9 +1023,9 @@ def get_parser() -> argparse.ArgumentParser:
         "ci-test", help="Runs standard integration tests on a temporary agent."
     )
     parser_ci_test.add_argument(
-        "--agent_dir",
+        "--app-dir",
         default=".",
-        help=("Path to the agent directory to test. " "Defaults to current directory."),
+        help=("Path to the app directory to test. " "Defaults to current directory."),
     )
     parser_ci_test.add_argument(
         "--display_name",
@@ -1047,7 +1049,7 @@ def get_parser() -> argparse.ArgumentParser:
         "delete", help="Deletes a specified agent/app."
     )
     parser_delete.add_argument(
-        "--app_name",
+        "--app-name",
         help=(
             "The CXAS App ID (projects/.../locations/.../apps/...). "
             "Required if --display_name not provided."
@@ -1057,7 +1059,7 @@ def get_parser() -> argparse.ArgumentParser:
         "--display_name",
         help=(
             "The Display Name of the app to delete. "
-            "Required if --app_name not provided."
+            "Required if --app-name not provided."
         ),
     )
     _add_project_location_args(parser_delete, required=False)
@@ -1073,9 +1075,9 @@ def get_parser() -> argparse.ArgumentParser:
         "local-test", help="Runs the agent tests locally using Docker."
     )
     parser_local_test.add_argument(
-        "--agent_dir",
+        "--app-dir",
         default=".",
-        help="Path to the agent directory. Defaults to current directory.",
+        help="Path to the app directory. Defaults to current directory.",
     )
     parser_local_test.add_argument(
         "--env_file",
@@ -1100,7 +1102,7 @@ def get_parser() -> argparse.ArgumentParser:
 
     # Parser for 'push'
     parser_push = subparsers.add_parser("push", help="Import local files back to CXAS.")
-    parser_push.add_argument("--agent_dir", default=".", help="Local agent directory.")
+    parser_push.add_argument("--app-dir", default=".", help="Local app directory.")
     parser_push.add_argument("--to", help="Target App Resource Name or Display Name.")
     parser_push.add_argument(
         "--env_file",
@@ -1110,14 +1112,14 @@ def get_parser() -> argparse.ArgumentParser:
         ),
     )
     parser_push.add_argument(
-        "--app_name",
+        "--app-name",
         help="Target App ID to explicitly push to (v1beta API).",
     )
     parser_push.add_argument(
         "--display_name",
         help="Display name for a new App if --to is not provided.",
     )
-    _add_project_location_args(parser_push)
+    _add_project_location_args(parser_push, required=False)
     parser_push.set_defaults(func=app_push)
 
     # Parser for 'lint'
@@ -1219,7 +1221,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser_create = subparsers.add_parser("create", help="Create a new app.")
     parser_create.add_argument("name", help="Display name of the new app.")
     parser_create.add_argument("--description", help="Description for the new app.")
-    parser_create.add_argument("--app_name", help="Optional specific app_name to use.")
+    parser_create.add_argument("--app-name", help="Optional specific app_name to use.")
     _add_project_location_args(parser_create)
     parser_create.set_defaults(func=app_create)
 

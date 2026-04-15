@@ -22,7 +22,7 @@ from google.protobuf.json_format import MessageToDict
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch evaluations and agent tools from CES API.")
-    parser.add_argument("--app_name", required=True, help="Full resource name of the app, e.g., projects/.../locations/.../apps/...")
+    parser.add_argument("--app-name", required=True, help="Full resource name of the app, e.g., projects/.../locations/.../apps/...")
     parser.add_argument("--output_dir", required=True, help="Base output directory")
     
     args = parser.parse_args()
