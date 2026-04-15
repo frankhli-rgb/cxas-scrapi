@@ -1401,7 +1401,7 @@ def test_s004_child_agent_exists(tmp_path, context):
 
     rule = ChildAgentReferences()
     f = tmp_path / "root_agent.json"
-    f.write_text('{"childAgents": ["billing_agent"]}')
+    f.write_text('{"childAgents": ["billing agent"]}')
 
     results = rule.check(f, f.read_text(), context)
     assert len(results) == 0
