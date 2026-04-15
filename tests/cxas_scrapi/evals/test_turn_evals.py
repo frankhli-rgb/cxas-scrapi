@@ -14,15 +14,18 @@
 
 """Unit tests for the TurnEvals testing utility."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
 import pandas as pd
+import pytest
+
 from cxas_scrapi.evals.turn_evals import (
+    HistoricalContextConfig,
     TurnEvals,
-    TurnTestCase,
     TurnExpectation,
     TurnOperator,
     TurnStep,
+    TurnTestCase,
 )
 from cxas_scrapi.utils.eval_utils import (
     ExpectationResult,
@@ -69,7 +72,7 @@ tests:
     assert cases[0].name == "test_greeting"
     assert cases[0].user == "Hello"
     assert cases[0].variables["first_turn"] is True
-    assert len(cases[0].expectations) == 2
+    assert len(cases[0].expectations) == 2  # noqa: PLR2004
     assert cases[0].expectations[0].type == TurnOperator.CONTAINS
     assert cases[0].expectations[0].value == "Hi there"
     assert cases[0].expectations[1].type == TurnOperator.TOOL_CALLED
@@ -128,7 +131,7 @@ def test_validate_turn_test_success(mock_message_to_dict, mock_turn_evals):
     )
 
     results = mock_turn_evals.validate_turn_test(test_case, MagicMock())
-    assert len(results) == 5
+    assert len(results) == 5  # noqa: PLR2004
     assert all(r["status"] == "SUCCESS" for r in results)
 
 
@@ -175,7 +178,7 @@ def test_validate_turn_test_failures(mock_message_to_dict, mock_turn_evals):
     )
 
     results = mock_turn_evals.validate_turn_test(test_case, MagicMock())
-    assert len(results) == 5
+    assert len(results) == 5  # noqa: PLR2004
     assert all(r["status"] == "FAILURE" for r in results)
     assert any("CONTAINS failed" in r["justification"] for r in results)
     assert any("EQUALS failed" in r["justification"] for r in results)
@@ -262,7 +265,7 @@ def test_run_turn_tests_conversation_expectations(
     df = mock_turn_evals.run_turn_tests(cases)
     assert isinstance(df, pd.DataFrame)
     # 1 row for the turn, 1 row for the conversation expectation
-    assert len(df) == 2
+    assert len(df) == 2  # noqa: PLR2004
 
     # Check the conversation row
     conv_row = df[df["turn"] == "CONVERSATION"]
@@ -277,7 +280,9 @@ def test_run_turn_tests_multi_turn_passes_historical_contexts(mock_turn_evals):
     cases = [
         TurnTestCase(
             name="t1",
-            historical_contexts="some_context_id",
+            historical_contexts=HistoricalContextConfig(
+                session_id="some_context_id"
+            ),
             turns=[
                 TurnStep(turn="1", user="hi", expectations=[]),
                 TurnStep(turn="2", user="how are you", expectations=[])
@@ -287,7 +292,7 @@ def test_run_turn_tests_multi_turn_passes_historical_contexts(mock_turn_evals):
 
     mock_turn_evals.run_turn_tests(cases)
 
-    assert mock_turn_evals.sessions_client.run.call_count == 2
+    assert mock_turn_evals.sessions_client.run.call_count == 2  # noqa: PLR2004
 
     # Check first call
     args, kwargs = mock_turn_evals.sessions_client.run.call_args_list[0]
@@ -296,5 +301,107 @@ def test_run_turn_tests_multi_turn_passes_historical_contexts(mock_turn_evals):
     # Check second call
     args, kwargs = mock_turn_evals.sessions_client.run.call_args_list[1]
     assert kwargs["historical_contexts"] is None
+def test_historical_context_config_mutually_exclusive():
+    # Valid cases
+    HistoricalContextConfig(session_id="sid")
+    HistoricalContextConfig(test_name="tname")
+    HistoricalContextConfig(utterances=[{"user": "hi"}])
+
+    # Invalid cases
+    with pytest.raises(ValueError):
+        HistoricalContextConfig(session_id="sid", test_name="tname")
+    with pytest.raises(ValueError):
+        HistoricalContextConfig(session_id="sid", utterances=[{"user": "hi"}])
+    with pytest.raises(ValueError):
+        HistoricalContextConfig(test_name="tname", utterances=[{"user": "hi"}])
+    with pytest.raises(ValueError):
+        HistoricalContextConfig()  # None provided
+
+
+def test_run_turn_tests_resolves_test_name_dependency(mock_turn_evals):
+    mock_turn_evals.sessions_client.run.return_value = MagicMock()
+
+    # Mock dependency manager to return resolved ID only for "parent_test"
+    def resolve_session_id(name):
+        if name == "parent_test":
+            return "resolved_session_123"
+        return None
+
+    mock_turn_evals.dependency_manager.resolve_session_id = MagicMock(
+        side_effect=resolve_session_id
+    )
+
+    cases = [
+        TurnTestCase(
+            name="t2",
+            historical_contexts=HistoricalContextConfig(test_name="parent_test"),
+            turns=[TurnStep(turn="1", user="hi", expectations=[])],
+        )
+    ]
+
+    mock_turn_evals.run_turn_tests(cases)
+
+    assert mock_turn_evals.sessions_client.run.call_count == 1
+    args, kwargs = mock_turn_evals.sessions_client.run.call_args
+    assert kwargs["historical_contexts"] == "resolved_session_123"
+
+
+def test_run_turn_tests_passes_utterances_directly(mock_turn_evals):
+    mock_turn_evals.sessions_client.run.return_value = MagicMock()
+
+    utterances = [{"user": "Hello"}, {"agent": "Hi!"}]
+    cases = [
+        TurnTestCase(
+            name="t3",
+            historical_contexts=HistoricalContextConfig(utterances=utterances),
+            turns=[TurnStep(turn="1", user="hi", expectations=[])],
+        )
+    ]
+
+    mock_turn_evals.run_turn_tests(cases)
+
+    assert mock_turn_evals.sessions_client.run.call_count == 1
+    args, kwargs = mock_turn_evals.sessions_client.run.call_args
+    assert kwargs["historical_contexts"] == utterances
+
+def test_topological_sort(mock_turn_evals):
+    # Setup cases
+    c1 = TurnTestCase(
+        name="child1",
+        historical_contexts=HistoricalContextConfig(test_name="parent"),
+        turns=[],
+    )
+    c2 = TurnTestCase(name="parent", turns=[])
+    c3 = TurnTestCase(
+        name="grandchild",
+        historical_contexts=HistoricalContextConfig(test_name="child1"),
+        turns=[],
+    )
+
+    cases = [c1, c2, c3]
+
+    sorted_cases = mock_turn_evals._topological_sort(cases)
+
+    # Expected order: parent, child1, grandchild
+    assert [c.name for c in sorted_cases] == ["parent", "child1", "grandchild"]
+
+
+def test_topological_sort_circular_dependency(mock_turn_evals):
+    # Setup cases
+    c1 = TurnTestCase(
+        name="a",
+        historical_contexts=HistoricalContextConfig(test_name="b"),
+        turns=[],
+    )
+    c2 = TurnTestCase(
+        name="b",
+        historical_contexts=HistoricalContextConfig(test_name="a"),
+        turns=[],
+    )
+
+    cases = [c1, c2]
+
+    with pytest.raises(ValueError, match="Circular dependency detected"):
+        mock_turn_evals._topological_sort(cases)
 
 
