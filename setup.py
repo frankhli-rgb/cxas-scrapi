@@ -96,6 +96,7 @@ setup(
         "json5",
         "graphviz",
         "rich",
+        "google-cloud-dialogflow-cx",
     ],
     entry_points={
         'console_scripts': [
