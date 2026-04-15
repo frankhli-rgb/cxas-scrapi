@@ -148,11 +148,14 @@ class Evaluations(Common):
                         text = " ".join(
                             [c.get("text", "") for c in chunks if "text" in c]
                         )
-                        # If we already have an agent response, start a new turn entry
+                        # If we already have an agent response, convert to list or append
                         if "agent" in current_turn:
-                            conversation_entry["turns"].append(current_turn)
-                            current_turn = {}
-                        current_turn["agent"] = text
+                            if isinstance(current_turn["agent"], list):
+                                current_turn["agent"].append(text)
+                            else:
+                                current_turn["agent"] = [current_turn["agent"], text]
+                        else:
+                            current_turn["agent"] = text
 
                     if "agent_transfer" in exp:
                         at = exp["agent_transfer"]
