@@ -50,7 +50,7 @@ class ToolCall(BaseModel):
 
 class Turn(BaseModel):
     user: Optional[str] = None
-    agent: Optional[str] = None
+    agent: Optional[Union[str, List[str]]] = None
     tool_calls: List[ToolCall] = []
 
 
@@ -161,17 +161,22 @@ class EvalUtils(Evaluations):
 
         steps.append({"userInput": user_input_obj})
 
-        if turn.agent and "# silent" not in turn.agent:
-            steps.append(
-                {
-                    "expectation": {
-                        "agentResponse": {
-                            "role": "agent",
-                            "chunks": [{"text": turn.agent}],
-                        }
-                    }
-                }
+        if turn.agent:
+            agents = (
+                turn.agent if isinstance(turn.agent, list) else [turn.agent]
             )
+            for agent_text in agents:
+                if "# silent" not in agent_text:
+                    steps.append(
+                        {
+                            "expectation": {
+                                "agentResponse": {
+                                    "role": "agent",
+                                    "chunks": [{"text": agent_text}],
+                                }
+                            }
+                        }
+                    )
 
         for tool_call in turn.tool_calls:
             action = tool_call.action

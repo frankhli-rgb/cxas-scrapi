@@ -179,6 +179,54 @@ def test_eval_dict_to_yaml():
     assert turns[1]["tool_calls"][0]["args"] == {"param": "val"}
 
 
+def test_eval_dict_to_yaml_multi_agent():
+    """Test eval_dict_to_yaml with multiple agent responses in a single turn."""
+    eval_dict = {
+        "display_name": "Test Multi Agent Eval",
+        "golden": {
+            "turns": [
+                {
+                    "steps": [
+                        {
+                            "user_input": {
+                                "text": "hi",
+                            }
+                        },
+                        {
+                            "expectation": {
+                                "agent_response": {
+                                    "chunks": [{"text": "hello response 1"}]
+                                }
+                            }
+                        },
+                        {
+                            "expectation": {
+                                "agent_response": {
+                                    "chunks": [{"text": "hello response 2"}]
+                                }
+                            }
+                        },
+                    ]
+                }
+            ],
+        },
+    }
+
+    res = Evaluations.eval_dict_to_yaml(eval_dict)
+
+    assert "conversations" in res
+    assert len(res["conversations"]) == 1
+
+    conv = res["conversations"][0]
+    assert conv["conversation"] == "Test Multi Agent Eval"
+
+    turns = conv["turns"]
+    assert len(turns) == 1
+
+    assert turns[0]["user"] == "hi"
+    assert turns[0]["agent"] == ["hello response 1", "hello response 2"]
+
+
 @patch("cxas_scrapi.core.evaluations.Evaluations.get_evaluation")
 def test_export_evaluation(mock_get_eval):
     """Test Evaluations.export_evaluation."""

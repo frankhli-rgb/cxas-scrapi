@@ -288,6 +288,32 @@ def test_process_dataset_turn_with_tool_mapping():
     assert tool_res["response"] == "res1"
 
 
+def test_process_dataset_turn_with_multi_agent_responses():
+    """Test _process_dataset_turn with multiple agent responses."""
+    utils = EvalUtils(app_name="projects/p/locations/l/apps/a")
+
+    # Case 1: List of responses
+    turn_list = {
+        "user": "hello",
+        "agent": ["response 1", "response 2"],
+    }
+    result_list = utils._process_dataset_turn(Turn.model_validate(turn_list), {}, False)
+    steps_list = result_list["steps"]
+    assert steps_list[0]["userInput"]["text"] == "hello"
+    assert steps_list[1]["expectation"]["agentResponse"]["chunks"][0]["text"] == "response 1"
+    assert steps_list[2]["expectation"]["agentResponse"]["chunks"][0]["text"] == "response 2"
+
+    # Case 2: Single string response (backward compatibility)
+    turn_str = {
+        "user": "hi",
+        "agent": "single response",
+    }
+    result_str = utils._process_dataset_turn(Turn.model_validate(turn_str), {}, False)
+    steps_str = result_str["steps"]
+    assert steps_str[0]["userInput"]["text"] == "hi"
+    assert steps_str[1]["expectation"]["agentResponse"]["chunks"][0]["text"] == "single response"
+
+
 def test_create_and_run_evaluation_from_yaml():
     """Test create_and_run_evaluation_from_yaml orchestration."""
     utils = EvalUtils(app_name="projects/p/locations/l/apps/a")
