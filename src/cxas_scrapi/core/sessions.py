@@ -144,23 +144,6 @@ class BidiSessionHandler:
         self, audio_payload: Dict[str, Any], turn_index: int
     ):
         audio_bytes = audio_payload["audio"]
-        text_label = audio_payload.get("text")
-
-        if text_label and text_label != "Audio Input":
-            self.outputs.append(
-                ces_v1beta.SessionOutput(
-                    {
-                        "diagnostic_info": {
-                            "messages": [
-                                {
-                                    "role": "USER",
-                                    "chunks": [{"text": text_label}],
-                                }
-                            ]
-                        }
-                    }
-                )
-            )
 
         logging.debug("Sending leading silence before turn %d...", turn_index)
         self._send_silence(
