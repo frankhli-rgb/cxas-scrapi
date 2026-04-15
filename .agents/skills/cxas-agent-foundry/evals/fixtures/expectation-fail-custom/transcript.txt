@@ -1,5 +1,0 @@
-User: <event>session start</event>
-Agent [root_agent]: This call may be recorded for quality and training purposes.
-
-User: Hello
-Agent [root_agent]: Thank you for calling Humana. My name is Ava. How can I help you today?
