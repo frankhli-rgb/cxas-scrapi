@@ -29,23 +29,33 @@ class DFCXPageModel(BaseModel):
 class DFCXFlowModel(BaseModel):
     """Represents a Flow with its Pages."""
 
-    flow: Dict[str, Any]
+    flow_id: str  # The full resource name of the flow
+    flow_data: Dict[str, Any]  # The raw flow data
     pages: List[DFCXPageModel] = Field(default_factory=list)
 
 
 class DFCXAgentIR(BaseModel):
     """Represents the full extracted state of a DFCX Agent."""
 
-    name: str
-    display_name: str
+    name: str  # The full resource name of the DFCX agent
+    display_name: str  # The human-readable name of the DFCX agent
     default_language_code: str
+    supported_language_codes: List[str] = Field(default_factory=list)
+    time_zone: Optional[str] = None
+    description: Optional[str] = None
+    start_flow: Optional[str] = None
+    start_playbook: Optional[str] = None
     intents: List[Dict[str, Any]] = Field(default_factory=list)
     tools: List[Dict[str, Any]] = Field(default_factory=list)
     entity_types: List[Dict[str, Any]] = Field(default_factory=list)
     webhooks: List[Dict[str, Any]] = Field(default_factory=list)
     flows: List[DFCXFlowModel] = Field(default_factory=list)
     playbooks: List[Dict[str, Any]] = Field(default_factory=list)
-    generative_settings: Optional[Dict[str, Any]] = None
+    test_cases: List[Dict[str, Any]] = Field(default_factory=list)
+    generative_settings: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    playbook_generative_settings: Optional[Dict[str, Any]] = None
+    generators: List[Dict[str, Any]] = Field(default_factory=list)
+    agent_transition_route_groups: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 # --- Target Migration IR Models ---
@@ -54,9 +64,9 @@ class DFCXAgentIR(BaseModel):
 class IRMetadata(BaseModel):
     """Metadata for the migration target."""
 
-    app_name: str
-    app_id: Optional[str] = None  # From target_app_uuid
-    app_resource_name: Optional[str] = None
+    app_name: str  # The display name of the target Polysynth app
+    app_id: Optional[str] = None  # The UUID generated for the new Polysynth app
+    app_resource_name: Optional[str] = None  # The full resource name of the Polysynth app
     default_model: str = "gemini-2.5-flash-001"
 
 
@@ -98,5 +108,6 @@ class MigrationIR(BaseModel):
     tools: Dict[str, IRTool] = Field(default_factory=dict)
     agents: Dict[str, IRAgent] = Field(default_factory=dict)
     routing_edges: List[Dict[str, Any]] = Field(default_factory=list)
+    test_cases: Dict[str, Any] = Field(default_factory=dict)
     test_runs: Dict[str, Any] = Field(default_factory=dict)
     optimization_logs: Dict[str, Any] = Field(default_factory=dict)
