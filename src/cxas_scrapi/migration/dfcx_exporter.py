@@ -7,13 +7,16 @@ import logging
 import re
 import traceback
 import zipfile
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
+from dataclasses import dataclass, field
 from google.api_core import exceptions as api_exceptions
 from google.cloud.dialogflowcx_v3beta1 import services as cx_services
 from google.cloud.dialogflowcx_v3beta1 import types as cx_types
 from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict
+
+from cxas_scrapi.migration.data_models import DFCXAgentIR, DFCXFlowModel, DFCXPageModel
 
 logger = logging.getLogger(__name__)
 
@@ -40,270 +43,371 @@ class BaseDFCXClient:
         return endpoint
 
 
+@dataclass
+class _ResourceProcessingContext:
+    """Holds state for processing resources within a DFCX agent zip."""
+
+    zip_file: zipfile.ZipFile
+    agent_id: str
+    intent_map: Dict[str, Any] = field(default_factory=dict)
+    playbook_map: Dict[str, Any] = field(default_factory=dict)
+    tool_map: Dict[str, Any] = field(default_factory=dict)
+    entity_map: Dict[str, Any] = field(default_factory=dict)
+    webhook_map: Dict[str, Any] = field(default_factory=dict)
+    flow_map: Dict[str, Any] = field(default_factory=dict)
+    generator_map: Dict[str, Any] = field(default_factory=dict)
+    agent_trg_map: Dict[str, Any] = field(default_factory=dict)
+    dir_name_to_full_name: Dict[str, Dict[str, str]] = field(
+        default_factory=dict
+    )
+    display_name_to_id: Dict[str, str] = field(default_factory=dict)
+
+
 class DFCXAgentExporter(BaseDFCXClient):
     """Client for exporting Dialogflow CX Agents."""
 
+    @staticmethod
+    def _get_full_name(agent_id: str, resource_type: str, resource_id: str) -> str:
+        """Constructs the full resource name."""
+        return f"{agent_id}/{resource_type}/{resource_id}"
+
+    @staticmethod
+    def _process_flat_resource(
+        ctx: "_ResourceProcessingContext", path_parts: List[str], filename: str
+    ):
+        """Processes flat resources like webhooks and agentTransitionRouteGroups."""
+        res_type = path_parts[0]
+        with ctx.zip_file.open(filename) as f:
+            content = json.load(f)
+        res_id = content.get("name") or path_parts[1].replace(".json", "")
+        full_name = DFCXAgentExporter._get_full_name(ctx.agent_id, res_type, res_id)
+        content["name"] = full_name
+        if res_type == "webhooks":
+            ctx.webhook_map[full_name] = content
+        elif res_type == "agentTransitionRouteGroups":
+            ctx.agent_trg_map[full_name] = content
+        ctx.dir_name_to_full_name.setdefault(res_type, {})[
+            path_parts[1].replace(".json", "")
+        ] = full_name
+        if content.get("displayName"):
+            ctx.display_name_to_id[content["displayName"]] = res_id
+
+    @staticmethod
+    def _process_standard_resource(
+        ctx: "_ResourceProcessingContext", path_parts: List[str], filename: str
+    ):
+        """Processes standard resources with type/name/name.json structure."""
+        res_type = path_parts[0]
+        with ctx.zip_file.open(filename) as f:
+            content = json.load(f)
+        res_id = content.get("name") or content.get("flowId")
+        if not res_id:
+            res_id = path_parts[-2]
+        full_name = DFCXAgentExporter._get_full_name(ctx.agent_id, res_type, res_id)
+        content["name"] = full_name
+        if res_type == "intents":
+            ctx.intent_map[full_name] = content
+        elif res_type == "playbooks":
+            ctx.playbook_map[full_name] = content
+        elif res_type == "tools":
+            ctx.tool_map[full_name] = content
+        elif res_type == "entityTypes":
+            ctx.entity_map[full_name] = content
+        elif res_type == "flows":
+            ctx.flow_map[full_name] = {
+                "flow": content,
+                "pages": [],
+            }
+        elif res_type == "generators":
+            ctx.generator_map[full_name] = content
+        ctx.dir_name_to_full_name.setdefault(res_type, {})[path_parts[-2]] = (
+            full_name
+        )
+        if content.get("displayName"):
+            ctx.display_name_to_id[content["displayName"]] = res_id
+
+    @staticmethod
+    def _process_generative_settings(
+        zip_file: zipfile.ZipFile,
+        filename: str,
+        generative_settings: Dict[str, Any],
+    ) -> None:
+        """Processes a generative settings file from the zip."""
+        lang = filename.split("/")[-1].replace(".json", "")
+        with zip_file.open(filename) as f:
+            generative_settings[lang] = json.load(f)
+
+    @staticmethod
+    def _process_test_cases(
+        zip_file: zipfile.ZipFile, filename: str, test_cases_list: List[Dict[str, Any]]
+    ) -> None:
+        """Processes a test case file from the zip."""
+        with zip_file.open(filename) as f:
+            test_cases_list.append(json.load(f))
+
+    @staticmethod
+    def _process_intent_training_phrases(
+        zip_file: zipfile.ZipFile,
+        filename: str,
+        intent_map: Dict[str, Any],
+        full_resource_name: str,
+    ) -> None:
+        """Processes intent training phrases from the zip."""
+        with zip_file.open(filename) as f:
+            tp_content = json.load(f)
+        intent_map.setdefault(full_resource_name, {}).setdefault(
+            "trainingPhrases", []
+        ).extend(tp_content.get("trainingPhrases", []))
+
+    @staticmethod
+    def _process_entity_type_entities(
+        zip_file: zipfile.ZipFile,
+        filename: str,
+        entity_map: Dict[str, Any],
+        full_resource_name: str,
+    ) -> None:
+        """Processes entity type entities from the zip."""
+        with zip_file.open(filename) as f:
+            entity_content = json.load(f)
+        entity_map.setdefault(full_resource_name, {}).setdefault(
+            "entities", []
+        ).extend(entity_content.get("entities", []))
+
+    @staticmethod
+    def _process_flow_pages(
+        zip_file: zipfile.ZipFile,
+        filename: str,
+        flow_map: Dict[str, Any],
+        full_resource_name: str,
+    ) -> None:
+        """Processes flow pages from the zip."""
+        with zip_file.open(filename) as f:
+            page_content = json.load(f)
+        page_key = page_content.get("name")
+        if page_key:
+            flow_map.setdefault(full_resource_name, {}).setdefault(
+                "pages", []
+            ).append({"key": page_key, "value": page_content})
+
+    @staticmethod
+    def _process_playbook_examples(
+        zip_file: zipfile.ZipFile,
+        filename: str,
+        playbook_map: Dict[str, Any],
+        full_resource_name: str,
+    ) -> None:
+        """Processes playbook examples from the zip."""
+        if full_resource_name in playbook_map:
+            with zip_file.open(filename) as f:
+                ex_content = json.load(f)
+            if "name" in ex_content:
+                ex_content[
+                    "name"
+                ] = f"{full_resource_name}/examples/{ex_content['name']}"
+            playbook_map[full_resource_name].setdefault(
+                "examples", []
+            ).append(ex_content)
+
+    @staticmethod
+    def _process_tool_schema(
+        zip_file: zipfile.ZipFile,
+        filename: str,
+        tool_map: Dict[str, Any],
+        full_resource_name: str,
+    ) -> None:
+        """Processes tool schema from the zip."""
+        with zip_file.open(filename) as f:
+            schema_content = f.read().decode("utf-8")
+        tool_map.setdefault(full_resource_name, {}).setdefault(
+            "openApiSpec", {}
+        )["textSchema"] = schema_content
+
+    @staticmethod
+    def _process_generator_phrases(
+        zip_file: zipfile.ZipFile,
+        filename: str,
+        generator_map: Dict[str, Any],
+        full_resource_name: str,
+    ) -> None:
+        """Processes generator phrases from the zip."""
+        lang = filename.split("/")[-1].replace(".json", "")
+        with zip_file.open(filename) as f:
+            phrase_content = json.load(f)
+        generator_map.setdefault(full_resource_name, {}).setdefault(
+            "phrases", {}
+        )[lang] = phrase_content
+
     def process_zip_content(
         self, zip_content: bytes, agent_id_fallback: str
-    ) -> Optional[Dict[str, Any]]:
-        """Parses raw ZIP bytes into the full agent JSON structure."""
-        full_agent_data = {}
+    ) -> Optional[DFCXAgentIR]:
+        """Parses raw ZIP bytes into the full agent IR structure."""
         try:
             with zipfile.ZipFile(io.BytesIO(zip_content), "r") as zip_file:
                 logger.info("Zip file opened in memory. Parsing contents...")
                 namelist = zip_file.namelist()
 
-                if "agent.json" in namelist:
-                    with zip_file.open("agent.json") as f:
-                        full_agent_data = json.load(f)
+                # 1. Detect Root
+                agent_json_path = None
+                for name in namelist:
+                    parts = name.split("/")
+                    if parts[-1] == "agent.json" and len(parts) <= 2:
+                        agent_json_path = name
+                        break
 
-                    # If the local export doesn't have the full name (project/loc/agent), use fallback
-                    if (
-                        "name" not in full_agent_data
-                        or not full_agent_data["name"]
-                    ):
-                        full_agent_data["name"] = agent_id_fallback
-
-                    # Ensure we have a consistent ID to use for mapping
-                    agent_id = full_agent_data["name"]
-                    logger.info(
-                        f"Successfully loaded agent.json. Using ID: {agent_id}"
-                    )
-                else:
-                    logger.error(
-                        "ERROR: agent.json not found in the zip. Cannot build full agent structure."
-                    )
+                if not agent_json_path:
+                    logger.error("agent.json not found in zip.")
                     return None
 
-                # --- MODIFIED: Added maps for Flows and Pages ---
-                (
-                    intent_map,
-                    playbook_map,
-                    tool_map,
-                    entity_map,
-                    webhook_map,
-                    flow_map,
-                ) = (
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
-                    {},
+                base_path = agent_json_path[: -len("agent.json")]
+                logger.info(f"Detected base path in zip: '{base_path}'")
+
+                with zip_file.open(agent_json_path) as f:
+                    agent_data = json.load(f)
+
+                if "name" not in agent_data or not agent_data["name"]:
+                    agent_data["name"] = agent_id_fallback
+
+                agent_id = agent_data["name"]
+
+
+                # Initialize processing context
+                ctx = _ResourceProcessingContext(
+                    zip_file=zip_file,
+                    agent_id=agent_id,
                 )
-                dir_name_to_full_name, display_name_to_id = {}, {}
+                test_cases_list = []
+                generative_settings = {}
 
-                def get_full_name(resource_type: str, resource_id: str) -> str:
-                    return f"{agent_id}/{resource_type}/{resource_id}"
-
-                # First pass: Load main components and build maps for all resource types
+                # First pass: Load main components
                 for filename in sorted(namelist):
+                    if not filename.startswith(base_path):
+                        continue
+
+                    rel_path = filename[len(base_path) :]
                     if (
-                        not filename.endswith(".json")
-                        or filename == "agent.json"
+                        not rel_path.endswith(".json")
+                        or rel_path == "agent.json"
                     ):
                         continue
 
-                    path_parts = filename.split("/")
+                    path_parts = rel_path.split("/")
 
-                    # DFCX stores webhooks directly in the webhooks/ directory without a subfolder
-                    is_webhook = (
-                        len(path_parts) == 2 and path_parts[0] == "webhooks"
-                    )
+                    # Flat resources: webhooks, agentTransitionRouteGroups
+                    if len(path_parts) == 2 and path_parts[0] in [
+                        "webhooks",
+                        "agentTransitionRouteGroups",
+                    ]:
+                        DFCXAgentExporter._process_flat_resource(ctx, path_parts, filename)
 
-                    # Other resources are in subfolders: type/name/name.json
-                    is_standard_resource = len(path_parts) >= 2 and path_parts[
-                        -2
-                    ] == path_parts[-1].replace(".json", "")
+                    # Standard resources: type/name/name.json
+                    elif (
+                        len(path_parts) >= 2
+                        and path_parts[-2]
+                        == path_parts[-1].replace(".json", "")
+                    ):
+                        DFCXAgentExporter._process_standard_resource(ctx, path_parts, filename)
 
-                    if is_standard_resource or is_webhook:
-                        resource_type = path_parts[0]
-                        resource_dir_name = (
-                            path_parts[-2]
-                            if is_standard_resource
-                            else path_parts[-1].replace(".json", "")
-                        )
-
-                        try:
-                            with zip_file.open(filename) as f:
-                                content = json.load(f)
-
-                            # Handle different ID keys ('name' vs. 'flowId')
-                            resource_id = content.get("name") or content.get(
-                                "flowId"
-                            )
-                            if not resource_id:
-                                # Webhooks sometimes only have displayName at the root
-                                if is_webhook and content.get("displayName"):
-                                    resource_id = content["displayName"]
-                                else:
-                                    logger.warning(
-                                        f"  Warning: Missing 'name' or 'flowId' in {filename}. Skipping."
-                                    )
-                                    continue
-
-                            full_name = get_full_name(
-                                resource_type, resource_id
-                            )
-                            content["name"] = full_name
-
-                            if resource_type == "intents":
-                                intent_map[full_name] = content
-                            elif resource_type == "playbooks":
-                                playbook_map[full_name] = content
-                            elif resource_type == "tools":
-                                tool_map[full_name] = content
-                            elif resource_type == "entityTypes":
-                                entity_map[full_name] = content
-                            elif resource_type == "webhooks":
-                                webhook_map[full_name] = content
-                            elif resource_type == "flows":
-                                flow_map[full_name] = {
-                                    "flow": content,
-                                    "pages": [],
-                                }
-
-                            dir_name_to_full_name[resource_dir_name] = full_name
-                            if content.get("displayName"):
-                                display_name_to_id[content["displayName"]] = (
-                                    resource_id
-                                )
-                        except Exception as e:
-                            logger.error(
-                                f"    -> ERROR pre-loading {filename}: {e}"
-                            )
-
-                # Second pass: Merge sub-components (training phrases, pages, examples, etc.)
+                # Second pass: Merge sub-components and handle special folders
                 for filename in sorted(namelist):
-                    if filename == "generativeSettings/en.json":
-                        with zip_file.open(filename) as f:
-                            full_agent_data["generativeSettings"] = json.load(f)
+                    if not filename.startswith(base_path):
                         continue
 
-                    path_parts = filename.split("/")
+                    rel_path = filename[len(base_path) :]
+
+                    # Generative Settings
+                    if rel_path.startswith("generativeSettings/"):
+                        if rel_path.endswith(".json"):
+                            DFCXAgentExporter._process_generative_settings(zip_file, filename, generative_settings)
+                        continue
+
+                    # Test Cases
+                    if rel_path.startswith("testCases/"):
+                        if rel_path.endswith(".json"):
+                            DFCXAgentExporter._process_test_cases(zip_file, filename, test_cases_list)
+                        continue
+
+                    path_parts = rel_path.split("/")
                     if len(path_parts) < 2:
                         continue
 
+                    res_type = path_parts[0]
                     resource_dir_name = path_parts[1]
-                    full_resource_name = dir_name_to_full_name.get(
-                        resource_dir_name
-                    )
+                    full_resource_name = ctx.dir_name_to_full_name.get(res_type, {}).get(resource_dir_name)
                     if not full_resource_name:
                         continue
 
-                    # --- MODIFIED: Handle sub-components for ALL resource types ---
-                    resource_type = path_parts[0]
-
-                    # Handle Training Phrases for Intents
+                    # Intents -> trainingPhrases
                     if (
-                        resource_type == "intents"
+                        res_type == "intents"
                         and path_parts[-2] == "trainingPhrases"
-                        and filename.endswith(".json")
+                        and rel_path.endswith(".json")
                     ):
-                        if full_resource_name in intent_map:
-                            with zip_file.open(filename) as f:
-                                tp_content = json.load(f)
-                            intent_map[full_resource_name].setdefault(
-                                "trainingPhrases", []
-                            ).extend(tp_content.get("trainingPhrases", []))
+                        DFCXAgentExporter._process_intent_training_phrases(zip_file, filename, ctx.intent_map, full_resource_name)
 
-                    # Handle Entities for EntityTypes
+                    # EntityTypes -> entities
                     elif (
-                        resource_type == "entityTypes"
+                        res_type == "entityTypes"
                         and path_parts[-2] == "entities"
-                        and filename.endswith(".json")
+                        and rel_path.endswith(".json")
                     ):
-                        if full_resource_name in entity_map:
-                            with zip_file.open(filename) as f:
-                                entity_content = json.load(f)
-                            entity_map[full_resource_name].setdefault(
-                                "entities", []
-                            ).extend(entity_content.get("entities", []))
+                        DFCXAgentExporter._process_entity_type_entities(zip_file, filename, ctx.entity_map, full_resource_name)
 
-                    # Handle Pages for Flows
+                    # Flows -> pages
                     elif (
-                        resource_type == "flows"
+                        res_type == "flows"
                         and path_parts[-2] == "pages"
-                        and filename.endswith(".json")
+                        and rel_path.endswith(".json")
                     ):
-                        if full_resource_name in flow_map:
-                            with zip_file.open(filename) as f:
-                                page_content = json.load(f)
-                            page_key = page_content.get("name")
-                            if page_key:
-                                flow_map[full_resource_name]["pages"].append(
-                                    {"key": page_key, "value": page_content}
-                                )
+                        DFCXAgentExporter._process_flow_pages(zip_file, filename, ctx.flow_map, full_resource_name)
 
-                    # Handle Examples for Playbooks
+                    # Playbooks -> examples
                     elif (
-                        resource_type == "playbooks"
+                        res_type == "playbooks"
                         and path_parts[-2] == "examples"
-                        and filename.endswith(".json")
+                        and rel_path.endswith(".json")
                     ):
-                        if full_resource_name in playbook_map:
-                            with zip_file.open(filename) as f:
-                                ex_content = json.load(f)
-                            if "name" in ex_content:
-                                ex_content["name"] = (
-                                    f"{full_resource_name}/examples/{ex_content['name']}"
-                                )
-                            playbook_map[full_resource_name].setdefault(
-                                "examples", []
-                            ).append(ex_content)
+                        DFCXAgentExporter._process_playbook_examples(zip_file, filename, ctx.playbook_map, full_resource_name)
 
-                    # Handle OpenAPI Schemas for Tools
+                    # Tools -> schema.yaml
+                    elif res_type == "tools" and path_parts[-1] == "schema.yaml":
+                        DFCXAgentExporter._process_tool_schema(zip_file, filename, ctx.tool_map, full_resource_name)
+
+                    # Generators -> phrases
                     elif (
-                        resource_type == "tools"
-                        and path_parts[-1] == "schema.yaml"
+                        res_type == "generators"
+                        and path_parts[-2] == "phrases"
+                        and rel_path.endswith(".json")
                     ):
-                        if full_resource_name in tool_map:
-                            try:
-                                with zip_file.open(filename) as f:
-                                    schema_content = f.read().decode("utf-8")
-                                tool_map[full_resource_name].setdefault(
-                                    "openApiSpec", {}
-                                )["textSchema"] = schema_content
-                            except Exception as e:
-                                logger.error(
-                                    f"    -> ERROR reading schema {filename}: {e}"
-                                )
+                        DFCXAgentExporter._process_generator_phrases(zip_file, filename, ctx.generator_map, full_resource_name)
 
-                # Finalize and assemble the full agent object
-                full_agent_data["intents"] = list(intent_map.values())
-                full_agent_data["tools"] = list(tool_map.values())
-                full_agent_data["entityTypes"] = list(entity_map.values())
-                full_agent_data["webhooks"] = list(webhook_map.values())
-                full_agent_data["flows"] = list(flow_map.values())
-
-                # (Playbook processing logic remains the same)
+                # Resolve Playbook references
                 processed_playbooks = []
-                for pb_name, pb_data in playbook_map.items():
+                for pb_name, pb_data in ctx.playbook_map.items():
                     if "referencedPlaybooks" in pb_data:
                         resolved_refs = [
-                            get_full_name("playbooks", display_name_to_id[dn])
+                            DFCXAgentExporter._get_full_name(agent_id, "playbooks", ctx.display_name_to_id[dn])
                             for dn in pb_data["referencedPlaybooks"]
-                            if dn in display_name_to_id
+                            if dn in ctx.display_name_to_id
                         ]
                         pb_data["referencedPlaybooks"] = resolved_refs
                     if "referencedTools" in pb_data:
                         resolved_refs = [
-                            get_full_name("tools", display_name_to_id[dn])
+                            DFCXAgentExporter._get_full_name(agent_id, "tools", ctx.display_name_to_id[dn])
                             for dn in pb_data["referencedTools"]
-                            if dn in display_name_to_id
+                            if dn in ctx.display_name_to_id
                         ]
                         pb_data["referencedTools"] = resolved_refs
                     processed_playbooks.append(pb_data)
 
-                start_pb_display_name = full_agent_data.get("startPlaybook")
+                # Reorder playbooks to put start playbook first
+                start_pb_display_name = agent_data.get("startPlaybook")
                 if (
                     start_pb_display_name
-                    and start_pb_display_name in display_name_to_id
+                    and start_pb_display_name in ctx.display_name_to_id
                 ):
-                    start_playbook_full_name = get_full_name(
-                        "playbooks", display_name_to_id[start_pb_display_name]
+                    start_playbook_full_name = DFCXAgentExporter._get_full_name(
+                        agent_id, "playbooks", ctx.display_name_to_id[start_pb_display_name]
                     )
-                    full_agent_data["startPlaybook"] = start_playbook_full_name
                     try:
                         start_pb_index = next(
                             i
@@ -312,33 +416,80 @@ class DFCXAgentExporter(BaseDFCXClient):
                         )
                         start_pb_obj = processed_playbooks.pop(start_pb_index)
                         processed_playbooks.insert(0, start_pb_obj)
-                        logger.info(
-                            f"  -> Reordered playbooks list to place start playbook '{start_pb_display_name}' first."
-                        )
                     except StopIteration:
-                        pass  # Already handled by other logic or not found
+                        pass
 
-                full_agent_data["playbooks"] = processed_playbooks
-
-                # --- ADDED: Resolve startFlow display name to full resource name ---
-                start_flow_display_name = full_agent_data.get("startFlow")
-                if (
-                    start_flow_display_name
-                    and start_flow_display_name in display_name_to_id
-                ):
-                    full_agent_data["startFlow"] = get_full_name(
-                        "flows", display_name_to_id[start_flow_display_name]
+                # Build DFCXAgentIR
+                flows_list = []
+                for flow_full_name, flow_stuff in ctx.flow_map.items():
+                    pages_list = [
+                        DFCXPageModel(
+                            page_id=p["key"], page_data=p["value"]
+                        )
+                        for p in flow_stuff["pages"]
+                    ]
+                    flows_list.append(
+                        DFCXFlowModel(
+                            flow_id=flow_full_name,
+                            flow_data=flow_stuff["flow"],
+                            pages=pages_list,
+                        )
                     )
 
-                logger.info("Successfully merged all JSON contents.")
-                return full_agent_data
+                agent_ir = DFCXAgentIR(
+                    name=agent_id,
+                    display_name=agent_data.get("displayName", ""),
+                    default_language_code=agent_data.get(
+                        "defaultLanguageCode", ""
+                    ),
+                    supported_language_codes=agent_data.get(
+                        "supportedLanguageCodes", []
+                    ),
+                    time_zone=agent_data.get("timeZone"),
+                    description=agent_data.get("description"),
+                    start_flow=DFCXAgentExporter._get_full_name(
+                        agent_id,
+                        "flows",
+                        ctx.display_name_to_id.get(
+                            agent_data.get("startFlow"), ""
+                        ),
+                    )
+                    if agent_data.get("startFlow")
+                    in ctx.display_name_to_id
+                    else agent_data.get("startFlow"),
+                    start_playbook=DFCXAgentExporter._get_full_name(
+                        agent_id,
+                        "playbooks",
+                        ctx.display_name_to_id.get(
+                            agent_data.get("startPlaybook"), ""
+                        ),
+                    )
+                    if agent_data.get("startPlaybook")
+                    in ctx.display_name_to_id
+                    else agent_data.get("startPlaybook"),
+                    intents=list(ctx.intent_map.values()),
+                    tools=list(ctx.tool_map.values()),
+                    entity_types=list(ctx.entity_map.values()),
+                    webhooks=list(ctx.webhook_map.values()),
+                    flows=flows_list,
+                    playbooks=processed_playbooks,
+                    test_cases=test_cases_list,
+                    generative_settings=generative_settings,
+                    generators=list(ctx.generator_map.values()),
+                    agent_transition_route_groups=list(
+                        ctx.agent_trg_map.values()
+                    ),
+                )
+
+                return agent_ir
+
         except Exception as e:
             logger.error(f"Error processing zip content: {e}")
             traceback.print_exc()
             return None
 
-    def export_agent_to_json(self, agent_id: str) -> Optional[Dict[str, Any]]:
-        """Exports the agent and returns its contents as a JSON object by merging all JSON files in the zip."""
+    def export_agent_to_json(self, agent_id: str) -> Optional[DFCXAgentIR]:
+        """Exports the agent and returns its contents as a DFCXAgentIR object."""
         client_options = self._get_client_options(agent_id)
         if not client_options:
             return None
@@ -436,7 +587,6 @@ class DFCXGenerativeSettings(BaseDFCXClient):
         if not client_options:
             return None
         try:
-            # The resource name for generative settings is the agent ID + "/generativeSettings"
             settings_name = f"{agent_id}/generativeSettings"
             client = cx_services.agents.AgentsClient(
                 client_options=client_options
@@ -447,7 +597,6 @@ class DFCXGenerativeSettings(BaseDFCXClient):
             response = client.get_generative_settings(request=request)
             return MessageToDict(response._pb)
         except api_exceptions.NotFound:
-            # Not an error; it just means no custom settings are configured.
             logger.info(
                 "No custom generative settings found for this agent. Using defaults."
             )
@@ -470,8 +619,8 @@ class ConversationalAgentsAPI:
         self.export_agent = DFCXAgentExporter()
 
     def fetch_full_agent_details(
-        self, agent_id: str, use_export: bool = False
-    ) -> Optional[Dict[str, Any]]:
+        self, agent_id: str, use_export: bool = True
+    ) -> Optional[DFCXAgentIR]:
         """Fetches the complete agent configuration, including all nested resources.
 
         Uses either parallel API calls or the ExportAgent method.
@@ -483,6 +632,8 @@ class ConversationalAgentsAPI:
             return self.export_agent.export_agent_to_json(agent_id)
 
         logger.info(f"Starting import for agent via API calls: {agent_id}...")
+        # TODO: If using use_export=False, this method currently does not include Flows and Pages.
+        # This is a work in progress. Use use_export=True for full agent extraction.
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_agent = executor.submit(self.agents.get_agent, agent_id)
             future_tools = executor.submit(self.tools.list_tools, agent_id)
@@ -497,10 +648,7 @@ class ConversationalAgentsAPI:
                 )
                 return None
 
-            # Get the required defaultLanguageCode to make the GenerativeSettings call
-            language_code = agent_details.get(
-                "defaultLanguageCode", "en"
-            )  # Default to 'en' just in case
+            language_code = agent_details.get("defaultLanguageCode", "en")
             future_gen_settings = executor.submit(
                 self.generative_settings.get_generative_settings,
                 agent_id,
@@ -510,19 +658,39 @@ class ConversationalAgentsAPI:
             tools_list = future_tools.result()
             playbooks_list = future_playbooks.result()
             gen_settings = future_gen_settings.result()
-            if gen_settings:
-                agent_details["generativeSettings"] = gen_settings
 
-            agent_details["tools"] = tools_list
-            agent_details["playbooks"] = playbooks_list
-            logger.info("Successfully imported all agent components.")
-            return agent_details
+            agent_ir = DFCXAgentIR(
+                name=agent_details.get("name", ""),
+                display_name=agent_details.get("displayName", ""),
+                default_language_code=language_code,
+                supported_language_codes=agent_details.get(
+                    "supportedLanguageCodes", []
+                ),
+                time_zone=agent_details.get("timeZone"),
+                description=agent_details.get("description"),
+                start_flow=agent_details.get("startFlow"),
+                start_playbook=agent_details.get("startPlaybook"),
+                intents=[],
+                tools=tools_list,
+                entity_types=[],
+                webhooks=[],
+                flows=[],
+                playbooks=playbooks_list,
+                test_cases=[],
+                generative_settings={language_code: gen_settings}
+                if gen_settings
+                else {},
+                generators=[],
+                agent_transition_route_groups=[],
+            )
+
+            logger.info("Successfully imported available agent components via API.")
+            return agent_ir
 
     def process_local_agent_zip(
         self, zip_bytes: bytes
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[DFCXAgentIR]:
         """Processes a local zip file without calling the API."""
-        # Use a dummy ID for local uploads so the migration logic has a base path
         dummy_id = (
             "projects/local-upload/locations/global/agents/uploaded-agent"
         )
