@@ -521,12 +521,12 @@ def generate_html_report(results, evals_dir, app_name):
 def main():
     parser = argparse.ArgumentParser(description="Run CXAS Simulation Evaluations.")
     parser.add_argument("--app-name", required=True, help="Full resource name of the app (projects/.../locations/.../apps/...)")
-    parser.add_argument("--output_dir", required=True, help="Base output directory containing sim_evals/")
+    parser.add_argument("--output-dir", required=True, help="Base output directory containing sim_evals/")
     parser.add_argument("--parallelism", type=int, default=5, help="Number of parallel workers")
-    parser.add_argument("--start_index", type=int, default=0, help="Start index of files to run")
-    parser.add_argument("--end_index", type=int, default=10, help="End index of files to run")
-    parser.add_argument("--skip_analysis", action="store_true", help="Skip cognitive diagnostics and LLM analysis")
-    parser.add_argument("--runs_per_eval", type=int, default=1, help="Number of times to run each evaluation")
+    parser.add_argument("--start-index", type=int, default=0, help="Start index of files to run")
+    parser.add_argument("--end-index", type=int, default=10, help="End index of files to run")
+    parser.add_argument("--skip-analysis", action="store_true", help="Skip cognitive diagnostics and LLM analysis")
+    parser.add_argument("--runs-per-eval", type=int, default=1, help="Number of times to run each evaluation")
     args = parser.parse_args()
 
     evals_dir = os.path.join(args.output_dir, 'sim_evals')

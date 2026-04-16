@@ -563,19 +563,19 @@ You can use the UI to build agents, but you must get them checked into source co
 # Pull an App
 # Download and unpack an app into a local directory:
 ```bash
-cxas pull {app_identifier} --project_id {project_id} --location {location} --target_dir {local_dir}
+cxas pull {app_identifier} --project-id {project_id} --location {location} --target-dir {local_dir}
 ```
 
 # Push Local Files
 # Upload the local agent directory to CXAS:
 ```bash
-cxas push --app-dir {local_dir} --to {app_identifier} --project_id {project_id} --location {location}
+cxas push --app-dir {local_dir} --to {app_identifier} --project-id {project_id} --location {location}
 ```
 
 # Branch an App
 # Duplicate an existing app (pulls source -> creates new -> pushes content):
 ```bash
-cxas branch "{source_app}" --new_name "{new_display_name}" --project_id {project_id} --location {location}
+cxas branch "{source_app}" --new-name "{new_display_name}" --project-id {project_id} --location {location}
 ```
 
 Using source control also enables multiple developers to work on the same app and maintain a single source of truth without stepping on other people's toes. The recommended pattern is for every developer is to mimic software engineering best practices. i.e.:

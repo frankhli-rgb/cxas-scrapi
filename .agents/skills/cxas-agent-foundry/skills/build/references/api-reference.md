@@ -34,7 +34,7 @@ grep -A 20 "def create_" .venv/lib/python3.13/site-packages/cxas_scrapi/core/<mo
 6. Create variables
 7. Create callbacks
 8. Set root agent + model on app
-9. Pull to local: `cxas pull $APP_NAME --target_dir cxas_app/`
+9. Pull to local: `cxas pull $APP_NAME --target-dir cxas_app/`
 10. Run linter: `cxas lint --app-dir cxas_app/`
 11. Run build verification gates (see `build-verification.md`)
 

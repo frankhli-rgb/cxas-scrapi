@@ -161,10 +161,10 @@ Output ONLY the converted JSON object. Do not include any markdown formatting or
 
 def main():
     parser = argparse.ArgumentParser(description="Convert CXAS evaluations to SimulationEvals test cases.")
-    parser.add_argument("--output_dir", required=True, help="Base output directory containing evals/ and tools/")
+    parser.add_argument("--output-dir", required=True, help="Base output directory containing evals/ and tools/")
     parser.add_argument("--project", default="ces-deployment-dev")
     parser.add_argument("--location", default="us-central1")
-    parser.add_argument("--custom_instructions", default="")
+    parser.add_argument("--custom-instructions", default="")
     parser.add_argument("--parallelism", type=int, default=5, help="Number of parallel workers")
     args = parser.parse_args()
 

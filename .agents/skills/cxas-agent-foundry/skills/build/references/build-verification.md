@@ -16,7 +16,7 @@ Sync platform state to local, lint, fix issues, then push fixes back:
 # 1. Pull platform state to local
 GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas pull \
   projects/$PROJECT_ID/locations/$LOCATION/apps/$APP_ID \
-  --project_id $PROJECT_ID --location $LOCATION --target_dir cxas_app/
+  --project-id $PROJECT_ID --location $LOCATION --target-dir cxas_app/
 
 # 2. Run linter
 .venv/bin/cxas lint --app-dir cxas_app/
@@ -25,12 +25,12 @@ GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas pull \
 GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas push \
   --app-dir cxas_app/ \
   --to projects/$PROJECT_ID/locations/$LOCATION/apps/$APP_ID \
-  --project_id $PROJECT_ID --location $LOCATION
+  --project-id $PROJECT_ID --location $LOCATION
 
 # 4. Re-pull to confirm sync
 GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas pull \
   projects/$PROJECT_ID/locations/$LOCATION/apps/$APP_ID \
-  --project_id $PROJECT_ID --location $LOCATION --target_dir cxas_app/
+  --project-id $PROJECT_ID --location $LOCATION --target-dir cxas_app/
 
 # 5. Re-lint — must pass clean
 .venv/bin/cxas lint --app-dir cxas_app/

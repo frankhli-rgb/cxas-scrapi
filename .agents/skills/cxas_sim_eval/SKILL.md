@@ -60,7 +60,7 @@ Usage:
 ```bash
 python .agents/skills/cxas_sim_eval/scripts/fetch_app_data.py \
   --app-name "projects/.../locations/.../apps/..." \
-  --output_dir /path/to/output_directory
+  --output-dir /path/to/output_directory
 ```
 
 ### 2. Fetch Tool Schemas
@@ -72,7 +72,7 @@ Usage:
 ```bash
 python .agents/skills/cxas_sim_eval/scripts/fetch_tool_schemas.py \
   --app-name "projects/.../locations/.../apps/..." \
-  --output_dir /path/to/output_directory
+  --output-dir /path/to/output_directory
 ```
 
 ### 3. Convert Evaluations
@@ -83,7 +83,7 @@ Converts the fetched evaluations to simulation test cases, using the fetched too
 Usage:
 ```bash
 python .agents/skills/cxas_sim_eval/scripts/convert_eval.py \
-  --output_dir /path/to/output_directory \
+  --output-dir /path/to/output_directory \
   --parallelism 5
 ```
 
@@ -99,10 +99,10 @@ Usage:
 ```bash
 python .agents/skills/cxas_sim_eval/scripts/run_evals.py \
   --app-name "projects/.../locations/.../apps/..." \
-  --output_dir /path/to/output_directory \
+  --output-dir /path/to/output_directory \
   --parallelism 5 \
-  --start_index 0 \
-  --end_index 10
+  --start-index 0 \
+  --end-index 10
 ```
 
 ## Interpreting Cognitive Diagnostics

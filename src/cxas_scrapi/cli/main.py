@@ -260,8 +260,8 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
         # Require prefix or tags if no specific ID is given
         if not args.display_name_prefix and not args.tags:
             print(
-                "Error: You must provide either --evaluation_id, "
-                "--display_name_prefix, or --tags to "
+                "Error: You must provide either --evaluation-id, "
+                "--display-name-prefix, or --tags to "
                 "specify which tests to run."
             )
             sys.exit(1)
@@ -307,8 +307,8 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
         # Require prefix or tags if no specific ID is given
         if not args.display_name_prefix and not args.tags:
             print(
-                "Error: You must provide either --evaluation_id, "
-                "--display_name_prefix, or --tags to "
+                "Error: You must provide either --evaluation-id, "
+                "--display-name-prefix, or --tags to "
                 "specify which tests to run."
             )
             sys.exit(1)
@@ -558,7 +558,7 @@ def ci_test(args: argparse.Namespace) -> None:
                 "test-tools",
                 "--app-name",
                 temp_app_name,
-                "--test_file",
+                "--test-file",
                 test_file,
             ]
             print(f"Executing: {' '.join(cmd)}")
@@ -587,7 +587,7 @@ def ci_test(args: argparse.Namespace) -> None:
                     "run",
                     "--app-name",
                     temp_app_name,
-                    "--evaluation_id",
+                    "--evaluation-id",
                     eval_id,
                     "--wait",
                     "--filter-auto-metrics",
@@ -678,17 +678,17 @@ def local_test(args: argparse.Namespace) -> None:
         "ci-test",
         "--app-dir",
         "/workspace",
-        "--project_id",
+        "--project-id",
         args.project_id,
         "--location",
         args.location,
-        "--display_name",
+        "--display-name",
         display_name,
     ]
 
     env_file = getattr(args, "env_file", None)
     if env_file:
-        inner_cmd.extend(["--env_file", env_file])
+        inner_cmd.extend(["--env-file", env_file])
 
     docker_cmd.extend(inner_cmd)
 
@@ -704,7 +704,7 @@ def get_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--oauth_token",
+        "--oauth-token",
         help=(
             "Optional: OAuth token string for CES API authentication. "
             "Alternatively, set CXAS_OAUTH_TOKEN env var."
@@ -718,7 +718,7 @@ def get_parser() -> argparse.ArgumentParser:
         """Helper to add standard GCP args to subparsers."""
         help_suffix = "" if required else " (Optional if using Display Name)"
         subparser.add_argument(
-            "--project_id",
+            "--project-id",
             required=required,
             help=f"The GCP Project ID.{help_suffix}",
         )
@@ -750,7 +750,7 @@ def get_parser() -> argparse.ArgumentParser:
         ),
     )
     parser_init_gh.add_argument(
-        "--agent_name",
+        "--agent-name",
         help=(
             "Optional: The name of the agent directory to scope the workflow "
             "to (e.g., 'pilot')."
@@ -758,11 +758,11 @@ def get_parser() -> argparse.ArgumentParser:
     )
 
     parser_init_gh.add_argument(
-        "--workload_identity_provider",
+        "--workload-identity-provider",
         help="Optional: GCP Workload Identity Provider string.",
     )
     parser_init_gh.add_argument(
-        "--service_account",
+        "--service-account",
         help="Optional: GCP Service Account email.",
     )
     parser_init_gh.add_argument(
@@ -826,7 +826,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
     parser_test_tools.add_argument(
-        "--test_file",
+        "--test-file",
         required=True,
         help="Path to the YAML/JSON file containing tool test definitions.",
     )
@@ -849,27 +849,27 @@ def get_parser() -> argparse.ArgumentParser:
         help="The path to the app directory.",
     )
     parser_test_callbacks.add_argument(
-        "--agent_name",
+        "--agent-name",
         required=False,
         help="Optional: The name of the agent to run callback tests for.",
     )
     parser_test_callbacks.add_argument(
-        "--callback_type",
+        "--callback-type",
         required=False,
         help="Optional: The type of callback to run tests for.",
     )
     parser_test_callbacks.add_argument(
-        "--callback_name",
+        "--callback-name",
         required=False,
         help="Optional: The name of the callback to run tests for.",
     )
     parser_test_callbacks.add_argument(
-        "--log_file",
+        "--log-file",
         required=False,
         help="Optional: Path to a file to log pytest output to.",
     )
     parser_test_callbacks.add_argument(
-        "--pytest_args",
+        "--pytest-args",
         type=lambda s: [item for item in s.split(",")],
         help='Comma-separated list (e.g., "-v,-s")',
     )
@@ -887,27 +887,27 @@ def get_parser() -> argparse.ArgumentParser:
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
     parser_test_single_callback.add_argument(
-        "--agent_name",
+        "--agent-name",
         required=True,
         help="Optional: The name of the agent to run callback tests for.",
     )
     parser_test_single_callback.add_argument(
-        "--callback_type",
+        "--callback-type",
         required=True,
         help="Optional: The type of callback to run tests for.",
     )
     parser_test_single_callback.add_argument(
-        "--test_file_path",
+        "--test-file-path",
         required=True,
         help="Path to the test python file to run.",
     )
     parser_test_single_callback.add_argument(
-        "--log_file",
+        "--log-file",
         required=False,
         help="Optional: Path to a file to log pytest output to.",
     )
     parser_test_single_callback.add_argument(
-        "--pytest_args",
+        "--pytest-args",
         type=lambda s: [item for item in s.split(",")],
         help='Comma-separated list (e.g., "-v,-s")',
     )
@@ -924,7 +924,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
     parser_export.add_argument(
-        "--evaluation_id",
+        "--evaluation-id",
         required=True,
         help=(
             "The evaluation resource name "
@@ -973,7 +973,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="The CXAS App ID (projects/.../locations/.../apps/...).",
     )
     parser_run.add_argument(
-        "--evaluation_id",
+        "--evaluation-id",
         required=False,
         help=(
             "The evaluation resource name "
@@ -987,7 +987,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="Evaluation execution modality (text or audio). Defaults to text.",
     )
     parser_run.add_argument(
-        "--display_name_prefix",
+        "--display-name-prefix",
         required=False,
         help="Run all tests whose display name starts with this string.",
     )
@@ -1028,14 +1028,14 @@ def get_parser() -> argparse.ArgumentParser:
         help=("Path to the app directory to test. " "Defaults to current directory."),
     )
     parser_ci_test.add_argument(
-        "--display_name",
+        "--display-name",
         help=(
             "Optional: Deterministic display name for the temp agent "
             "(e.g. [CI] PR-123). Overwrites existing."
         ),
     )
     parser_ci_test.add_argument(
-        "--env_file",
+        "--env-file",
         help=(
             "Path to a specific environment JSON "
             "file to include as environment.json."
@@ -1052,11 +1052,11 @@ def get_parser() -> argparse.ArgumentParser:
         "--app-name",
         help=(
             "The CXAS App ID (projects/.../locations/.../apps/...). "
-            "Required if --display_name not provided."
+            "Required if --display-name not provided."
         ),
     )
     parser_delete.add_argument(
-        "--display_name",
+        "--display-name",
         help=(
             "The Display Name of the app to delete. "
             "Required if --app-name not provided."
@@ -1080,7 +1080,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="Path to the app directory. Defaults to current directory.",
     )
     parser_local_test.add_argument(
-        "--env_file",
+        "--env-file",
         help=(
             "Path to a specific environment JSON "
             "file to include as environment.json."
@@ -1095,7 +1095,7 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_pull.add_argument("app", help="App Resource Name or Display Name.")
     parser_pull.add_argument(
-        "--target_dir", default=".", help="Directory to extract to."
+        "--target-dir", default=".", help="Directory to extract to."
     )
     _add_project_location_args(parser_pull, required=False)
     parser_pull.set_defaults(func=app_pull)
@@ -1105,7 +1105,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser_push.add_argument("--app-dir", default=".", help="Local app directory.")
     parser_push.add_argument("--to", help="Target App Resource Name or Display Name.")
     parser_push.add_argument(
-        "--env_file",
+        "--env-file",
         help=(
             "Path to a specific environment JSON "
             "file to include as environment.json."
@@ -1116,7 +1116,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="Target App ID to explicitly push to (v1beta API).",
     )
     parser_push.add_argument(
-        "--display_name",
+        "--display-name",
         help="Display name for a new App if --to is not provided.",
     )
     _add_project_location_args(parser_push, required=False)
@@ -1233,7 +1233,7 @@ def get_parser() -> argparse.ArgumentParser:
         "source", help="Source App Resource Name or Display Name."
     )
     parser_branch.add_argument(
-        "--new_name", required=True, help="Display name of the new branch app."
+        "--new-name", required=True, help="Display name of the new branch app."
     )
     _add_project_location_args(parser_branch)
     parser_branch.set_defaults(func=app_branch)
@@ -1274,7 +1274,7 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_local_create_agent.add_argument("name", help="Display name of the agent.")
     parser_local_create_agent.add_argument(
-        "--app_dir", default=".", help="App directory."
+        "--app-dir", default=".", help="App directory."
     )
     parser_local_create_agent.set_defaults(func=handle_local_create)
 
@@ -1286,10 +1286,10 @@ def get_parser() -> argparse.ArgumentParser:
         "tool_type", nargs="?", help="Type of tool (e.g., PYTHON)."
     )
     parser_local_create_tool.add_argument(
-        "--add_to_agent", nargs="?", help="Agent to add the tool to."
+        "--add-to-agent", nargs="?", help="Agent to add the tool to."
     )
     parser_local_create_tool.add_argument(
-        "--app_dir", default=".", help="App directory."
+        "--app-dir", default=".", help="App directory."
     )
     parser_local_create_tool.set_defaults(func=handle_local_create)
 

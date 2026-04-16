@@ -94,7 +94,7 @@ app = apps.create_app(app_id=app_name, display_name=display_name, ...)
 # Push the entire app (agents, tools, callbacks) from local files
 cxas push --app-dir <project>/cxas_app/<AppName> \
   --to <app_resource_name> \
-  --project_id <project_id> --location <location>
+  --project-id <project_id> --location <location>
 ```
 
 **Always use `cxas push` as the single source of truth** for agents, tools, and callbacks. Do NOT use `create_tool`, `create_agent`, or `create_callback` APIs — these create resources that get overwritten or orphaned on the next push.

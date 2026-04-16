@@ -75,11 +75,11 @@ if echo "$cmd" | grep -qE 'cxas(-eval)? push'; then
     tmp_dir=$(mktemp -d)
     trap 'rm -rf "$tmp_dir"' EXIT
 
-    if GOOGLE_CLOUD_PROJECT="$project" cxas pull "$app_resource" --project_id "$project" --location "$location" --target_dir "$tmp_dir" 2>/dev/null; then
+    if GOOGLE_CLOUD_PROJECT="$project" cxas pull "$app_resource" --project-id "$project" --location "$location" --target-dir "$tmp_dir" 2>/dev/null; then
       # Compare platform state vs local state
       drift=$(diff -rq "$tmp_dir" "$app_dir" 2>/dev/null || true)
       if [ -n "$drift" ]; then
-        msg="BLOCKED: Platform state has diverged from local files in $app_dir. Someone made changes via SCRAPI or the UI that are not in your local copy. Run 'cxas pull $app_resource --project_id $project --location $location --target_dir $app_dir' to merge platform changes first, then retry the push."
+        msg="BLOCKED: Platform state has diverged from local files in $app_dir. Someone made changes via SCRAPI or the UI that are not in your local copy. Run 'cxas pull $app_resource --project-id $project --location $location --target-dir $app_dir' to merge platform changes first, then retry the push."
         if [ "$agent" = "claude" ]; then
           echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"blockToolExecution\":true,\"additionalContext\":\"$msg\"}}"
         else

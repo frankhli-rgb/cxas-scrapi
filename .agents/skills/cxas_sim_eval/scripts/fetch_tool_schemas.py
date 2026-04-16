@@ -24,7 +24,7 @@ from cxas_scrapi import Tools
 def main():
     parser = argparse.ArgumentParser(description="Fetch tool schemas for a given app.")
     parser.add_argument("--app-name", required=True, help="The full resource name of the app (e.g., projects/.../locations/.../apps/...)")
-    parser.add_argument("--output_dir", required=True, help="Directory to save the tool schema files")
+    parser.add_argument("--output-dir", required=True, help="Directory to save the tool schema files")
     
     args = parser.parse_args()
     

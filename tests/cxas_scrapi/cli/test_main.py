@@ -25,7 +25,7 @@ def test_get_parser():
     assert parser is not None
     
     # Test parsing a simple command to verify the parser structure
-    args = parser.parse_args(["apps", "list", "--project_id", "test-project", "--location", "us"])
+    args = parser.parse_args(["apps", "list", "--project-id", "test-project", "--location", "us"])
     assert args.command == "apps"
     assert args.project_id == "test-project"
     assert args.location == "us"

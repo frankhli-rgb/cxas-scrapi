@@ -36,7 +36,7 @@ if echo "$cmd" | grep -qE 'update_agent'; then
     location=$(jq -r '.location' "$config_file")
     app_id=$(jq -r '.deployed_app_id' "$config_file")
     app_resource="projects/${project}/locations/${location}/apps/${app_id}"
-    if GOOGLE_CLOUD_PROJECT="$project" cxas pull "$app_resource" --project_id "$project" --location "$location" --target_dir "$app_dir" 2>/dev/null; then
+    if GOOGLE_CLOUD_PROJECT="$project" cxas pull "$app_resource" --project-id "$project" --location "$location" --target-dir "$app_dir" 2>/dev/null; then
       pull_msg="AUTO-SYNC: Pulled latest agent state to $app_dir. "
     fi
   fi

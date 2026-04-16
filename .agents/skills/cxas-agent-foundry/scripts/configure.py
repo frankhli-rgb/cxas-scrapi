@@ -529,9 +529,9 @@ def _pull_app(config):
 
     pull_cmd = [
         "cxas", "pull", app_resource,
-        "--project_id", project,
+        "--project-id", project,
         "--location", location,
-        "--target_dir", app_dir,
+        "--target-dir", app_dir,
     ]
 
     try:
