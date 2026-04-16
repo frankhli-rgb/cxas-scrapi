@@ -555,6 +555,21 @@ class Sessions(Common):
                                     )
                                 )
 
+                        elif chunk_type == "transcript":
+                            if role.lower() == "user":
+                                logging.debug(f"USER QUERY: {chunk.transcript}")
+                                display(HTML(f"{query_font} {chunk.transcript}"))
+                            else:
+                                logging.debug(
+                                    f"AGENT RESPONSE: [{role}] {chunk.transcript}"
+                                )
+                                display(
+                                    HTML(
+                                        f"{response_font} [{role}] "
+                                        f"{chunk.transcript}"
+                                    )
+                                )
+
                         elif chunk_type == "tool_call":
                             tc = chunk.tool_call
                             tool_name = tc.display_name or tc.tool
