@@ -43,6 +43,7 @@ from cxas_scrapi.core.github import init_github_action
 from cxas_scrapi.evals.callback_evals import CallbackEvals
 from cxas_scrapi.evals.tool_evals import ToolEvals
 from cxas_scrapi.utils.eval_utils import EvalUtils
+from cxas_scrapi.cli.create_local import handle_local_create
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +57,7 @@ def export_eval(args: argparse.Namespace) -> None:
 
     try:
         format_enum = (
-            ExportFormat(args.format.lower())
-            if args.format
-            else ExportFormat.YAML
+            ExportFormat(args.format.lower()) if args.format else ExportFormat.YAML
         )
         exported_eval = eval_client.export_evaluation(
             args.evaluation_id,
@@ -133,8 +132,7 @@ def wait_for_evaluation_completion(
                     df_new = df_current[df_current["eval_result_id"] == run_id]
                     exec_state = (
                         df_new["execution_state"].iloc[0]
-                        if not df_new.empty
-                        and "execution_state" in df_new.columns
+                        if not df_new.empty and "execution_state" in df_new.columns
                         else "COMPLETED"
                     )
 
@@ -148,9 +146,7 @@ def wait_for_evaluation_completion(
 
                 if all_completed:
                     print(f"All {len(new_ids)} evaluations completed.")
-                    return eval_utils.evals_to_dataframe(
-                        results=completed_results
-                    )
+                    return eval_utils.evals_to_dataframe(results=completed_results)
 
         except Exception as e:
             print(f"Error checking evaluation status: {e}")
@@ -211,10 +207,7 @@ def filter_metrics_and_assess(  # noqa: C901
         )
         print("Focusing strictly on custom expectations and tool invocation.")
 
-        if (
-            not df_expectations.empty
-            and "record_type" in df_expectations.columns
-        ):
+        if not df_expectations.empty and "record_type" in df_expectations.columns:
             expectation_rows = df_expectations[
                 df_expectations["record_type"] == "summary_expectation"
             ]
@@ -239,8 +232,7 @@ def filter_metrics_and_assess(  # noqa: C901
                 passed = False
             else:
                 print(
-                    f"PASSED: All {len(expectation_rows)} custom expectations "
-                    "met."
+                    f"PASSED: All {len(expectation_rows)} custom expectations " "met."
                 )
         else:
             print("WARNING: No custom expectations found in this evaluation.")
@@ -275,10 +267,7 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
             sys.exit(1)
 
         if args.display_name_prefix:
-            print(
-                "Fetching tests matching prefix: "
-                f"'{args.display_name_prefix}'..."
-            )
+            print("Fetching tests matching prefix: " f"'{args.display_name_prefix}'...")
         elif args.tags:
             print(f"Fetching tests matching tags: {args.tags}...")
         all_evals = eval_client.list_evaluations(app_name=args.app_name)
@@ -304,8 +293,7 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
 
         if not evaluations_to_run:
             print(
-                "No matching tests found for the "
-                "given prefix or tags. Aborting run."
+                "No matching tests found for the " "given prefix or tags. Aborting run."
             )
             sys.exit(0)
 
@@ -326,10 +314,7 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
             sys.exit(1)
 
         if args.display_name_prefix:
-            print(
-                "Fetching tests matching prefix: "
-                f"'{args.display_name_prefix}'..."
-            )
+            print("Fetching tests matching prefix: " f"'{args.display_name_prefix}'...")
         elif args.tags:
             print(f"Fetching tests matching tags: {args.tags}...")
         all_evals = eval_client.list_evaluations(app_name=args.app_name)
@@ -355,8 +340,7 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
 
         if not evaluations_to_run:
             print(
-                "No matching tests found for the "
-                "given prefix or tags. Aborting run."
+                "No matching tests found for the " "given prefix or tags. Aborting run."
             )
             sys.exit(0)
 
@@ -364,9 +348,7 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
 
     try:
         # Step 1: Capture existing evaluation runs to diff against later
-        df_initial = eval_utils.evals_to_dataframe().get(
-            "summary", pd.DataFrame()
-        )
+        df_initial = eval_utils.evals_to_dataframe().get("summary", pd.DataFrame())
         old_result_ids = set()
         if not df_initial.empty and "eval_result_id" in df_initial.columns:
             old_result_ids = set(df_initial["eval_result_id"].unique())
@@ -440,8 +422,7 @@ def test_tools(args: argparse.Namespace) -> None:
     """Handles the 'test-tools' command."""
 
     print(
-        f"Running tool tests for App: {args.app_name} "
-        f"using file: {args.test_file}"
+        f"Running tool tests for App: {args.app_name} " f"using file: {args.test_file}"
     )
     tool_evals = ToolEvals(app_name=args.app_name)
 
@@ -631,9 +612,7 @@ def local_test(args: argparse.Namespace) -> None:
     """Handles the 'local-test' command."""
 
     agent_dir = os.path.abspath(args.agent_dir)
-    agent_name = (
-        os.path.basename(agent_dir.rstrip(os.sep)).lower().replace(" ", "-")
-    )
+    agent_name = os.path.basename(agent_dir.rstrip(os.sep)).lower().replace(" ", "-")
     tag = f"{agent_name}-local-test"
 
     print(f"Building Docker image for {agent_name}...")
@@ -747,9 +726,7 @@ def get_parser() -> argparse.ArgumentParser:
             help=f"The GCP Location (e.g., global, us-central1).{help_suffix}",
         )
 
-    subparsers = parser.add_subparsers(
-        title="Commands", dest="command", required=True
-    )
+    subparsers = parser.add_subparsers(title="Commands", dest="command", required=True)
 
     # Parser for 'init-github-action'
     parser_init_gh = subparsers.add_parser(
@@ -813,8 +790,7 @@ def get_parser() -> argparse.ArgumentParser:
         "--install-hook",
         action="store_true",
         help=(
-            "Optional: Install a git pre-push hook to run local-test "
-            "automatically."
+            "Optional: Install a git pre-push hook to run local-test " "automatically."
         ),
     )
     parser_init_gh.add_argument(
@@ -833,10 +809,7 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_init_gh.add_argument(
         "--github-repo",
-        help=(
-            "Optional: Override inferred GitHub "
-            "repository (e.g., owner/repo)."
-        ),
+        help=("Optional: Override inferred GitHub " "repository (e.g., owner/repo)."),
     )
 
     parser_init_gh.set_defaults(func=init_github_action)
@@ -1021,8 +994,7 @@ def get_parser() -> argparse.ArgumentParser:
         nargs="+",
         default=[],
         help=(
-            "Space-separated list of tags. Runs tests "
-            "containing any of these tags."
+            "Space-separated list of tags. Runs tests " "containing any of these tags."
         ),
     )
     parser_run.add_argument(
@@ -1051,10 +1023,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser_ci_test.add_argument(
         "--agent_dir",
         default=".",
-        help=(
-            "Path to the agent directory to test. "
-            "Defaults to current directory."
-        ),
+        help=("Path to the agent directory to test. " "Defaults to current directory."),
     )
     parser_ci_test.add_argument(
         "--display_name",
@@ -1130,15 +1099,9 @@ def get_parser() -> argparse.ArgumentParser:
     parser_pull.set_defaults(func=app_pull)
 
     # Parser for 'push'
-    parser_push = subparsers.add_parser(
-        "push", help="Import local files back to CXAS."
-    )
-    parser_push.add_argument(
-        "--agent_dir", default=".", help="Local agent directory."
-    )
-    parser_push.add_argument(
-        "--to", help="Target App Resource Name or Display Name."
-    )
+    parser_push = subparsers.add_parser("push", help="Import local files back to CXAS.")
+    parser_push.add_argument("--agent_dir", default=".", help="Local agent directory.")
+    parser_push.add_argument("--to", help="Target App Resource Name or Display Name.")
     parser_push.add_argument(
         "--env_file",
         help=(
@@ -1229,8 +1192,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser_lint.add_argument(
         "--evaluation-expectations",
         help=(
-            "Validate a single evaluation expectations"
-            " directory against CES schema."
+            "Validate a single evaluation expectations" " directory against CES schema."
         ),
     )
     parser_lint.set_defaults(func=app_lint)
@@ -1239,7 +1201,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser_init = subparsers.add_parser(
         "init",
         help="Initialize a project with CXAS agent development skills "
-             "(.agents, .claude, .gemini, AGENTS.md, etc.).",
+        "(.agents, .claude, .gemini, AGENTS.md, etc.).",
     )
     parser_init.add_argument(
         "--target-dir",
@@ -1256,12 +1218,8 @@ def get_parser() -> argparse.ArgumentParser:
     # Parser for 'create'
     parser_create = subparsers.add_parser("create", help="Create a new app.")
     parser_create.add_argument("name", help="Display name of the new app.")
-    parser_create.add_argument(
-        "--description", help="Description for the new app."
-    )
-    parser_create.add_argument(
-        "--app_name", help="Optional specific app_name to use."
-    )
+    parser_create.add_argument("--description", help="Description for the new app.")
+    parser_create.add_argument("--app_name", help="Optional specific app_name to use.")
     _add_project_location_args(parser_create)
     parser_create.set_defaults(func=app_create)
 
@@ -1295,6 +1253,43 @@ def get_parser() -> argparse.ArgumentParser:
     )
     _add_project_location_args(parser_apps_get, required=False)
     parser_apps_get.set_defaults(func=apps_get)
+
+    # Subparsers for 'local'
+    parser_local = subparsers.add_parser("local", help="Local workspace operations.")
+    local_subparsers = parser_local.add_subparsers(
+        title="Local Commands", dest="local_command", required=True
+    )
+
+    parser_local_create = local_subparsers.add_parser(
+        "create", help="Create local templates for CXAS components."
+    )
+    local_create_subparsers = parser_local_create.add_subparsers(
+        title="Create Local Commands", dest="create_local_command", required=True
+    )
+
+    parser_local_create_agent = local_create_subparsers.add_parser(
+        "agent", help="Create local agent template."
+    )
+    parser_local_create_agent.add_argument("name", help="Display name of the agent.")
+    parser_local_create_agent.add_argument(
+        "--app_dir", default=".", help="App directory."
+    )
+    parser_local_create_agent.set_defaults(func=handle_local_create)
+
+    parser_local_create_tool = local_create_subparsers.add_parser(
+        "tool", help="Create local tool template."
+    )
+    parser_local_create_tool.add_argument("name", help="Display name of the tool.")
+    parser_local_create_tool.add_argument(
+        "tool_type", nargs="?", help="Type of tool (e.g., PYTHON)."
+    )
+    parser_local_create_tool.add_argument(
+        "--add_to_agent", nargs="?", help="Agent to add the tool to."
+    )
+    parser_local_create_tool.add_argument(
+        "--app_dir", default=".", help="App directory."
+    )
+    parser_local_create_tool.set_defaults(func=handle_local_create)
 
     # Subparsers for 'insights'
     parser_insights = subparsers.add_parser(
