@@ -12,26 +12,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Any, List, Optional
-import os
-import mimetypes
-import base64
-import uuid
-from google.cloud.ces_v1beta import SessionServiceClient, types
-from google.cloud import ces_v1beta
-from cxas_scrapi.core.conversation_history import ConversationHistory
-from cxas_scrapi.core.common import Common
-from cxas_scrapi.core.audio_transformer import AudioTransformer
+import json
 import logging
+import mimetypes
+import os
+import re
+import sys
 import threading
 import time
-import json
-import websocket
-import ssl
-import sys
-import certifi
-from google.protobuf import json_format
+import uuid
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+import certifi
+import requests
+import websocket
+from google.auth.transport.requests import Request
+from google.cloud import ces_v1beta
+from google.cloud.ces_v1beta import SessionServiceClient, types
+from google.protobuf import json_format
+
+try:
+    from IPython.display import HTML, display  # noqa: F401
+    HAS_IPYTHON = True
+except ImportError:
+    HAS_IPYTHON = False
+
+from cxas_scrapi.core.audio_transformer import AudioTransformer
+from cxas_scrapi.core.common import Common
+from cxas_scrapi.core.conversation_history import ConversationHistory
 
 logger = logging.getLogger(__name__)
 
@@ -360,6 +369,58 @@ class Sessions(Common):
         self.deployment_id = deployment_id
         self.version_id = version_id
 
+    def _check_audio_requirements(self):
+        """Checks if the necessary APIs are enabled and user has permissions."""
+        if not self.project_id:
+            raise ValueError(
+                "Project ID could not be determined from the app_name. "
+                "Audio preflight checks cannot be performed without a "
+                "project ID."
+            )
+
+        services = ["ces.googleapis.com", "texttospeech.googleapis.com"]
+
+        try:
+            self.creds.refresh(Request())
+        except Exception as e:
+            logger.debug(f"Failed to refresh credentials: {e}")
+
+        headers = {"Authorization": f"Bearer {self.creds.token}"}
+
+        http_forbidden = 403
+        http_ok = 200
+
+        for service in services:
+            url = (
+                f"https://serviceusage.googleapis.com/v1/projects/"
+                f"{self.project_id}/services/{service}"
+            )
+            try:
+                response = requests.get(url, headers=headers)
+                if response.status_code == http_forbidden:
+                    raise PermissionError(
+                        f"Permission denied when checking service {service}. "
+                        "Make sure you have permissions like "
+                        "roles/serviceusage.serviceUsageConsumer."
+                    )
+                elif response.status_code != http_ok:
+                    raise RuntimeError(
+                        f"Failed to check service {service}. "
+                        f"Status code: {response.status_code}"
+                    )
+
+                data = response.json()
+                if data.get("state") != "ENABLED":
+                    raise RuntimeError(
+                        f"Service {service} is not enabled in project "
+                        f"{self.project_id}. "
+                        "Please enable it in the Google Cloud Console."
+                    )
+            except requests.RequestException as e:
+                raise RuntimeError(
+                    f"Network error when checking service {service}: {e}"
+                ) from e
+
     def create_session_id(self) -> str:
         """Create a unique uuid4 string to use as the session ID."""
         return str(uuid.uuid4())
@@ -401,7 +462,7 @@ class Sessions(Common):
         else:
             return pb_struct
 
-    def parse_result(self, res: Any):
+    def parse_result(self, res: Any):  # noqa: C901
         """
         Parses the CX Agent Studio session response to extract and print
         turn-by-turn interactions including User Queries, Agent Responses,
@@ -425,40 +486,35 @@ class Sessions(Common):
             def HTML(text):
                 return text  # Pass-through for terminal
 
+        elif HAS_IPYTHON:
+            tool_call_font = (
+                "<font color='darkred'><b>TOOL CALL:</b></font>"
+            )
+            tool_res_font = (
+                "<font color='goldenrod'><b>TOOL RESULT:</b></font>"
+            )
+            query_font = "<font color='darkgreen'><b>USER QUERY:</b></font>"
+            response_font = (
+                "<font color='purple'><b>AGENT RESPONSE:</b></font>"
+            )
+            transfer_font = (
+                "<font color='darkorange'><b>AGENT TRANSFER:</b></font>"
+            )
+            payload_font = (
+                "<font color='brown'><b>CUSTOM PAYLOAD:</b></font>"
+            )
         else:
-            try:
-                from IPython.display import display, HTML
+            tool_call_font = "TOOL CALL:"
+            tool_res_font = "TOOL RESULT:"
+            query_font = "USER QUERY:"
+            response_font = "AGENT RESPONSE:"
+            transfer_font = "AGENT TRANSFER:"
+            payload_font = "CUSTOM PAYLOAD:"
 
-                tool_call_font = (
-                    "<font color='darkred'><b>TOOL CALL:</b></font>"
-                )
-                tool_res_font = (
-                    "<font color='goldenrod'><b>TOOL RESULT:</b></font>"
-                )
-                query_font = "<font color='darkgreen'><b>USER QUERY:</b></font>"
-                response_font = (
-                    "<font color='purple'><b>AGENT RESPONSE:</b></font>"
-                )
-                transfer_font = (
-                    "<font color='darkorange'><b>AGENT TRANSFER:</b></font>"
-                )
-                payload_font = (
-                    "<font color='brown'><b>CUSTOM PAYLOAD:</b></font>"
-                )
-            except ImportError:
-                tool_call_font = "TOOL CALL:"
-                tool_res_font = "TOOL RESULT:"
-                query_font = "USER QUERY:"
-                response_font = "AGENT RESPONSE:"
-                transfer_font = "AGENT TRANSFER:"
-                payload_font = "CUSTOM PAYLOAD:"
+            display = print
 
-                display = print
-
-                def HTML(text):
-                    import re
-
-                    return re.sub(r"<[^>]*>", "", text).strip()
+            def HTML(text):
+                return re.sub(r"<[^>]*>", "", text).strip()
 
         outputs = getattr(res, "outputs", [])
         if not outputs:
@@ -568,7 +624,7 @@ class Sessions(Common):
         request = types.RunSessionRequest(config=config, inputs=inputs)
         return self.client.run_session(request=request)
 
-    def run(
+    def run(  # noqa: C901
         self,
         session_id: str,
         text: Optional[str | list[str]] = None,
@@ -624,16 +680,17 @@ class Sessions(Common):
             saved conversation ID.
             modality: Running via text (synced) or audio (asynchronous
             bidirectional streaming). Defaults to Modality.TEXT.
-            use_tool_fakes: Use fake tools for the session if available. Defaults to False.
+            use_tool_fakes: Use fake tools for the session if available.
+            Defaults to False.
         """
 
         if isinstance(modality, str):
             try:
                 modality = Modality(modality.lower())
-            except ValueError:
+            except ValueError as e:
                 raise ValueError(
                     f"Invalid modality: {modality}. Must be 'text' or 'audio'."
-                )
+                ) from e
 
         config = {"session": f"{self.app_name}/sessions/{session_id}"}
         if use_tool_fakes:
@@ -641,6 +698,7 @@ class Sessions(Common):
         inputs = []
 
         if modality == Modality.AUDIO:
+            self._check_audio_requirements()
             config["input_audio_config"] = (
                 input_audio_config
                 or ces_v1beta.InputAudioConfig(
