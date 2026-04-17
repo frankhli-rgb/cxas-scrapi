@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import pydantic
-from google import genai
+from cxas_scrapi.utils.gemini import GeminiGenerate
 
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.sessions import Sessions
@@ -159,7 +159,7 @@ class LLMUserConversation(Conversation):
 
     def __init__(
         self,
-        genai_client: genai.Client,
+        genai_client: GeminiGenerate,
         genai_model: str,
         test_case: Dict[str, Any],
         max_turns: int = _MAX_TURNS,
@@ -236,17 +236,16 @@ class LLMUserConversation(Conversation):
             "{current_step_progress}",
             json_step_progress_list,
         )
-        response = self.genai_client.models.generate_content(
-            contents=prompt,
-            model=self.genai_model,
-            config=genai.types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=LLMUserConversation.Output,
-            ),
+        output: LLMUserConversation.Output = self.genai_client.generate(
+            prompt=prompt,
+            model_name=self.genai_model,
+            response_mime_type="application/json",
+            response_schema=LLMUserConversation.Output,
         )
-        output: LLMUserConversation.Output = response.parsed
-        self.steps_progress = output.step_progresses
-        return output.next_user_utterance, {}
+        if output:
+            self.steps_progress = output.step_progresses
+            return output.next_user_utterance, {}
+        return "", {}
 
     def next_user_utterance(
         self, last_agent_response: str = ""
@@ -311,9 +310,8 @@ class SimulationEvals(Apps):
         # Apps use 'us' or 'eu'
         vertex_location = "global"
 
-        self.genai_client = genai.Client(
-            vertexai=True,
-            project=self.project_id,
+        self.genai_client = GeminiGenerate(
+            project_id=self.project_id,
             location=vertex_location,
             credentials=self.creds,
         )

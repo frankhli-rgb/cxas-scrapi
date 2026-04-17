@@ -21,6 +21,9 @@ import os
 import time
 import uuid
 from typing import Any, Dict, List, Optional, Union
+from cxas_scrapi.utils.gemini import GeminiGenerate
+from cxas_scrapi.core.common import Common
+from cxas_scrapi.prompts import llm_user_prompts
 
 import pandas as pd
 import pydantic
@@ -1398,7 +1401,7 @@ class ExpectationOutput(pydantic.BaseModel):
 
 
 def evaluate_expectations(
-    genai_client: Any,
+    gemini_client: Any,
     model_name: str,
     trace: List[str],
     expectations: List[str],
@@ -1424,16 +1427,15 @@ def evaluate_expectations(
     )
 
     try:
-        response = genai_client.models.generate_content(
-            contents=prompt,
-            model=model_name,
-            config=genai.types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=ExpectationOutput,
-            ),
+        output: ExpectationOutput = gemini_client.generate(
+            prompt=prompt,
+            model_name=model_name,
+            response_mime_type="application/json",
+            response_schema=ExpectationOutput,
         )
-        output: ExpectationOutput = response.parsed
-        return output.results
+        if output:
+            return output.results
+        return []
     except Exception as e:
         logging.getLogger(__name__).error(f"Error evaluating expectations: {e}")
         return []

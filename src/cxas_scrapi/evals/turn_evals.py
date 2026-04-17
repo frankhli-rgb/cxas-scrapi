@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import yaml
-from google import genai
+from cxas_scrapi.utils.gemini import GeminiGenerate
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
@@ -137,9 +137,8 @@ class TurnEvals:
         project_id = app_name.split("/")[1]
         vertex_location = "global"
 
-        self.genai_client = genai.Client(
-            vertexai=True,
-            project=project_id,
+        self.genai_client = GeminiGenerate(
+            project_id=project_id,
             location=vertex_location,
             credentials=self.creds,
         )

@@ -15,14 +15,9 @@
 import datetime
 import functools
 import json
-from typing import Any, Dict, List
+from typing import Dict, List, Any
 
-# Assuming google.genai is available in the environment if the user uses this
-try:
-    from google import genai
-except ImportError:
-    pass
-
+from cxas_scrapi.utils.gemini import GeminiGenerate
 
 class ChangelogUtils:
     @staticmethod
@@ -332,19 +327,26 @@ class ChangelogUtils:
 
         try:
             # Handle if the user passes the vertex framework client or strings
-            if hasattr(vertex_client_or_project, "models"):
-                cl = vertex_client_or_project
-            else:
-                cl = genai.Client(
-                    vertexai=True, project=project_id, location="us-central1"
-                )
 
-            response = cl.models.generate_content(
-                model="gemini-2.5-flash", contents=prompt
-            )
-            # Basic post-processing to clean up potential numbering/extra
-            # whitespace
-            lines = response.text.strip().split("\n")
+            if isinstance(vertex_client_or_project, GeminiGenerate):
+                response_text = vertex_client_or_project.generate(
+                    prompt=prompt, model_name="gemini-2.5-flash"
+                )
+            elif hasattr(vertex_client_or_project, "models"):
+                response = vertex_client_or_project.models.generate_content(
+                    model="gemini-2.5-flash", contents=prompt
+                )
+                response_text = response.text
+            else:
+                cl = GeminiGenerate(
+                    project_id=project_id,
+                    location="us-central1",
+                    model_name="gemini-2.5-flash",
+                )
+                response_text = cl.generate(prompt=prompt)
+
+            # Basic post-processing to clean up potential numbering/extra whitespace
+            lines = response_text.strip().split("\n") if response_text else []
             cleaned_lines = [
                 line.strip() for line in lines if line.strip().startswith("-")
             ]
