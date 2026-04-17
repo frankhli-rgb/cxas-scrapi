@@ -1,8 +1,14 @@
 {
-  "_comment": [
+  "_comment_model": [
     "MODEL SELECTION (set automatically based on modality):",
     "  Audio/voice agents: model=gemini-3.1-flash-live, modality=audio",
     "  Text-only agents:   model=gemini-3-flash, modality=text"
+  ],
+  "_comment_deployed_app_id": [
+    "CRITICAL FORMATTING:",
+    "  deployed_app_id MUST be the short name only (e.g., 'your-app-name').",
+    "  DO NOT use the full Google Cloud resource path (projects/.../apps/...).",
+    "  The SDK automatically constructs the full path during push and eval operations."
   ],
   "gcp_project_id": "YOUR_PROJECT_ID",
   "location": "us",
