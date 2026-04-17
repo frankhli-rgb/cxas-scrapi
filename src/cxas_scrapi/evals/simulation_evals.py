@@ -14,23 +14,26 @@
 
 """Eval conversation classes for CXAS Scrapi."""
 
-import time
-from typing import Dict, List, Optional, Any
-
-import json
-import uuid
-
-from google import genai
-import pydantic
 import enum
-import pandas as pd
+import json
+import re
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, List, Optional
 
-from cxas_scrapi.prompts import llm_user_prompts
+import pandas as pd
+import pydantic
+from google import genai
+
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.sessions import Sessions
+from cxas_scrapi.core.tools import Tools
+from cxas_scrapi.prompts import llm_user_prompts
 from cxas_scrapi.utils.eval_utils import (
-    evaluate_expectations,
     ExpectationResult,
+    ExpectationStatus,
+    evaluate_expectations,
 )
 
 _FIRST_UTTERANCE = "event: welcome"
@@ -69,25 +72,6 @@ class StepProgress(pydantic.BaseModel):
         return super().model_dump(**kwargs)
 
 
-class ExpectationStatus(str, enum.Enum):
-    MET = "Met"
-    NOT_MET = "Not Met"
-
-
-class ExpectationResult(pydantic.BaseModel):
-    expectation: str
-    status: ExpectationStatus = ExpectationStatus.NOT_MET
-    justification: str = ""
-
-    def model_dump(self, **kwargs):
-        kwargs.setdefault("exclude_defaults", True)
-        return super().model_dump(**kwargs)
-
-
-class ExpectationOutput(pydantic.BaseModel):
-    results: List[ExpectationResult] = []
-
-
 class SimulationReport:
     """A report containing both Goals and Expectations DataFrames."""
 
@@ -100,8 +84,6 @@ class SimulationReport:
         self.expectations_df = expectations_df
 
     def __str__(self):
-        import re
-
         green = "\033[1;32m"
         red = "\033[1;31m"
         reset = "\033[0m"
@@ -206,15 +188,17 @@ class LLMUserConversation(Conversation):
         self.expectation_results: List[ExpectationResult] = []
 
     def _next_user_utterance(self) -> tuple[str, Dict[str, Any]]:
-        """Generates the next user utterance and variables to inject based on the conversation history.
+        """Generates the next user utterance and variables to inject based on
+        the conversation history.
 
         This method uses an LLM to determine the next utterance, considering the
         current turn, maximum turns, and the completion status of the
         defined steps.
 
         Returns:
-          - The generated next user utterance as a string. Returns an empty string
-          if the conversation has reached the maximum number of turns or all steps are completed.
+          - The generated next user utterance as a string. Returns an empty
+          string if the conversation has reached the maximum number of turns
+          or all steps are completed.
           - The variables to inject as a dict.
         """
         if self.current_turn >= self.max_turns:
@@ -321,6 +305,8 @@ class SimulationEvals(Apps):
         location = app_name.split("/")[3]
         super().__init__(project_id=project_id, location=location, **kwargs)
         self.sessions_client = Sessions(app_name, **kwargs)
+        self.tools_map = Tools(app_name=app_name).get_tools_map()
+
 
         # Vertex AI requires a specific region (e.g. global), whereas CXAS
         # Apps use 'us' or 'eu'
@@ -389,9 +375,15 @@ class SimulationEvals(Apps):
         )
         if chunk_type == "tool_call":
             tc = chunk.tool_call
-            tool_name = getattr(tc, "tool", "") or getattr(
-                tc, "display_name", ""
+            tool_name = getattr(tc, "display_name", "") or getattr(
+                tc, "tool", ""
             )
+            if (
+                tool_name
+                and "/tools/" in tool_name
+                and hasattr(self, "tools_map")
+            ):
+                tool_name = self.tools_map.get(tool_name, tool_name)
             expanded_args = Sessions._expand_pb_struct(tc.args)
             trace_chunks.append(
                 f"Tool Call: {tool_name} with args " f"{expanded_args}"
@@ -400,7 +392,15 @@ class SimulationEvals(Apps):
                 session_ended = True
         elif chunk_type == "tool_response":
             tr = chunk.tool_response
-            tool_name = tr.tool or tr.display_name
+            tool_name = getattr(tr, "display_name", "") or getattr(
+                tr, "tool", ""
+            )
+            if (
+                tool_name
+                and "/tools/" in tool_name
+                and hasattr(self, "tools_map")
+            ):
+                tool_name = self.tools_map.get(tool_name, tool_name)
             expanded_response = Sessions._expand_pb_struct(tr.response)
             trace_chunks.append(
                 f"Tool Response: {tool_name} with result "
@@ -433,6 +433,68 @@ class SimulationEvals(Apps):
                 trace=detailed_trace,
                 expectations=eval_conv.expectations,
             )
+
+    def _send_request_with_retry(
+        self,
+        session_id: str,
+        user_utterance: str,
+        variables: Dict[str, Any],
+        modality: str,
+        console_logging: bool,
+    ) -> Any:
+        """Sends a request to the CES Agent with exponential backoff for
+        transient errors.
+        """
+        response = None
+        for attempt in range(self.max_retries):
+            try:
+                if user_utterance.startswith("event:"):
+                    response = self.sessions_client.run(
+                        session_id=session_id,
+                        event=user_utterance.removeprefix("event:").strip(),
+                        variables=variables,
+                        modality=modality,
+                    )
+                elif user_utterance.startswith("dtmf:"):
+                    response = self.sessions_client.run(
+                        session_id=session_id,
+                        dtmf=user_utterance.removeprefix("dtmf:").strip(),
+                        variables=variables,
+                        modality=modality,
+                    )
+                else:
+                    response = self.sessions_client.run(
+                        session_id=session_id,
+                        text=user_utterance,
+                        variables=variables,
+                        modality=modality,
+                    )
+                break
+            except Exception as e:
+                if attempt == self.max_retries - 1:
+                    raise e
+                if console_logging:
+                    print(
+                        "Warning: CXAS Agent request failed "
+                        f"({e}). Retrying in "
+                        f"{self.retry_delay_base**attempt}s..."
+                    )
+                time.sleep(self.retry_delay_base**attempt)
+        return response
+
+    def _print_completion_status(
+        self, eval_conv: LLMUserConversation
+    ) -> None:
+        """Prints the final step progress of the conversation."""
+        print("\n--- Conversation Complete ---")
+        print("Final Step Progress:")
+        for step_prog in eval_conv.steps_progress:
+            print(
+                f"- Goal: {step_prog.step.goal} | "
+                f"Status: {step_prog.status.value}"
+            )
+            if step_prog.justification:
+                print(f"  Justification: {step_prog.justification}")
 
     def simulate_conversation(
         self,
@@ -471,43 +533,9 @@ class SimulationEvals(Apps):
         detailed_trace.append(f"User: {user_utterance}")
 
         while user_utterance:
-            # Send utterance to the CES Agent with exponential backoff for
-            # transient errors.
-            for attempt in range(self.max_retries):
-                try:
-                    if user_utterance.startswith("event:"):
-                        response = self.sessions_client.run(
-                            session_id=session_id,
-                            event=user_utterance.removeprefix("event:").strip(),
-                            variables=variables,
-                            modality=modality,
-                        )
-                    elif user_utterance.startswith("dtmf:"):
-                        response = self.sessions_client.run(
-                            session_id=session_id,
-                            dtmf=user_utterance.removeprefix("dtmf:").strip(),
-                            variables=variables,
-                            modality=modality,
-                        )
-                    else:
-                        response = self.sessions_client.run(
-                            session_id=session_id,
-                            text=user_utterance,
-                            variables=variables,
-                            modality=modality,
-                        )
-                    break
-                except Exception as e:
-                    if attempt == self.max_retries - 1:
-                        raise e
-                    if console_logging:
-                        print(
-                            "Warning: CXAS Agent request failed "
-                            f"({e}). Retrying in "
-                            f"{self.retry_delay_base**attempt}s..."
-                        )
-                    time.sleep(self.retry_delay_base**attempt)
-
+            response = self._send_request_with_retry(
+                session_id, user_utterance, variables, modality, console_logging
+            )
             if not response:
                 break
 
@@ -536,15 +564,7 @@ class SimulationEvals(Apps):
                 detailed_trace.append(f"User: {user_utterance}")
 
         if console_logging:
-            print("\n--- Conversation Complete ---")
-            print("Final Step Progress:")
-            for step_prog in eval_conv.steps_progress:
-                print(
-                    f"- Goal: {step_prog.step.goal} | "
-                    f"Status: {step_prog.status.value}"
-                )
-                if step_prog.justification:
-                    print(f"  Justification: {step_prog.justification}")
+            self._print_completion_status(eval_conv)
 
         self._evaluate_expectations(
             eval_conv, detailed_trace, model, console_logging
@@ -566,7 +586,7 @@ class SimulationEvals(Apps):
         Args:
             test_cases: List of test case dictionaries.
             runs: Number of runs per test case.
-            parallel: Number of parallel workers.
+            parallel: Number of parallel workers (capped at 25).
             model: Gemini model to use.
             modality: 'text' or 'audio'.
             verbose: Whether to log to console (only active if parallel=1).
@@ -583,9 +603,8 @@ class SimulationEvals(Apps):
             label = f"{name} (run {run_idx + 1}/{runs})"
             session_id = str(uuid.uuid4())
             try:
-                import time as _time
-                _start = _time.time()
-                
+                _start = time.time()
+
                 conv = self.simulate_conversation(
                     test_case=tc,
                     model=model,
@@ -593,14 +612,18 @@ class SimulationEvals(Apps):
                     console_logging=verbose and parallel <= 1,
                     modality=modality,
                 )
-                duration_s = round(_time.time() - _start, 1)
+                duration_s = round(time.time() - _start, 1)
 
                 goals_completed = sum(
-                    1 for p in conv.steps_progress if p.status == StepStatus.COMPLETED
+                    1
+                    for p in conv.steps_progress
+                    if p.status == StepStatus.COMPLETED
                 )
                 total_goals = len(conv.steps_progress)
                 expectations_met = sum(
-                    1 for r in conv.expectation_results if r.status == ExpectationStatus.MET
+                    1
+                    for r in conv.expectation_results
+                    if r.status == ExpectationStatus.MET
                 )
                 total_exp = len(conv.expectation_results)
 
@@ -610,9 +633,12 @@ class SimulationEvals(Apps):
 
                 status = "PASS" if passed else "FAIL"
                 if parallel > 1 or not verbose:
-                    print(f"  {status}  {label} | goals: {goals_completed}/{total_goals} | "
-                          f"expectations: {expectations_met}/{total_exp} | "
-                          f"turns: {conv.current_turn} | {duration_s}s")
+                    print(
+                        f"  {status}  {label} | goals: "
+                        f"{goals_completed}/{total_goals} | "
+                        f"expectations: {expectations_met}/{total_exp} | "
+                        f"turns: {conv.current_turn} | {duration_s}s"
+                    )
 
                 return {
                     "name": name,
@@ -646,16 +672,24 @@ class SimulationEvals(Apps):
                 }
             except Exception as e:
                 print(f"  ERROR  {label}: {e}")
-                return {"name": name, "run": run_idx + 1, "passed": False, "error": str(e)}
+                return {
+                    "name": name,
+                    "run": run_idx + 1,
+                    "passed": False,
+                    "error": str(e),
+                }
 
         if parallel <= 1:
             for tc, run_idx in jobs:
                 results.append(_run_job(tc, run_idx))
         else:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            with ThreadPoolExecutor(max_workers=parallel) as executor:
+            max_workers = min(parallel, 25)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
-                    executor.submit(_run_job, tc, run_idx): (tc["name"], run_idx)
+                    executor.submit(_run_job, tc, run_idx): (
+                        tc["name"],
+                        run_idx,
+                    )
                     for tc, run_idx in jobs
                 }
                 for future in as_completed(futures):
