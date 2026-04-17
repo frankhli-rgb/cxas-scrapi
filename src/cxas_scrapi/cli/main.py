@@ -36,6 +36,7 @@ from cxas_scrapi.cli.app import (
     apps_get,
     apps_list,
 )
+from cxas_scrapi.cli.create_local import handle_local_create
 from cxas_scrapi.cli.insights_cli import populate_insights_parser
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
@@ -43,7 +44,6 @@ from cxas_scrapi.core.github import init_github_action
 from cxas_scrapi.evals.callback_evals import CallbackEvals
 from cxas_scrapi.evals.tool_evals import ToolEvals
 from cxas_scrapi.utils.eval_utils import EvalUtils
-from cxas_scrapi.cli.create_local import handle_local_create
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,9 @@ def wait_for_evaluation_completion(
 
                 if all_completed:
                     print(f"All {len(new_ids)} evaluations completed.")
-                    return eval_utils.evals_to_dataframe(results=completed_results)
+                    return eval_utils.evals_to_dataframe(
+                        results=completed_results
+                    )
 
         except Exception as e:
             print(f"Error checking evaluation status: {e}")
@@ -207,7 +209,10 @@ def filter_metrics_and_assess(  # noqa: C901
         )
         print("Focusing strictly on custom expectations and tool invocation.")
 
-        if not df_expectations.empty and "record_type" in df_expectations.columns:
+        if (
+            not df_expectations.empty
+            and "record_type" in df_expectations.columns
+        ):
             expectation_rows = df_expectations[
                 df_expectations["record_type"] == "summary_expectation"
             ]
@@ -232,7 +237,7 @@ def filter_metrics_and_assess(  # noqa: C901
                 passed = False
             else:
                 print(
-                    f"PASSED: All {len(expectation_rows)} custom expectations " "met."
+                    f"PASSED: All {len(expectation_rows)} custom expectations met."
                 )
         else:
             print("WARNING: No custom expectations found in this evaluation.")
@@ -267,7 +272,9 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
             sys.exit(1)
 
         if args.display_name_prefix:
-            print("Fetching tests matching prefix: " f"'{args.display_name_prefix}'...")
+            print(
+                f"Fetching tests matching prefix: '{args.display_name_prefix}'..."
+            )
         elif args.tags:
             print(f"Fetching tests matching tags: {args.tags}...")
         all_evals = eval_client.list_evaluations(app_name=args.app_name)
@@ -293,7 +300,8 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
 
         if not evaluations_to_run:
             print(
-                "No matching tests found for the " "given prefix or tags. Aborting run."
+                "No matching tests found for the "
+                "given prefix or tags. Aborting run."
             )
             sys.exit(0)
 
@@ -348,7 +356,9 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
 
     try:
         # Step 1: Capture existing evaluation runs to diff against later
-        df_initial = eval_utils.evals_to_dataframe().get("summary", pd.DataFrame())
+        df_initial = eval_utils.evals_to_dataframe().get(
+            "summary", pd.DataFrame()
+        )
         old_result_ids = set()
         if not df_initial.empty and "eval_result_id" in df_initial.columns:
             old_result_ids = set(df_initial["eval_result_id"].unique())
@@ -422,7 +432,8 @@ def test_tools(args: argparse.Namespace) -> None:
     """Handles the 'test-tools' command."""
 
     print(
-        f"Running tool tests for App: {args.app_name} " f"using file: {args.test_file}"
+        f"Running tool tests for App: {args.app_name} "
+        f"using file: {args.test_file}"
     )
     tool_evals = ToolEvals(app_name=args.app_name)
 
@@ -696,6 +707,7 @@ def local_test(args: argparse.Namespace) -> None:
     sys.exit(subprocess.call(docker_cmd))
 
 
+
 def get_parser() -> argparse.ArgumentParser:
     """Sets up the argument parser."""
     parser = argparse.ArgumentParser(
@@ -728,7 +740,9 @@ def get_parser() -> argparse.ArgumentParser:
             help=f"The GCP Location (e.g., global, us-central1).{help_suffix}",
         )
 
-    subparsers = parser.add_subparsers(title="Commands", dest="command", required=True)
+    subparsers = parser.add_subparsers(
+        title="Commands", dest="command", required=True
+    )
 
     # Parser for 'init-github-action'
     parser_init_gh = subparsers.add_parser(
@@ -792,7 +806,8 @@ def get_parser() -> argparse.ArgumentParser:
         "--install-hook",
         action="store_true",
         help=(
-            "Optional: Install a git pre-push hook to run local-test " "automatically."
+            "Optional: Install a git pre-push hook to run local-test "
+            "automatically."
         ),
     )
     parser_init_gh.add_argument(
@@ -811,7 +826,9 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser_init_gh.add_argument(
         "--github-repo",
-        help=("Optional: Override inferred GitHub " "repository (e.g., owner/repo)."),
+        help=(
+            "Optional: Override inferred GitHub " "repository (e.g., owner/repo)."
+        ),
     )
 
     parser_init_gh.set_defaults(func=init_github_action)
@@ -996,7 +1013,8 @@ def get_parser() -> argparse.ArgumentParser:
         nargs="+",
         default=[],
         help=(
-            "Space-separated list of tags. Runs tests " "containing any of these tags."
+            "Space-separated list of tags. Runs tests "
+            "containing any of these tags."
         ),
     )
     parser_run.add_argument(

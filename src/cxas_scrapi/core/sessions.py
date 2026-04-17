@@ -615,6 +615,67 @@ class Sessions(Common):
                                 )
                             )
 
+    def get_structured_response(self, response) -> Dict[str, Any]:
+        """Parse response, avoiding duplicate text from diagnostic info.
+        
+        Returns a dictionary with keys:
+        - agent_text: Consolidated text response.
+        - tool_calls: List of tool calls made by agent.
+        - tool_responses: List of tool responses received.
+        - agent_transfer: Target agent if a transfer occurred.
+        - session_ended: Boolean indicating if session ended.
+        """
+        agent_texts = []
+        tool_calls = []
+        agent_transfer = None
+        session_ended = False
+
+        for output in response.outputs:
+            if hasattr(output, "text") and output.text:
+                agent_texts.append(output.text)
+
+            tc_msg = getattr(output, "tool_calls", None)
+            if tc_msg and hasattr(tc_msg, "tool_calls"):
+                for tc in tc_msg.tool_calls:
+                    tool_name = getattr(tc, "display_name", "") or getattr(tc, "tool", "")
+                    args = Sessions._expand_pb_struct(tc.args) if hasattr(tc, "args") else {}
+                    tool_calls.append({"action": tool_name, "args": args})
+                    if "end_session" in (tool_name or ""):
+                        session_ended = True
+
+            diagnostic_info = getattr(output, "diagnostic_info", None)
+            if diagnostic_info and hasattr(diagnostic_info, "messages"):
+                for message in diagnostic_info.messages:
+                    for chunk in getattr(message, "chunks", []):
+                        fc = getattr(chunk, "function_call", None)
+                        if fc:
+                            tc_name = getattr(fc, "name", "")
+                            tc_args = Sessions._expand_pb_struct(fc.args) if hasattr(fc, "args") else {}
+                            if tc_name and not any(t["action"] == tc_name for t in tool_calls):
+                                tool_calls.append({"action": tc_name, "args": tc_args})
+                                if "end_session" in tc_name:
+                                    session_ended = True
+
+                        fr = getattr(chunk, "function_response", None)
+                        if fr:
+                            fr_name = getattr(fr, "name", "")
+                            fr_resp = Sessions._expand_pb_struct(fr.response) if hasattr(fr, "response") else {}
+                            tool_calls.append({"action": f"_response:{fr_name}", "args": {}, "response": fr_resp})
+
+                    actions = getattr(message, "actions", None)
+                    if actions and hasattr(actions, "transfer_to_agent") and actions.transfer_to_agent:
+                        agent_transfer = actions.transfer_to_agent
+
+        agent_text = " ".join(agent_texts).strip() if agent_texts else ""
+
+        return {
+            "agent_text": agent_text,
+            "tool_calls": [t for t in tool_calls if not t["action"].startswith("_response:")],
+            "tool_responses": [t for t in tool_calls if t["action"].startswith("_response:")],
+            "agent_transfer": agent_transfer,
+            "session_ended": session_ended,
+        }
+
     def async_bidi_run_session(
         self, config: dict, inputs: list[dict[str, Any]]
     ):

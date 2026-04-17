@@ -128,6 +128,18 @@ class EvalUtils(Evaluations):
         return str(val) if val is not None else None
 
     @staticmethod
+    def score_result_audio(result) -> bool:
+        """Score a single result using audio-correct method.
+        In audio mode, taskCompleted is broken (always False).
+        Use goalScore AND allExpectationsSatisfied instead.
+        """
+        res_dict = type(result).to_dict(result) if not isinstance(result, dict) else result
+        sr = res_dict.get("scenario_result", {})
+        goal = sr.get("user_goal_satisfaction_result", {}).get("score", 0)
+        all_exp = sr.get("all_expectations_satisfied", False)
+        return (goal == 1) and all_exp
+
+    @staticmethod
     def _extract_tool_call_args(tool_call: Dict[str, Any]) -> Dict[str, Any]:
         """Extracts tool arguments from various possible alias keys."""
         for key in ["args", "arguments"]:

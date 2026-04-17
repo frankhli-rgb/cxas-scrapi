@@ -227,11 +227,12 @@ class LLMUserConversation(Conversation):
             return "", {}
 
         if self.current_turn == 0:
+            session_params = self.test_case.get("session_parameters", {})
             if not self.test_case["steps"][0].get("static_utterance", None):
-                return _FIRST_UTTERANCE, {}
-            return self.test_case["steps"][0][
-                "static_utterance"
-            ], self.test_case["steps"][0].get("inject_variables", {})
+                return _FIRST_UTTERANCE, session_params
+            inject_vars = self.test_case["steps"][0].get("inject_variables", {})
+            merged_vars = {**session_params, **inject_vars}
+            return self.test_case["steps"][0]["static_utterance"], merged_vars
 
         step_list = self.test_case["steps"]
         json_step_list = json.dumps(
@@ -548,5 +549,116 @@ class SimulationEvals(Apps):
         self._evaluate_expectations(
             eval_conv, detailed_trace, model, console_logging
         )
-
+        eval_conv.detailed_trace = detailed_trace
         return eval_conv
+
+    def run_simulations(
+        self,
+        test_cases: List[Dict[str, Any]],
+        runs: int = 1,
+        parallel: int = 1,
+        model: str = _DEFAULT_GEMINI_MODEL,
+        modality: str = "text",
+        verbose: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Runs multiple simulations, optionally in parallel.
+
+        Args:
+            test_cases: List of test case dictionaries.
+            runs: Number of runs per test case.
+            parallel: Number of parallel workers.
+            model: Gemini model to use.
+            modality: 'text' or 'audio'.
+            verbose: Whether to log to console (only active if parallel=1).
+        """
+        jobs = []
+        for tc in test_cases:
+            for run_idx in range(runs):
+                jobs.append((tc, run_idx))
+
+        results = []
+
+        def _run_job(tc, run_idx):
+            name = tc["name"]
+            label = f"{name} (run {run_idx + 1}/{runs})"
+            session_id = str(uuid.uuid4())
+            try:
+                import time as _time
+                _start = _time.time()
+                
+                conv = self.simulate_conversation(
+                    test_case=tc,
+                    model=model,
+                    session_id=session_id,
+                    console_logging=verbose and parallel <= 1,
+                    modality=modality,
+                )
+                duration_s = round(_time.time() - _start, 1)
+
+                goals_completed = sum(
+                    1 for p in conv.steps_progress if p.status == StepStatus.COMPLETED
+                )
+                total_goals = len(conv.steps_progress)
+                expectations_met = sum(
+                    1 for r in conv.expectation_results if r.status == ExpectationStatus.MET
+                )
+                total_exp = len(conv.expectation_results)
+
+                passed = (goals_completed == total_goals)
+                if total_exp > 0:
+                    passed = passed and (expectations_met == total_exp)
+
+                status = "PASS" if passed else "FAIL"
+                if parallel > 1 or not verbose:
+                    print(f"  {status}  {label} | goals: {goals_completed}/{total_goals} | "
+                          f"expectations: {expectations_met}/{total_exp} | "
+                          f"turns: {conv.current_turn} | {duration_s}s")
+
+                return {
+                    "name": name,
+                    "run": run_idx + 1,
+                    "passed": passed,
+                    "goals": f"{goals_completed}/{total_goals}",
+                    "expectations": f"{expectations_met}/{total_exp}",
+                    "turns": conv.current_turn,
+                    "duration_s": duration_s,
+                    "session_id": session_id,
+                    "session_parameters": tc.get("session_parameters", {}),
+                    "transcript": conv.get_transcript(),
+                    "detailed_trace": getattr(conv, "detailed_trace", []),
+                    "step_details": [
+                        {
+                            "goal": p.step.goal,
+                            "success_criteria": p.step.success_criteria,
+                            "status": p.status.value,
+                            "justification": p.justification,
+                        }
+                        for p in conv.steps_progress
+                    ],
+                    "expectation_details": [
+                        {
+                            "expectation": r.expectation,
+                            "status": r.status.value,
+                            "justification": r.justification,
+                        }
+                        for r in conv.expectation_results
+                    ],
+                }
+            except Exception as e:
+                print(f"  ERROR  {label}: {e}")
+                return {"name": name, "run": run_idx + 1, "passed": False, "error": str(e)}
+
+        if parallel <= 1:
+            for tc, run_idx in jobs:
+                results.append(_run_job(tc, run_idx))
+        else:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            with ThreadPoolExecutor(max_workers=parallel) as executor:
+                futures = {
+                    executor.submit(_run_job, tc, run_idx): (tc["name"], run_idx)
+                    for tc, run_idx in jobs
+                }
+                for future in as_completed(futures):
+                    results.append(future.result())
+
+        return results
