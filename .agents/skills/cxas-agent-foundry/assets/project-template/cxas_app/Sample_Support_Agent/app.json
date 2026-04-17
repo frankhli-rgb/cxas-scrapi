@@ -23,7 +23,7 @@
         "  GECX session state only supports string values. The before_model_callback",
         "  checks str(state.get('api_failed', 'false')).lower() == 'true'."
     ],
-    "name": "sample-app-id",
+    "name": "sample_support_agent",
     "displayName": "Sample Support Agent",
     "description": "Sample customer support agent demonstrating GECX best practices",
     "rootAgent": "root_agent",

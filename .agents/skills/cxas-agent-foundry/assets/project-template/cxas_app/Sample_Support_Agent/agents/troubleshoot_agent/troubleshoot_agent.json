@@ -1,5 +1,5 @@
 {
-    "name": "sub-agent-id",
+    "name": "troubleshoot_agent",
     "displayName": "troubleshoot_agent",
     "instruction": "agents/troubleshoot_agent/instruction.txt",
     "tools": ["set_session_state", "lookup_account", "end_session"],

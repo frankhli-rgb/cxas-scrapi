@@ -1,5 +1,5 @@
 {
-    "name": "root-agent-id",
+    "name": "root_agent",
     "displayName": "root_agent",
     "instruction": "agents/root_agent/instruction.txt",
     "tools": ["set_session_state", "lookup_account", "end_session"],
