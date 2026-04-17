@@ -1,9 +1,3 @@
----
-name: cxas-agent-foundry-build
-description: Build a fully tested GECX conversational agent from requirements, or create evals for an existing agent. Use this skill when the user says "build me an agent", "create an agent from this PRD", "create evals for my agent", "generate test cases", "I have requirements and need an agent", or wants to go from a spec/PRD to a working, eval-verified agent.
-user_invocable: false
----
-
 # Agent Foundry
 
 Build GECX conversational agents from requirements and verify them with evals. This skill handles two workflows:
@@ -12,6 +6,16 @@ Build GECX conversational agents from requirements and verify them with evals. T
 2. **Eval creation** — existing app → inspect → generate goldens/scenarios/simulations
 
 Both workflows use the `cxas-scrapi` library for API interactions and the skill's scripts for running evals. **Prerequisite:** Ensure the virtualenv is set up and activated (`source .venv/bin/activate`). The top-level SKILL.md handles this automatically via the Environment Readiness Check.
+
+## Table of Contents
+
+- [References (load on demand, not upfront)](#references-load-on-demand-not-upfront)
+- [Entry Point Detection](#entry-point-detection)
+- [Interview](#interview)
+- [Inspect App](#inspect-app)
+- [Build App](#build-app)
+- [Generate Evals](#generate-evals)
+- [Push and Run](#push-and-run)
 
 ## References (load on demand, not upfront)
 
@@ -25,7 +29,7 @@ Do NOT read all references before starting. Load each one only when you reach th
 | Making SCRAPI API calls (create agents, tools, callbacks, etc.) | `references/api-reference.md` — SCRAPI backstop with build order, common mistakes, and code patterns. For exact field names/enums, it points to `references/api-schemas/`. |
 | Running verification gates after building | `references/build-verification.md` |
 | Writing eval YAML files | `references/eval-templates.md` |
-| Creating golden/sim evals | `../run/references/creating-evals.md` |
+| Creating golden/sim evals | `creating-evals.md` |
 | Starting a new project from scratch | `assets/project-template/` — copy and adapt |
 
 For first-time builds, you will naturally encounter these in order: interview-guide → gecx-design-guide → api-reference → build-verification → eval-templates.
@@ -192,6 +196,8 @@ The `run-and-report.py` script snapshots the agent state, runs all eval types, t
 After the run, update the TDD:
 - Fill in the **Pass Rate History** table with the baseline results
 - Update the **Changelog** with the date and "Initial baseline"
+
+---
 
 ---
 

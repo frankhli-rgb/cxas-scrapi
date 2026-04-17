@@ -2,6 +2,17 @@
 
 Run these gates IN ORDER after building agents/tools/callbacks. ALL must pass before writing evals.
 
+## Table of Contents
+
+- [CRITICAL: Always use the existing app](#critical-always-use-the-existing-app)
+- [Gate 1: Pull, Lint & Push](#gate-1-pull-lint--push)
+- [Gate 2: Agent hierarchy](#gate-2-agent-hierarchy)
+- [Gate 3: Tool associations (including system tools)](#gate-3-tool-associations-including-system-tools)
+- [Gate 4: Callback inventory](#gate-4-callback-inventory)
+- [Gate 5: Single-turn smoke test](#gate-5-single-turn-smoke-test)
+- [Gate 6: Multi-turn smoke test](#gate-6-multi-turn-smoke-test)
+- [Gate 7: Simulation smoke test](#gate-7-simulation-smoke-test)
+
 ## CRITICAL: Always use the existing app
 
 Read `gecx-config.json` for the app ID. Always construct the full resource path:

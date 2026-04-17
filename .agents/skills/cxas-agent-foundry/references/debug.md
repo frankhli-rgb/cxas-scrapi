@@ -1,19 +1,22 @@
----
-name: cxas-agent-foundry-debug
-description: Debug failing GECX agent evals, improve pass rates, and fix agent behavior. Use this skill when the user wants to improve eval scores, debug why an eval is failing, iterate to a target pass rate, fix agent instructions, inspect agent traces, or says things like "get evals to 90%", "why is this eval failing", "fix the failing evals", "debug the agent", "look at the trace", or "run evals and fix what's broken".
-user_invocable: false
----
-
 # Eval Debugger
 
 Methodology for systematically debugging eval failures and improving agent behavior.
+
+## Table of Contents
+
+- [References](#references)
+- [Before Starting](#before-starting)
+- [The Iteration Loop](#the-iteration-loop)
+- [Quick Start](#quick-start)
+- [Triage Guide](#triage-guide)
+- [Common Mistakes](#common-mistakes)
 
 ## References
 
 - `references/debugging-agent.md` — Test sessions, inspect conversations, execute tools, view traces and changelogs
 - `references/improving-agent.md` — Analyze eval failures, optimize instructions, iterate on behavior
-- `../build/references/gecx-design-guide.md` — Instruction design, callback patterns, anti-patterns table (consult when fixing agent behavior)
-- `../build/references/api-schemas/evaluations.md` — Eval schemas, threshold field names, scoring enum values (consult when investigating threshold/scoring issues)
+- `gecx-design-guide.md` — Instruction design, callback patterns, anti-patterns table (consult when fixing agent behavior)
+- `api-schemas/evaluations.md` — Eval schemas, threshold field names, scoring enum values (consult when investigating threshold/scoring issues)
 
 ## Before Starting
 
@@ -142,8 +145,8 @@ The LLM understands natural language intent — let it handle detection (hostili
 
 When behavior is flaky:
 1. **Check tool availability first** — if the instruction references a tool the agent can't access, the LLM silently improvises. This is the most common and hardest-to-diagnose issue.
-2. **Fix the instruction** — make triggers clearer, remove conflicting constraints, add priority ordering. See `../build/references/gecx-design-guide.md` → "Instruction Design Anti-Patterns".
-3. **Use the trigger pattern** — for actions that must be deterministic (escalation, session termination), have the instruction tell the LLM to set a state variable, then have the callback intercept and execute. See `../build/references/gecx-design-guide.md` → "Trigger pattern for deterministic tool calls".
+2. **Fix the instruction** — make triggers clearer, remove conflicting constraints, add priority ordering. See `gecx-design-guide.md` → "Instruction Design Anti-Patterns".
+3. **Use the trigger pattern** — for actions that must be deterministic (escalation, session termination), have the instruction tell the LLM to set a state variable, then have the callback intercept and execute. See `gecx-design-guide.md` → "Trigger pattern for deterministic tool calls".
 4. **Use `after_model_callback`** — to guarantee text before `end_session`, or to recover when the LLM forgets the state-setting call.
 
 **Don't overfit.** If you find yourself adding hardcoded phrase lists to callbacks, requiring exact keywords in triggers, or bypassing the LLM for intent detection — stop. The agent might pass goldens but fail on real conversations. Signs: golden pass rate goes up but sim pass rate degrades.

@@ -1,12 +1,18 @@
----
-name: cxas-agent-foundry-run
-description: Create, manage, run, and report on GECX agent evals across goldens, simulations, tool tests, and callback tests. Use this skill whenever the user wants to create evals, push evals, run evals, check eval results, generate eval reports, or manage the eval suite. Also triggers on "goldens", "sims", "sim evals", "pass rate", "eval run", "create an eval", "write a golden", or comparing agent behavior against expected behavior.
-user_invocable: false
----
-
 # Agent Foundry: Eval Runner
 
 This skill manages the full eval lifecycle for GECX conversational agents — creating evals, running them, and generating reports.
+
+## Table of Contents
+
+- [References](#references)
+- [Before Starting](#before-starting)
+- [Four Eval Types](#four-eval-types)
+- [Run Everything](#run-everything)
+- [Choosing Golden vs Sim](#choosing-golden-vs-sim)
+- [Filtering](#filtering)
+- [Audio Scoring](#audio-scoring)
+- [Session Parameters](#session-parameters)
+- [Reports](#reports)
 
 ## References
 
@@ -97,7 +103,7 @@ This categorizes each failure (timeout, tool missing, text mismatch, scoring inc
 
 ## Choosing Golden vs Sim
 
-See `../build/references/interview-guide.md` → "Golden vs Scenario Decision" for the decision table. Key rule: if a golden keeps failing because responses inherently vary (KB-dependent), convert to a sim.
+See `interview-guide.md` → "Golden vs Scenario Decision" for the decision table. Key rule: if a golden keeps failing because responses inherently vary (KB-dependent), convert to a sim.
 
 ## Filtering
 

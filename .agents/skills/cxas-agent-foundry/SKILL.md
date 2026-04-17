@@ -1,7 +1,6 @@
 ---
 name: cxas-agent-foundry
 description: End-to-end GECX agent lifecycle — build agents from requirements, create and run evals, debug failures, and update evals when requirements change. TRIGGER this skill whenever the user mentions GECX, CXAS, conversational agents, voice agents, IVR replacement, or agent evals. Also trigger on "build me an agent", "create evals", "run evals", "run tool tests", "test callbacks", "debug failing evals", "get to 90%", "update evals", "generate a report", "push goldens", "run sims", "check pass rate", "fix the agent", "lint the agent", "inspect the app", PRD-to-agent workflows, or anything related to creating, testing, debugging, or improving a GECX conversational agent. Even if the user doesn't explicitly say "agent" — if they're working with CXAS apps, SCRAPI, agent instructions, callbacks, or eval YAML files, this skill applies.
-user_invocable: true
 ---
 
 # Agent Foundry
@@ -75,37 +74,48 @@ Read what the user wants and load the appropriate sub-skill:
 
 | User says... | Phase | Load |
 |-------------|-------|------|
-| "Build me an agent from this PRD" | Build | `skills/build/SKILL.md` |
-| "Create evals for my agent" | Build | `skills/build/SKILL.md` |
-| "Generate tool tests", "create callback tests" | Build | `skills/build/SKILL.md` |
-| "Update evals — requirements changed" | Build | `skills/build/SKILL.md` |
-| "Update the TDD" | Build | `skills/build/SKILL.md` |
-| "Run evals", "push evals", "check results" | Run | `skills/run/SKILL.md` |
-| "Run tool tests", "test the callbacks" | Run | `skills/run/SKILL.md` |
-| "Generate a report" | Run | `skills/run/SKILL.md` |
-| "Why is this eval failing", "get to 90%" | Debug | `skills/debug/SKILL.md` |
-| "Fix the failing evals", "debug the agent" | Debug | `skills/debug/SKILL.md` |
-| "Tool test is failing", "callback test broke" | Debug | `skills/debug/SKILL.md` |
+| "Build me an agent from this PRD" | Build | `references/build.md` |
+| "Create evals for my agent" | Build | `references/build.md` |
+| "Generate tool tests", "create callback tests" | Build | `references/build.md` |
+| "Update evals — requirements changed" | Build | `references/build.md` |
+| "Update the TDD" | Build | `references/build.md` |
+| "Run evals", "push evals", "check results" | Run | `references/run.md` |
+| "Run tool tests", "test the callbacks" | Run | `references/run.md` |
+| "Generate a report" | Run | `references/run.md` |
+| "Why is this eval failing", "get to 90%" | Debug | `references/debug.md` |
+| "Fix the failing evals", "debug the agent" | Debug | `references/debug.md` |
+| "Tool test is failing", "callback test broke" | Debug | `references/debug.md` |
 
 If the intent is unclear, ask: "Are you looking to **build/create** evals, **run** them, or **debug** failures?"
 
-## Sub-Skills
 
-### Build (`skills/build/SKILL.md`)
-PRD/requirements → agent + evals. Three entry points:
-- **Full build** — write TDD from requirements (user approves), then create app + evals
-- **Eval creation** — inspect existing app, write/update TDD, generate evals
-- **Eval update** — diff changed requirements against TDD, update TDD, then update evals
 
-### Run (`skills/run/SKILL.md`)
-Push, run, score, and report across four eval types:
-- **Platform goldens** — deterministic turn-by-turn tests
-- **Local simulations** — fast parallel open-ended testing via SCRAPI Sessions API
-- **Tool tests** — isolated tool input/output validation via `ToolEvals`
-- **Callback tests** — pytest against agent callbacks via `CallbackEvals`
+## Development Workflow
 
-### Debug (`skills/debug/SKILL.md`)
-Triage failures, fix eval configs or agent instructions, iterate to target pass rate.
+Agent development uses a **hybrid approach** — local files in git for version control, with SCRAPI for running evals and platform operations.
+
+Each agent is managed within a dedicated `<project>` workspace folder containing:
+- **`gecx-config.json`** — Centralized config (project ID, app ID, location, modality).
+- **`cxas_app/`** — Local agent code (instructions, callbacks, tools). The canonical source for agent definitions.
+- **`tdd.md`** — Technical Design Document (the source of truth for architecture).
+- **`evals/`** — Test definitions (goldens, simulations, tool tests, callback tests).
+- **`eval-reports/`** — HTML reports generated after running evals, including historical snapshots in `iterations/`.
+- **`experiment_log.md`** — Tracks iterations, what was tried, and pass rate progression over time.
+
+- **SCRAPI** is used for running evals, testing sessions, inspecting state, and rapid prototyping.
+
+The core principle: **create and edit locally, push to platform**.
+
+## Key Conventions
+
+- **TDD is the source of truth.** The Technical Design Document (`<project>/tdd.md`) defines agent architecture and eval coverage. Evals follow the TDD, not the agent's current behavior. Update the TDD first, then update evals to match.
+- **Four eval types:** goldens, simulations, tool tests, callback tests.
+- **Audio scoring:** For **goldens**, use `evaluation_status` directly. For **sims**, the sim runner handles audio scoring automatically.
+- **Session variables:** Only override what the agent's `before_agent_callback` can't derive. Never override `auth_status` or `user_role`.
+- **Fix the agent first.** When evals fail, assume the agent is wrong. Only modify evals as a last resort after confirming agent behavior is correct.
+- **Every agent change needs eval updates.** Callback changes require syncing code + adding/updating tests. Instruction changes require checking affected goldens/sims.
+- **Combined report after every run.** Always generate a combined report with all 4 eval types using `generate-combined-report.py`.
+- **YAML formatting:** Hand-write YAML instead of using `yaml.dump()` to avoid reformatting.
 
 ## Shared Resources
 

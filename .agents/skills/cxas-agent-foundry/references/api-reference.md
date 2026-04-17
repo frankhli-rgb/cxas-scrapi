@@ -4,6 +4,23 @@ SCRAPI backstop for when the bundled scripts don't cover your use case. For most
 
 For exact field names, enum values, or threshold structures, see the schema files in `api-schemas/`.
 
+## Table of Contents
+
+- [Authentication](#authentication)
+- [Before Making ANY API Call](#before-making-any-api-call)
+- [Build Order](#build-order)
+- [Common Mistakes](#common-mistakes)
+- [Apps](#apps)
+- [Agents](#agents)
+- [Tools](#tools)
+- [Variables](#variables)
+- [Callbacks](#callbacks)
+- [Sessions](#sessions)
+- [Evaluations](#evaluations)
+- [Inspecting an Existing App](#inspecting-an-existing-app)
+- [Version Management](#version-management)
+- [Legacy REST](#legacy-rest)
+
 ## Authentication
 
 SCRAPI picks up credentials automatically (application-default or service account). No manual token management.
