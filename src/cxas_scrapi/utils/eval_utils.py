@@ -804,6 +804,7 @@ class EvalUtils(Evaluations):
         tool_details_rows = []
         callback_details_rows = []
         guardrail_details_rows = []
+        llm_details_rows = []
 
         for res_obj in results:
             res_dict = (
@@ -884,6 +885,7 @@ class EvalUtils(Evaluations):
                                 tool_details_rows,
                                 callback_details_rows,
                                 guardrail_details_rows,
+                                llm_details_rows,
                                 context_key="eval_result_id",
                             )
                             turn_llm_ms = sums["LLM"]
