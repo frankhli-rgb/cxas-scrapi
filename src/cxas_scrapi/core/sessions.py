@@ -464,9 +464,9 @@ class Sessions(Common):
             transfer_font = "\033[1;36mAGENT TRANSFER:\033[0m"
             payload_font = "\033[1;94mCUSTOM PAYLOAD:\033[0m"
 
-            display = print
+            render = print
 
-            def HTML(text):
+            def render_html(text):
                 return text  # Pass-through for terminal
 
         elif HAS_IPYTHON:
@@ -486,6 +486,9 @@ class Sessions(Common):
             payload_font = (
                 "<font color='brown'><b>CUSTOM PAYLOAD:</b></font>"
             )
+            
+            render = display
+            render_html = HTML
         else:
             tool_call_font = "TOOL CALL:"
             tool_res_font = "TOOL RESULT:"
@@ -494,9 +497,9 @@ class Sessions(Common):
             transfer_font = "AGENT TRANSFER:"
             payload_font = "CUSTOM PAYLOAD:"
 
-            display = print
+            render = print
 
-            def HTML(text):
+            def render_html(text):
                 return re.sub(r"<[^>]*>", "", text).strip()
 
         outputs = getattr(res, "outputs", [])
@@ -526,13 +529,13 @@ class Sessions(Common):
                         if chunk_type == "text":
                             if role.lower() == "user":
                                 logging.debug(f"USER QUERY: {chunk.text}")
-                                display(HTML(f"{query_font} {chunk.text}"))
+                                render(render_html(f"{query_font} {chunk.text}"))
                             else:
                                 logging.debug(
                                     f"AGENT RESPONSE: [{role}] {chunk.text}"
                                 )
-                                display(
-                                    HTML(
+                                render(
+                                    render_html(
                                         f"{response_font} [{role}] "
                                         f"{chunk.text}"
                                     )
@@ -541,13 +544,13 @@ class Sessions(Common):
                         elif chunk_type == "transcript":
                             if role.lower() == "user":
                                 logging.debug(f"USER QUERY: {chunk.transcript}")
-                                display(HTML(f"{query_font} {chunk.transcript}"))
+                                render(render_html(f"{query_font} {chunk.transcript}"))
                             else:
                                 logging.debug(
                                     f"AGENT RESPONSE: [{role}] {chunk.transcript}"
                                 )
-                                display(
-                                    HTML(
+                                render(
+                                    render_html(
                                         f"{response_font} [{role}] "
                                         f"{chunk.transcript}"
                                     )
@@ -561,8 +564,8 @@ class Sessions(Common):
                                 f"TOOL CALL: [{role}] {tool_name} -- "
                                 f"Args: {expanded_args}"
                             )
-                            display(
-                                HTML(
+                            render(
+                                render_html(
                                     f"{tool_call_font} [{role}] {tool_name} -- "
                                     f"Args: {expanded_args}"
                                 )
@@ -578,8 +581,8 @@ class Sessions(Common):
                                 f"TOOL RESULT: [{role}] {tool_name} -- "
                                 f"Result: {expanded_response}"
                             )
-                            display(
-                                HTML(
+                            render(
+                                render_html(
                                     f"{tool_res_font} [{role}] {tool_name} -- "
                                     f"Result: {expanded_response}"
                                 )
@@ -591,8 +594,8 @@ class Sessions(Common):
                                 f"AGENT TRANSFER: [{role}] "
                                 f"Transferred to {at.display_name}"
                             )
-                            display(
-                                HTML(
+                            render(
+                                render_html(
                                     f"{transfer_font} [{role}] "
                                     f"Transferred to {at.display_name}"
                                 )
@@ -605,8 +608,8 @@ class Sessions(Common):
                             logging.debug(
                                 f"CUSTOM PAYLOAD: [{role}] {expanded_payload}"
                             )
-                            display(
-                                HTML(
+                            render(
+                                render_html(
                                     f"{payload_font} [{role}] "
                                     f"{expanded_payload}"
                                 )
