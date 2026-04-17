@@ -50,8 +50,17 @@
     "timeZoneSettings": {
         "timeZone": "America/New_York"
     },
+    "_comment_logging_settings": [
+        "LOGGING SETTINGS:",
+        "  For VOICE/AUDIO agents ONLY: evaluationAudioRecordingConfig MUST be provided",
+        "  to run audio evaluations. Without it, the platform will return a 400 BadRequestException.",
+        "  For TEXT/CHAT agents: You can remove this entire evaluationAudioRecordingConfig block."
+    ],
     "loggingSettings": {
-        "conversationLoggingSettings": {}
+        "conversationLoggingSettings": {},
+        "evaluationAudioRecordingConfig": {
+            "gcsBucket": "gs://your-audio-evals-bucket"
+        }
     },
     "toolExecutionMode": "PARALLEL",
 

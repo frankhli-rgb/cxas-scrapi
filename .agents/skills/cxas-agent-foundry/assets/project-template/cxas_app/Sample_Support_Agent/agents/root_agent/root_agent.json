@@ -3,6 +3,13 @@
     "displayName": "root_agent",
     "instruction": "agents/root_agent/instruction.txt",
     "tools": ["set_session_state", "lookup_account", "end_session"],
+    "_comment_child_agents": [
+        "CHILD AGENTS (CRITICAL LINTER/PLATFORM QUIRK):",
+        "  The cxas lint tool may expect spaces matching the 'displayName',",
+        "  but the platform PUSH will fail (400 Reference Not Found) if it doesn't",
+        "  exactly match the agent's 'name' field (the directory name).",
+        "  ALWAYS use the exact 'name' field with underscores (e.g., 'troubleshoot_agent')."
+    ],
     "childAgents": ["troubleshoot_agent"],
     "beforeAgentCallbacks": [{"pythonCode": "agents/root_agent/before_agent_callbacks/before_agent_callbacks_01/python_code.py"}],
     "beforeModelCallbacks": [{"pythonCode": "agents/root_agent/before_model_callbacks/before_model_callbacks_01/python_code.py"}],
