@@ -280,6 +280,15 @@ class SchemaValid(Rule):
             except FileNotFoundError as e:
                 return [self.make_result(rel, f"Missing referenced file: {e}")]
 
+        # Pop custom tools field from app_config to avoid proto validation failure
+        if self.target == "app_config" and "tools" in data:
+            data.pop("tools")
+
+        # Pop any custom _comment_ fields used for inline documentation
+        for key in list(data.keys()):
+            if key.startswith("_comment_"):
+                data.pop(key)
+
         try:
             _validate_fields(data, self._proto_type, path=str(resource_dir))
         except ValueError as e:

@@ -50,7 +50,7 @@ Only 3 pieces of information are needed. Ask for them **one at a time** — don'
 Everything else is derived:
 - **Location**: defaults to `us`
 - **Model**: `gemini-3.1-flash-live` for audio, `gemini-3-flash` for text
-- **deployed_app_id**: `null` for new apps (set after first push)
+- **deployed_app_id**: `null` for new apps (set after first push). Note: For `deployed_app_id`, use the **short name** (e.g., `my-app-id`), NOT the full Google Cloud resource path. The SDK handles the pathing automatically.
 
 Once you have all 3, write `<project_name>/gecx-config.json` inside the project folder (NOT at the repo root):
 ```json
@@ -88,7 +88,11 @@ Read what the user wants and load the appropriate sub-skill:
 
 If the intent is unclear, ask: "Are you looking to **build/create** evals, **run** them, or **debug** failures?"
 
+## Step Tracking (TODO Tool)
 
+**CRITICAL:** Before starting any multi-step workflow (Build, Run, or Debug), you MUST create a `todo.md` checklist in the workspace using the `write_file` tool. 
+
+As you complete each step in the workflow, you MUST use the `replace` tool to check it off (`[ ]` to `[x]`). Do not proceed to the next step until the current one is checked off. This ensures no steps are missed during complex builds or debug sessions.
 
 ## Development Workflow
 

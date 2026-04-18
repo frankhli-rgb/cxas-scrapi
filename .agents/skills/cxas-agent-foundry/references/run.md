@@ -11,8 +11,12 @@ This skill manages the full eval lifecycle for GECX conversational agents — cr
 - [Choosing Golden vs Sim](#choosing-golden-vs-sim)
 - [Filtering](#filtering)
 - [Audio Scoring](#audio-scoring)
-- [Session Parameters](#session-parameters)
-- [Reports](#reports)
+- [Local Simulations](#local-simulations)
+- [Reporting](#reporting)
+
+## Step Tracking Reminder
+
+**CRITICAL:** Remember to initialize your `todo.md` checklist for this evaluation run with the following steps: Run Goldens, Run Sims, Run Tool Tests, Triage Results, Generate Report.
 
 ## References
 

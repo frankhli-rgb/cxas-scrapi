@@ -27,6 +27,10 @@
     "displayName": "Sample Support Agent",
     "description": "Sample customer support agent demonstrating GECX best practices",
     "rootAgent": "root_agent",
+    "tools": [
+        "lookup_account",
+        "set_session_state"
+    ],
 
     "_comment_model_settings": [
         "MODEL SETTINGS (set based on modality):",

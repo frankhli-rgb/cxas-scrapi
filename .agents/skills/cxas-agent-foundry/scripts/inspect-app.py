@@ -90,7 +90,7 @@ def inspect(app_name, verbose=False):
             "callbacks": {},
         }
 
-    if verbose and agent.instruction:
+        if verbose and agent.instruction:
             agent_info["instruction"] = agent.instruction
 
         # Callbacks

@@ -11,7 +11,7 @@
 
 ### PythonFunction
 - **name** (string): Function name. Must match function in pythonCode. Case sensitive.
-- **pythonCode** (string): Python code.
+- **pythonCode** (string): [required] Python code file path (e.g., "tools/<name>/python_function/python_code.py").
 - **description** (string): Output only. Parsed from docstring.
 
 ### ClientFunction

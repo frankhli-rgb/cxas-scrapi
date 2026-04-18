@@ -17,6 +17,10 @@ Both workflows use the `cxas-scrapi` library for API interactions and the skill'
 - [Generate Evals](#generate-evals)
 - [Push and Run](#push-and-run)
 
+## Step Tracking Reminder
+
+**CRITICAL:** Remember to initialize your `todo.md` checklist with the following build steps: Interview, TDD, Build App, Generate Evals: Goldens, Generate Evals: Simulations, Generate Evals: Tool Tests, Generate Evals: Callback Tests, Push and Run.
+
 ## References (load on demand, not upfront)
 
 Do NOT read all references before starting. Load each one only when you reach the relevant step:
@@ -94,8 +98,13 @@ apps = Apps(project_id=project, location=location)
 app = apps.create_app(app_id=app_name, display_name=display_name, ...)
 ```
 
+**CRITICAL: ALWAYS run `cxas lint` BEFORE `cxas push`.** If the app has structural issues (like missing tools, unreferenced agents, or schema errors), `cxas push` will fail with an unhelpful API error (e.g., `400 Reference not found`). You MUST fix ALL lint errors before attempting to push.
+
 ```bash
-# Push the entire app (agents, tools, callbacks) from local files
+# 1. Lint the app (MUST do this first)
+cxas lint --app-dir <project>/cxas_app/<AppName>
+
+# 2. Push the entire app (agents, tools, callbacks) from local files
 cxas push --app-dir <project>/cxas_app/<AppName> \
   --to <app_resource_name> \
   --project-id <project_id> --location <location>
@@ -115,6 +124,7 @@ The linter (`cxas lint`) checks for these patterns. Code that violates them will
 
 | Rule | What it checks | How to comply |
 |------|---------------|---------------|
+| **A006** | `app.json` must explicitly list all local tools in its `tools` array | Add every tool in the `tools/` directory to the `tools` array in `app.json` |
 | **S001** | `variableDeclarations` in `app.json` must include `name`, `description`, and `schema` | Always include `"description": "..."` on every variable |
 | **I002** | `<taskflow>` must contain `<step>` or `<subtask>` children | Use `<step name="..." priority="N">` inside `<taskflow>`. Do NOT use custom tag names like `<priority_1>`, `<billing>`, `<eligibility>` |
 | **I012** | Agent config lists a tool but instruction never references it | Reference every tool in the instruction using `{@TOOL: tool_name}` format (e.g., `Call {@TOOL: lookup_benefits} with...`) |
@@ -122,6 +132,8 @@ The linter (`cxas lint`) checks for these patterns. Code that violates them will
 | **T009** | Tool function uses `**kwargs` | Use explicit named parameters — GECX requires them to generate the tool schema. Tools with `**kwargs` are silently dropped during import |
 | **T010** | Tool Python file has invalid syntax | Fix the syntax error — invalid Python causes tools to be silently dropped during import |
 | **T011** | Tool parameter uses `None` as default | Use type-matching defaults (e.g., `str = ""`, `int = 0`). `None` defaults cause the platform to silently drop the tool during import |
+| **T012** | Tool JSON must include `pythonFunction.description` | Add a description to `pythonFunction` |
+| **T013** | Tool JSON must include `pythonFunction.pythonCode` | Add `"pythonCode": "tools/<name>/python_function/python_code.py"` to `pythonFunction` |
 
 After pushing:
 1. Update `<project>/gecx-config.json` with the `deployed_app_id` if this is a new app
@@ -130,10 +142,9 @@ After pushing:
 
 ### Quick Verification (first-time builds)
 
-For a first build, run these 3 essential checks instead of the full 7-gate process:
+For a first build, run these 2 essential checks instead of the full 7-gate process:
 
-1. **Lint** — `cxas lint --app-dir cxas_app/` (catches structural issues in instructions, callbacks, tools, and configs)
-2. **Smoke test** — Send "Hello" via Sessions API and confirm the agent responds without errors:
+1. **Smoke test** — Send "Hello" via Sessions API and confirm the agent responds without errors:
    ```python
    from cxas_scrapi.core.sessions import Sessions
    import uuid
@@ -141,13 +152,15 @@ For a first build, run these 3 essential checks instead of the full 7-gate proce
    r = sessions.run(session_id=f"smoke-{uuid.uuid4().hex[:8]}", text="Hello")
    sessions.parse_result(r)
    ```
-3. **Inspect** — `python .agents/skills/cxas-agent-foundry/scripts/inspect-app.py` (confirm agents, tools, callbacks all exist and match the TDD)
+2. **Inspect** — `python .agents/skills/cxas-agent-foundry/scripts/inspect-app.py` (confirm agents, tools, callbacks all exist and match the TDD)
 
 For the full 7-gate verification (recommended before writing production evals), see `references/build-verification.md`.
 
 ---
 
 ## Generate Evals
+
+**CRITICAL PLAN MODE ENFORCEMENT:** If you are generating the initial batch of evaluation YAML files from the TDD, you MUST be in Plan Mode to ensure coverage consistency before writing to the file system.
 
 Create eval files for each type. See `references/eval-templates.md` for full YAML templates, code patterns, and examples.
 
@@ -201,3 +214,24 @@ After the run, update the TDD:
 
 ---
 
+
+### Multi-Agent Routing (CRITICAL)
+
+When creating a multi-agent hierarchy, the parent agent MUST declare all sub-agents in its `childAgents` array inside its `<agent_name>.json` config file.
+
+**CRITICAL RULE:** The strings in the `childAgents` array MUST use underscores (e.g., `"member_benefits_agent"`). The GECX platform matches these references against the agent's exact directory name.
+
+If you use spaces in the `childAgents` array, the platform will drop the sub-agents and all of their tools will be orphaned!
+
+Example `root_agent.json`:
+```json
+{
+  "name": "root_agent",
+  "displayName": "root_agent",
+  "instruction": "agents/root_agent/instruction.txt",
+  "childAgents": [
+    "member_benefits_agent",
+    "claims_agent"
+  ]
+}
+```

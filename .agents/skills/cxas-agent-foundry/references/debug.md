@@ -11,6 +11,10 @@ Methodology for systematically debugging eval failures and improving agent behav
 - [Triage Guide](#triage-guide)
 - [Common Mistakes](#common-mistakes)
 
+## Step Tracking Reminder
+
+**CRITICAL:** Remember to initialize your `todo.md` checklist for this debug session with the following steps: Check Prerequisites, Triage Failures, Fix Agent, Re-run Evals, Generate Report.
+
 ## References
 
 - `references/debugging-agent.md` — Test sessions, inspect conversations, execute tools, view traces and changelogs
@@ -131,6 +135,8 @@ A golden that passes 1/1 may fail 2/5. Run goldens at least 5 times (`--runs 5`)
 | Callback gap | Behavior works on root but not sub-agent | Root callbacks don't fire on sub-agents | Add callback to every agent in the flow |
 
 ### Fixing: agent first, eval last
+
+**CRITICAL PLAN MODE ENFORCEMENT:** If fixing an evaluation failure requires a cross-cutting architectural change (e.g., adding a new agent, modifying `before_agent` state derivation, or changing multi-agent routing), you MUST use Plan mode to propose the structural fix before making file changes. Simple prompt tweaks in `instruction.txt` do not require Plan Mode.
 
 **Start by assuming the agent is wrong** — eval expectations represent the contract with the user. Only modify an eval when:
 1. You've read the transcript and verified agent behavior is correct

@@ -510,3 +510,42 @@ class NoneDefaultValue(Rule):
                 r"=\s*None\s*$", p.strip()
             )
         ]
+
+
+@rule("tools")
+class MissingToolDescriptionInJSON(Rule):
+    id = "T012"
+    name = "tool-json-missing-description"
+    description = (
+        "Tool JSON configuration must include pythonFunction.description."
+    )
+    default_severity = Severity.ERROR
+
+    def check(
+        self, file_path: Path, content: str, context: LintContext
+    ) -> list[LintResult]:
+        tool_config, json_path = _load_tool_config(file_path)
+        if not tool_config:
+            return []
+
+        python_function = tool_config.get("pythonFunction", {})
+        description = python_function.get("description")
+
+        if not description or not str(description).strip():
+            rel = str(json_path.relative_to(context.project_root))
+            return [
+                self.make_result(
+                    file=rel,
+                    message=(
+                        "Tool JSON configuration is missing "
+                        "pythonFunction.description field. "
+                        "The LLM relies on this description to know when to "
+                        "call the tool."
+                    ),
+                    fix=(
+                        "Add a 'description' key to the 'pythonFunction' "
+                        "object in the tool's JSON file."
+                    ),
+                )
+            ]
+        return []
