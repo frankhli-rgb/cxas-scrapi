@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-from typing import Any, Iterator, Dict, List, Optional
+from typing import Any, Dict, List
+
 from cxas_scrapi.core.insights import Insights
 
 QaScorecard = Dict[str, Any]

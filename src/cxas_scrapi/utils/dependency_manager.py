@@ -17,6 +17,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+
 class SessionDependencyManager:
     """Manages test dependencies and caches session IDs in memory."""
 

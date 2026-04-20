@@ -15,7 +15,10 @@
 # limitations under the License.
 
 from typing import Any, Dict, List, Optional
+
 import requests
+from google.auth.transport.requests import Request as GoogleAuthRequest
+
 from cxas_scrapi.core.common import Common
 
 
@@ -67,10 +70,6 @@ class Insights(Common):
             getattr(self.creds, "expired", False)
             or getattr(self.creds, "token", None) is None
         ):
-            from google.auth.transport.requests import (
-                Request as GoogleAuthRequest,
-            )
-
             self.creds.refresh(GoogleAuthRequest())
 
         headers = {

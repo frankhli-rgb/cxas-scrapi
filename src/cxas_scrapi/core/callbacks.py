@@ -15,9 +15,13 @@
 """Core Callbacks class for CXAS Scrapi."""
 
 import inspect
+import re
 import textwrap
-from typing import Dict, List, Any, Union, Callable, Optional
+import traceback
+from typing import Any, Callable, Dict, List, Optional, Union
+
 from google.cloud.ces_v1beta import types
+
 from cxas_scrapi.core.agents import Agents
 
 
@@ -28,12 +32,14 @@ class Callbacks(Agents):
         """Initializes the Callbacks client.
 
         Args:
-            app_name: The full resource name of the parent App (projects/P/locations/L/apps/A).
+            app_name: The full resource name of the parent App
+                (projects/PROJECT_ID/locations/LOCATION/apps/APP_ID).
         """
         super().__init__(app_name=app_name, **kwargs)
         self.resource_type = "callbacks"
 
-        # Maps shorthand callback types to the exact field names in the Agent proto
+        # Maps shorthand callback types to the exact field names in the
+        # Agent proto
         self.callback_map = {
             "before_model": "before_model_callbacks",
             "after_model": "after_model_callbacks",
@@ -64,16 +70,18 @@ class Callbacks(Agents):
                 f"def {original_name}", f"def {new_name}", 1
             )
             return code_as_string
-        except OSError:
+        except OSError as e:
             raise ValueError(
-                "Could not extract Python source code from the provided Callable."
-            )
+                "Could not extract Python source code from the provided "
+                "Callable."
+            ) from e
 
     def list_callbacks(self, agent_id: str) -> Dict[str, List[types.Callback]]:
         """Lists callbacks attached to a specific agent.
 
         Returns:
-            A dictionary mapping the callback field name to a list of its callbacks.
+            A dictionary mapping the callback field name to a list of its
+            callbacks.
         """
         agent = self.get_agent(agent_id)
 
@@ -109,7 +117,8 @@ class Callbacks(Agents):
         description: str = "",
         disabled: bool = False,
     ) -> types.Agent:
-        """Appends a new callback to the specific callback field on the Agent."""
+        """Appends a new callback to the specific callback field on the
+        Agent."""
         field_name = self.callback_map.get(callback_type)
         if not field_name:
             raise ValueError(f"Invalid callback type: {callback_type}")
@@ -196,35 +205,37 @@ class Callbacks(Agents):
     def execute_callback(
         callback_func: Union[Callable, str], mock_session_input: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        Executes a localized python callback function hermetically against a mock session.
+        """Executes a localized python callback function hermetically against
+        a mock session.
 
         Args:
             callback_func: The logic to execute. Either a Callable or a string.
-            mock_session_input: The dummy session state/input corresponding to what the CES engine usually provides.
+            mock_session_input: The dummy session state/input
+                corresponding to what the CES engine usually provides.
 
         Returns:
-            A dictionary containing either the returned dictionary update or error trace.
+            A dictionary containing either the returned dictionary update or
+            error trace.
         """
         if isinstance(callback_func, Callable):
             try:
                 code_str = textwrap.dedent(inspect.getsource(callback_func))
-            except OSError:
+            except OSError as e:
                 raise ValueError(
-                    "Could not extract Python source code. Pass as a string instead."
-                )
+                    "Could not extract Python source code. Pass as a string "
+                    "instead."
+                ) from e
             func_name = callback_func.__name__
         else:
             code_str = callback_func
             # Basic parsing to find the "def FuncName(...):" signature
-            import re
-
             match = re.search(r"def (\w+)\s*\(", code_str)
             if match:
                 func_name = match.group(1)
             else:
                 raise ValueError(
-                    "Could not determine the function name from the provided code string."
+                    "Could not determine the function name from the provided "
+                    "code string."
                 )
 
         # Prepare a restricted execution environment
@@ -238,17 +249,17 @@ class Callbacks(Agents):
 
         if func_name not in exec_globals:
             return {
-                "error": f"Function {func_name} not found after executing the code block."
+                "error": f"Function {func_name} not found after executing "
+                f"the code block."
             }
 
         # Call the function hermetically
         try:
-            # The execution signature usually accepts a `session` argument containing the state dict
+            # The execution signature usually accepts a `session` argument
+            # containing the state dict
             result = exec_globals[func_name](mock_session_input)
             return {"success": True, "result": result}
         except Exception as e:
-            import traceback
-
             return {
                 "error": f"Execution failed: {str(e)}",
                 "traceback": traceback.format_exc(),

@@ -14,20 +14,20 @@
 
 """Utility functions for processing and running CXAS Guardrail Tests."""
 
-from typing import Annotated, Any, Dict, List, Optional, NamedTuple
-import time
 import datetime
 import json
 import logging
+import time
+from typing import Annotated, Any, Dict, List, NamedTuple, Optional
 
 import pandas as pd
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel, BeforeValidator, Field
 from tqdm import tqdm
 
-from cxas_scrapi.core.sessions import Sessions
-from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.agents import Agents
+from cxas_scrapi.core.apps import Apps
+from cxas_scrapi.core.sessions import Sessions
 from cxas_scrapi.utils.eval_utils import EvalUtils
 
 logger = logging.getLogger(__name__)
@@ -91,15 +91,15 @@ class GuardrailEvals:
         """Extracts the project ID from a resource name."""
         try:
             return name.split("/")[1]
-        except IndexError:
-            raise ValueError(f"Invalid resource name format: {name}")
+        except IndexError as e:
+            raise ValueError(f"Invalid resource name format: {name}") from e
 
     def _get_location(self, name: str) -> str:
         """Extracts the location from a resource name."""
         try:
             return name.split("/")[3]
-        except IndexError:
-            raise ValueError(f"Invalid resource name format: {name}")
+        except IndexError as e:
+            raise ValueError(f"Invalid resource name format: {name}") from e
 
     def _search_span_dict(
         self, span_dict: Dict[str, Any]
@@ -326,7 +326,8 @@ class GuardrailEvals:
             elif expected_triggered != actual_triggered:
                 passed = False
                 error_details.append(
-                    f"Expected trigger: {expected_triggered}, Actual trigger: {actual_triggered}"
+                    f"Expected trigger: {expected_triggered}, "
+                    f"Actual trigger: {actual_triggered}"
                 )
             elif actual_triggered and expected_triggered:
                 if (
@@ -336,7 +337,9 @@ class GuardrailEvals:
                 ):
                     passed = False
                     error_details.append(
-                        f"Expected guardrail name '{test_case.expected_guardrail_name}', but got '{actual_guardrail_name}'"
+                        f"Expected guardrail name "
+                        f"'{test_case.expected_guardrail_name}', but got "
+                        f"'{actual_guardrail_name}'"
                     )
 
                 if has_expected_type and actual_guardrail_type:
@@ -381,7 +384,9 @@ class GuardrailEvals:
                     if not matched:
                         passed = False
                         error_details.append(
-                            f"Expected guardrail type matching '{test_case.expected_guardrail_type}', but got '{actual_guardrail_type}'"
+                            f"Expected guardrail type matching "
+                            f"'{test_case.expected_guardrail_type}', but got "
+                            f"'{actual_guardrail_type}'"
                         )
 
             data = {

@@ -99,8 +99,8 @@ setup(
         "google-cloud-dialogflow-cx",
     ],
     entry_points={
-        'console_scripts': [
-            'cxas=cxas_scrapi.cli.main:main',
+        "console_scripts": [
+            "cxas=cxas_scrapi.cli.main:main",
         ],
     },
     data_files=_collect_data_files(

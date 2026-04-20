@@ -188,8 +188,8 @@ class LLMUserConversation(Conversation):
         self.expectation_results: List[ExpectationResult] = []
 
     def _next_user_utterance(self) -> tuple[str, Dict[str, Any]]:
-        """Generates the next user utterance and variables to inject based on
-        the conversation history.
+        """Generates the next user utterance and variables to inject based
+        on the conversation history.
 
         This method uses an LLM to determine the next utterance, considering the
         current turn, maximum turns, and the completion status of the
@@ -197,8 +197,8 @@ class LLMUserConversation(Conversation):
 
         Returns:
           - The generated next user utterance as a string. Returns an empty
-          string if the conversation has reached the maximum number of turns
-          or all steps are completed.
+            string if the conversation has reached the maximum number of
+            turns or all steps are completed.
           - The variables to inject as a dict.
         """
         if self.current_turn >= self.max_turns:
@@ -386,7 +386,7 @@ class SimulationEvals(Apps):
                 tool_name = self.tools_map.get(tool_name, tool_name)
             expanded_args = Sessions._expand_pb_struct(tc.args)
             trace_chunks.append(
-                f"Tool Call: {tool_name} with args " f"{expanded_args}"
+                f"Tool Call: {tool_name} with args {expanded_args}"
             )
             if "end_session" in tool_name:
                 session_ended = True
@@ -403,8 +403,7 @@ class SimulationEvals(Apps):
                 tool_name = self.tools_map.get(tool_name, tool_name)
             expanded_response = Sessions._expand_pb_struct(tr.response)
             trace_chunks.append(
-                f"Tool Response: {tool_name} with result "
-                f"{expanded_response}"
+                f"Tool Response: {tool_name} with result {expanded_response}"
             )
         elif chunk_type == "text":
             agent_text_add = chunk.text + " "
@@ -522,8 +521,7 @@ class SimulationEvals(Apps):
 
         if console_logging:
             print(
-                f"Starting simulated conversation with session ID: "
-                f"{session_id}"
+                f"Starting simulated conversation with session ID: {session_id}"
             )
 
         # Initialize the first turn manually

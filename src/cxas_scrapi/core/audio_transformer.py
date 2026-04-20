@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 import io
+import logging
 import wave
 
-from google.cloud import texttospeech
 from google.api_core import client_options
+from google.cloud import texttospeech
 
 ClientOptions = client_options.ClientOptions
 
@@ -29,7 +29,9 @@ class AudioTransformer:
     def text_to_speech_bytes(
         self, text: str, credentials, project_id: str
     ) -> dict:
-        """Converts text to speech and returns a dictionary with text and audio bytes without saving to disk."""
+        """Converts text to speech and returns a dictionary with text and
+        audio bytes without saving to disk.
+        """
         client_options = ClientOptions(quota_project_id=project_id)
         client = texttospeech.TextToSpeechClient(
             credentials=credentials, client_options=client_options

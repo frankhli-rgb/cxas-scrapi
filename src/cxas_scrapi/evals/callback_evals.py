@@ -16,15 +16,16 @@
 
 import glob
 import io
+import logging
 import os
 import sys
 import tempfile
 import time
 from contextlib import redirect_stderr, redirect_stdout
-import logging
 
 import pandas as pd
 import pytest
+
 from cxas_scrapi.core.agents import Agents
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,8 @@ class CallbackEvals:
         Args:
             app_name: The CXAS App name.
             agent_name: The name or display name of the agent.
-            callback_type: The type of callback (e.g., 'before_model', 'after_tool').
+            callback_type: The type of callback (e.g., 'before_model',
+                'after_tool').
             test_file_path: Path to the test.py file to run.
             log_file: Optional. Path to a file to log pytest output to.
             pytest_args: Optional. Additional arguments to pass to pytest.
@@ -64,7 +66,8 @@ class CallbackEvals:
         except Exception as e:
             logger.error(f"Failed to get agent {agent_name}: {e}")
             raise ValueError(
-                f"Failed to get agent {agent_name} from application to run callback test."
+                f"Failed to get agent {agent_name} from application to "
+                f"run callback test."
             ) from e
 
         # Fetch callback
@@ -79,11 +82,13 @@ class CallbackEvals:
         callback = all_callbacks.get(callback_type)
         if not callback:
             raise ValueError(
-                f"No callback found of type {callback_type} for agent {agent_name}"
+                f"No callback found of type {callback_type} for agent "
+                f"{agent_name}"
             )
         if len(callback) > 1:
             raise ValueError(
-                f"Multiple callbacks found of type {callback_type} for agent {agent_name}"
+                f"Multiple callbacks found of type {callback_type} for "
+                f"agent {agent_name}"
             )
 
         code_content = callback[0].python_code

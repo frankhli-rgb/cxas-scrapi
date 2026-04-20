@@ -14,7 +14,6 @@
 
 """Unit tests for FlowDependencyResolver and FlowTreeVisualizer."""
 
-import pytest
 from rich.console import Console
 from rich.tree import Tree
 
@@ -62,9 +61,7 @@ MINIMAL_AGENT_DATA = {
     "flows": [
         {
             "flow": {
-                "name": (
-                    f"projects/p/locations/l/agents/a/flows/{FLOW_UUID}"
-                ),
+                "name": (f"projects/p/locations/l/agents/a/flows/{FLOW_UUID}"),
                 "displayName": "Main Flow",
             },
             "pages": [],
@@ -127,7 +124,7 @@ LOGIC_FLOW_WRAPPER = {
                 "condition": "$session.params.flag = true",
                 "conditionString": "$session.params.flag = true",
                 "targetFlow": (
-                    f"projects/p/locations/l/agents/a/flows/other-flow"
+                    "projects/p/locations/l/agents/a/flows/other-flow"
                 ),
             }
         ],
@@ -148,16 +145,12 @@ class TestFlowDependencyResolver:
 
     def test_collects_intent_from_transition_route(self):
         result = self.resolver.resolve(FLOW_WRAPPER_WITH_INTENT_AND_WEBHOOK)
-        intent_names = [
-            i.get("displayName") for i in result["intents"]
-        ]
+        intent_names = [i.get("displayName") for i in result["intents"]]
         assert "confirm.yes" in intent_names
 
     def test_collects_webhook_from_fulfillment(self):
         result = self.resolver.resolve(FLOW_WRAPPER_WITH_INTENT_AND_WEBHOOK)
-        wh_names = [
-            w.get("displayName") for w in result["webhooks"]
-        ]
+        wh_names = [w.get("displayName") for w in result["webhooks"]]
         assert "MyWebhook" in wh_names
 
     def test_flow_type_1_for_logic_flow(self):
@@ -209,9 +202,7 @@ class TestFlowDependencyResolver:
             "intents": [],
             "entityTypes": [
                 {
-                    "name": (
-                        f"projects/p/l/a/entityTypes/{ENTITY_UUID}"
-                    ),
+                    "name": (f"projects/p/l/a/entityTypes/{ENTITY_UUID}"),
                     "displayName": "YesNo",
                 }
             ],

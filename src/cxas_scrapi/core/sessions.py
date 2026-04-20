@@ -34,6 +34,7 @@ from google.protobuf import json_format
 
 try:
     from IPython.display import HTML, display  # noqa: F401
+
     HAS_IPYTHON = True
 except ImportError:
     HAS_IPYTHON = False
@@ -470,22 +471,14 @@ class Sessions(Common):
                 return text  # Pass-through for terminal
 
         elif HAS_IPYTHON:
-            tool_call_font = (
-                "<font color='darkred'><b>TOOL CALL:</b></font>"
-            )
-            tool_res_font = (
-                "<font color='goldenrod'><b>TOOL RESULT:</b></font>"
-            )
+            tool_call_font = "<font color='darkred'><b>TOOL CALL:</b></font>"
+            tool_res_font = "<font color='goldenrod'><b>TOOL RESULT:</b></font>"
             query_font = "<font color='darkgreen'><b>USER QUERY:</b></font>"
-            response_font = (
-                "<font color='purple'><b>AGENT RESPONSE:</b></font>"
-            )
+            response_font = "<font color='purple'><b>AGENT RESPONSE:</b></font>"
             transfer_font = (
                 "<font color='darkorange'><b>AGENT TRANSFER:</b></font>"
             )
-            payload_font = (
-                "<font color='brown'><b>CUSTOM PAYLOAD:</b></font>"
-            )
+            payload_font = "<font color='brown'><b>CUSTOM PAYLOAD:</b></font>"
 
             render = display
             render_html = HTML
@@ -530,9 +523,7 @@ class Sessions(Common):
                             if role.lower() == "user":
                                 logging.debug(f"USER QUERY: {chunk.text}")
                                 render(
-                                    render_html(
-                                        f"{query_font} {chunk.text}"
-                                    )
+                                    render_html(f"{query_font} {chunk.text}")
                                 )
                             else:
                                 logging.debug(
@@ -540,8 +531,7 @@ class Sessions(Common):
                                 )
                                 render(
                                     render_html(
-                                        f"{response_font} [{role}] "
-                                        f"{chunk.text}"
+                                        f"{response_font} [{role}] {chunk.text}"
                                     )
                                 )
 

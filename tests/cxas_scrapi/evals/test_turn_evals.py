@@ -47,8 +47,9 @@ class MockTurnResponse:
 
 @pytest.fixture
 def mock_turn_evals():
-    with patch("cxas_scrapi.evals.turn_evals.Sessions"), patch(
-        "cxas_scrapi.evals.turn_evals.Variables"
+    with (
+        patch("cxas_scrapi.evals.turn_evals.Sessions"),
+        patch("cxas_scrapi.evals.turn_evals.Variables"),
     ):
         evals = TurnEvals(app_name="projects/p/locations/l/apps/a")
         return evals
@@ -193,12 +194,9 @@ def test_extract_signals(mock_message_to_dict, mock_turn_evals):
         "text": "Hello there!",
         "toolCalls": {
             "toolCalls": [
-                {
-                    "displayName": "my_tool",
-                    "args": {"param": "value"}
-                }
+                {"displayName": "my_tool", "args": {"param": "value"}}
             ]
-        }
+        },
     }
 
     signals = mock_turn_evals._extract_signals(MagicMock())
@@ -253,12 +251,8 @@ def test_run_turn_tests_conversation_expectations(
     cases = [
         TurnTestCase(
             name="t1",
-            turns=[
-                TurnStep(turn="1", user="hi", expectations=[])
-            ],
-            expectations=[
-                "Overall good"
-            ],
+            turns=[TurnStep(turn="1", user="hi", expectations=[])],
+            expectations=["Overall good"],
         )
     ]
 
@@ -285,7 +279,7 @@ def test_run_turn_tests_multi_turn_passes_historical_contexts(mock_turn_evals):
             ),
             turns=[
                 TurnStep(turn="1", user="hi", expectations=[]),
-                TurnStep(turn="2", user="how are you", expectations=[])
+                TurnStep(turn="2", user="how are you", expectations=[]),
             ],
         )
     ]
@@ -301,6 +295,8 @@ def test_run_turn_tests_multi_turn_passes_historical_contexts(mock_turn_evals):
     # Check second call
     args, kwargs = mock_turn_evals.sessions_client.run.call_args_list[1]
     assert kwargs["historical_contexts"] is None
+
+
 def test_historical_context_config_mutually_exclusive():
     # Valid cases
     HistoricalContextConfig(session_id="sid")
@@ -334,7 +330,9 @@ def test_run_turn_tests_resolves_test_name_dependency(mock_turn_evals):
     cases = [
         TurnTestCase(
             name="t2",
-            historical_contexts=HistoricalContextConfig(test_name="parent_test"),
+            historical_contexts=HistoricalContextConfig(
+                test_name="parent_test"
+            ),
             turns=[TurnStep(turn="1", user="hi", expectations=[])],
         )
     ]
@@ -363,6 +361,7 @@ def test_run_turn_tests_passes_utterances_directly(mock_turn_evals):
     assert mock_turn_evals.sessions_client.run.call_count == 1
     args, kwargs = mock_turn_evals.sessions_client.run.call_args
     assert kwargs["historical_contexts"] == utterances
+
 
 def test_topological_sort(mock_turn_evals):
     # Setup cases
@@ -403,5 +402,3 @@ def test_topological_sort_circular_dependency(mock_turn_evals):
 
     with pytest.raises(ValueError, match="Circular dependency detected"):
         mock_turn_evals._topological_sort(cases)
-
-

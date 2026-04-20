@@ -587,4 +587,3 @@ def test_check_audio_requirements_no_project_id_raises_error():
     with pytest.raises(ValueError) as exc_info:
         sessions._check_audio_requirements()
     assert "Project ID could not be determined" in str(exc_info.value)
-

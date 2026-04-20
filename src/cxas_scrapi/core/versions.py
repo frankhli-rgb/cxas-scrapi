@@ -14,7 +14,8 @@
 
 """Core Versions class for CXAS Scrapi."""
 
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
 from google.cloud.ces_v1beta import types
 
 from cxas_scrapi.core.apps import Apps

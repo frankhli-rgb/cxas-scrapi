@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import MagicMock
 
-from cxas_scrapi.utils.insights_utils import InsightsUtils
+import pytest
+
 from cxas_scrapi.core.scorecards import Scorecards
+from cxas_scrapi.utils.insights_utils import InsightsUtils
 
 
 class TestInsightsUtils:
-
     @pytest.fixture
     def utils_with_mocked_client(self):
         utils = InsightsUtils(project_id="test-project", location="us-central1")
@@ -71,7 +71,8 @@ class TestInsightsUtils:
         # Should delete existing_q2 because it doesn't match KeepMe or AddMe
         mock_client.delete_question.assert_called_once_with("existing_q2_name")
 
-        # Should create template_q2 (AddMe) because it doesn't match KeepMe or DeleteMe.
+        # Should create template_q2 (AddMe) because it doesn't match KeepMe
+        # or DeleteMe.
         mock_client.create_question.assert_called_once_with(
             "revision_name", template_q2
         )

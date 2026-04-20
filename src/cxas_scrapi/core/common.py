@@ -14,16 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-import re
 import hashlib
-import yaml
-from typing import Dict, List, Optional, Any
-from google.auth import default
-from google.oauth2 import service_account
-from google.auth.transport.requests import Request
-from google.api_core.gapic_v1.client_info import ClientInfo
 import importlib.metadata
+import os
+import re
+from typing import Any, Dict, List, Optional
+
+from google.api_core.gapic_v1.client_info import ClientInfo
+from google.auth import default
+from google.auth.transport.requests import Request
+from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 from proto.marshal.collections import maps, repeated
 
 # Define global scopes used for CX Agent Studio Requests
@@ -46,8 +47,6 @@ class Common:
         self.scopes = GLOBAL_SCOPES
         if scope:
             self.scopes += scope
-
-        import os
 
         oauth_token = os.environ.get("CXAS_OAUTH_TOKEN")
 
@@ -75,8 +74,6 @@ class Common:
             self.token = self.creds.token
 
         elif oauth_token:
-            from google.oauth2.credentials import Credentials
-
             self.creds = Credentials(token=oauth_token)
             self.token = oauth_token
 
@@ -127,12 +124,14 @@ class Common:
             # projects/<PROJECT>/locations/<LOCATION>/...
             # Attempt to find location
             if "locations/" in resource_name:
-                location = resource_name.split("locations/")[1].split("/")[0]
+                _ = resource_name.split("locations/")[1].split("/", maxsplit=1)[
+                    0
+                ]
             else:
                 # If path is just projects/P/locations/L...
                 parts = resource_name.split("/")
                 if len(parts) > 3 and parts[2] == "locations":
-                    location = parts[3]
+                    _ = parts[3]
                 else:
                     return {}
         except IndexError:
@@ -162,7 +161,9 @@ class Common:
             return None
         try:
             if "locations/" in resource_name:
-                return resource_name.split("locations/")[1].split("/")[0]
+                return resource_name.split("locations/")[1].split(
+                    "/", maxsplit=1
+                )[0]
             parts = resource_name.split("/")
             if (
                 len(parts) >= 4
@@ -305,10 +306,12 @@ class Common:
     def get_agent_text_from_outputs(
         outputs: List[Any], separator: str = "\n"
     ) -> str:
-        """Extracts and concatenates text responses from a list of output objects.
+        """Extracts and concatenates text responses from a list of output
+        objects.
 
         Args:
-            outputs: A list of output objects (dict or protobuf) from a Session flow execution.
+            outputs: A list of output objects (dict or protobuf) from a
+                Session flow execution.
             separator: String used to join multiple text responses.
 
         Returns:
@@ -329,11 +332,11 @@ class Common:
         repeated_list = []
         for item in repeated_object:
             if isinstance(item, repeated.RepeatedComposite):
-                item = self.recurse_proto_repeated_composite(item)
-                repeated_list.append(item)
+                processed_item = self.recurse_proto_repeated_composite(item)
+                repeated_list.append(processed_item)
             elif isinstance(item, maps.MapComposite):
-                item = self.recurse_proto_marshal_to_dict(item)
-                repeated_list.append(item)
+                processed_item = self.recurse_proto_marshal_to_dict(item)
+                repeated_list.append(processed_item)
             else:
                 repeated_list.append(item)
 
@@ -343,10 +346,11 @@ class Common:
         """Recursively converts MapComposite objects to dicts."""
         new_dict = {}
         for k, v in marshal_object.items():
+            processed_v = v
             if isinstance(v, maps.MapComposite):
-                v = self.recurse_proto_marshal_to_dict(v)
+                processed_v = self.recurse_proto_marshal_to_dict(v)
             elif isinstance(v, repeated.RepeatedComposite):
-                v = self.recurse_proto_repeated_composite(v)
-            new_dict[k] = v
+                processed_v = self.recurse_proto_repeated_composite(v)
+            new_dict[k] = processed_v
 
         return new_dict

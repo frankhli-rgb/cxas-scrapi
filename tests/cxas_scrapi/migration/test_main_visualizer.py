@@ -15,8 +15,9 @@
 """Unit tests for MainVisualizer."""
 
 import os
-import pytest
 from unittest.mock import MagicMock, patch
+
+from rich.console import Console
 from rich.tree import Tree
 
 from cxas_scrapi.migration.main_visualizer import MainVisualizer
@@ -57,9 +58,7 @@ DATA_WITH_TOOLS = {
 }
 
 DATA_WITH_PLAYBOOK_AND_FLOW = {
-    "agent": {
-        "startPlaybook": f"projects/p/l/a/playbooks/{PB_UUID}"
-    },
+    "agent": {"startPlaybook": f"projects/p/l/a/playbooks/{PB_UUID}"},
     "playbooks": [
         {
             "playbook": {
@@ -125,8 +124,6 @@ class TestMainVisualizerToolsTree:
 
     def test_tool_name_in_tree(self):
         mv = MainVisualizer(DATA_WITH_TOOLS)
-        from rich.console import Console
-
         c = Console(force_terminal=False, width=200, record=True)
         c.print(mv._build_tools_tree())
         rendered = c.export_text()
@@ -134,8 +131,6 @@ class TestMainVisualizerToolsTree:
 
     def test_webhook_name_in_tree(self):
         mv = MainVisualizer(DATA_WITH_TOOLS)
-        from rich.console import Console
-
         c = Console(force_terminal=False, width=200, record=True)
         c.print(mv._build_tools_tree())
         rendered = c.export_text()
@@ -143,8 +138,6 @@ class TestMainVisualizerToolsTree:
 
     def test_webhook_uri_in_tree(self):
         mv = MainVisualizer(DATA_WITH_TOOLS)
-        from rich.console import Console
-
         c = Console(force_terminal=False, width=200, record=True)
         c.print(mv._build_tools_tree())
         rendered = c.export_text()
@@ -152,8 +145,6 @@ class TestMainVisualizerToolsTree:
 
     def test_no_tools_message_when_empty(self):
         mv = MainVisualizer(EMPTY_DATA)
-        from rich.console import Console
-
         c = Console(force_terminal=False, width=200, record=True)
         c.print(mv._build_tools_tree())
         rendered = c.export_text()
@@ -165,9 +156,7 @@ class TestMainVisualizerTopology:
     @patch(
         "cxas_scrapi.migration.graph_visualizer.HighLevelGraphVisualizer.build"
     )
-    def test_visualize_topology_calls_display(
-        self, mock_build, mock_display
-    ):
+    def test_visualize_topology_calls_display(self, mock_build, mock_display):
         mock_build.return_value = _make_mock_dot()
         mv = MainVisualizer(EMPTY_DATA)
         mv.visualize_topology()
@@ -192,9 +181,7 @@ class TestMainVisualizerTopology:
 
 class TestMainVisualizerDetails:
     @patch("cxas_scrapi.migration.main_visualizer.display")
-    def test_visualize_details_no_error_with_empty_data(
-        self, mock_display
-    ):
+    def test_visualize_details_no_error_with_empty_data(self, mock_display):
         mv = MainVisualizer(EMPTY_DATA)
         mv.visualize_details()
 
@@ -215,9 +202,7 @@ class TestMainVisualizerExport:
     @patch(
         "cxas_scrapi.migration.graph_visualizer.HighLevelGraphVisualizer.build"
     )
-    def test_export_writes_md_file(
-        self, mock_build, mock_display, tmp_path
-    ):
+    def test_export_writes_md_file(self, mock_build, mock_display, tmp_path):
         mock_dot = MagicMock()
         mock_dot.render = MagicMock()
         mock_build.return_value = mock_dot

@@ -61,7 +61,8 @@ class HighLevelGraphVisualizer:
 
     @staticmethod
     def _get_raw_id(res: Any) -> str:
-        """Extract the short UUID from a resource dict or resource-name string."""
+        """Extract the short UUID from a resource dict or resource-name
+        string."""
         if isinstance(res, dict):
             return (
                 res.get("playbookId")

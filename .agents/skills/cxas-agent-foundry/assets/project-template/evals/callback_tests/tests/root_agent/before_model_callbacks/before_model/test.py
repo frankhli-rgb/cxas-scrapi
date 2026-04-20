@@ -40,8 +40,8 @@ RUNNING:
     results = cb.test_all_callbacks_in_app_dir(app_dir="evals/callback_tests")
 """
 
-import sys
 import os
+import sys
 from unittest.mock import MagicMock
 
 # -------------------------------------------------------------------------
@@ -49,22 +49,39 @@ from unittest.mock import MagicMock
 # The GECX runtime provides a 'tools' global that doesn't exist in test.
 # We inject a MagicMock so the module loads without errors.
 # -------------------------------------------------------------------------
-sys.path.insert(0, os.path.join(
-    os.path.dirname(__file__),
-    "..", "..", "..", "..", "agents", "root_agent",
-    "before_model_callbacks", "before_model",
-))
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "..",
+        "..",
+        "agents",
+        "root_agent",
+        "before_model_callbacks",
+        "before_model",
+    ),
+)
 
 import python_code  # noqa: E402
+
 python_code.tools = MagicMock()
 
 from python_code import before_model_callback  # noqa: E402
-from cxas_scrapi.utils.callback_libs import CallbackContext, Content, Part  # noqa: E402
+
+from cxas_scrapi.utils.callback_libs import (  # noqa: E402
+    CallbackContext,
+    Content,
+    Part,
+)
 
 
 def _session_start_content():
     """Create user_content simulating a session start event."""
-    return Content(role="user", parts=[Part(text="<event>session start</event>")])
+    return Content(
+        role="user", parts=[Part(text="<event>session start</event>")]
+    )
 
 
 def _normal_user_content(text="My phone is not working"):
@@ -81,7 +98,9 @@ class TestGreeting:
         ctx.user_content = _session_start_content()
         result = before_model_callback(ctx, llm_request=MagicMock())
         assert result is not None
-        has_text = any(hasattr(p, "text") and p.text for p in result.content.parts)
+        has_text = any(
+            hasattr(p, "text") and p.text for p in result.content.parts
+        )
         assert has_text
 
     def test_greeting_text_content(self):
@@ -89,15 +108,21 @@ class TestGreeting:
         ctx = CallbackContext(state={})
         ctx.user_content = _session_start_content()
         result = before_model_callback(ctx, llm_request=MagicMock())
-        text = [p.text for p in result.content.parts if hasattr(p, "text") and p.text][0]
+        text = [
+            p.text
+            for p in result.content.parts
+            if hasattr(p, "text") and p.text
+        ][0]
         assert "virtual assistant" in text.lower()
 
     def test_normal_message_skips_greeting(self):
         """A normal user message does not trigger the greeting."""
-        ctx = CallbackContext(state={
-            "_action_trigger": "",
-            "api_failed": "false",
-        })
+        ctx = CallbackContext(
+            state={
+                "_action_trigger": "",
+                "api_failed": "false",
+            }
+        )
         ctx.user_content = _normal_user_content()
         result = before_model_callback(ctx, llm_request=MagicMock())
         assert result is None
@@ -107,11 +132,13 @@ class TestNoOpPath:
     """Tests for when the callback should do nothing (return None)."""
 
     def test_no_trigger_returns_none(self):
-        """No-op: No trigger set, no API failure, normal user message — LLM handles normally."""
-        ctx = CallbackContext(state={
-            "_action_trigger": "",
-            "api_failed": "false",
-        })
+        """No-op: No trigger set, no API failure, normal user message."""
+        ctx = CallbackContext(
+            state={
+                "_action_trigger": "",
+                "api_failed": "false",
+            }
+        )
         ctx.user_content = _normal_user_content()
         result = before_model_callback(ctx, llm_request=MagicMock())
         assert result is None
@@ -125,9 +152,11 @@ class TestNoOpPath:
 
     def test_unknown_trigger_returns_none(self):
         """No-op: Trigger value not in ESCALATION_MAP — unknown trigger."""
-        ctx = CallbackContext(state={
-            "_action_trigger": "unknown_trigger_value",
-        })
+        ctx = CallbackContext(
+            state={
+                "_action_trigger": "unknown_trigger_value",
+            }
+        )
         ctx.user_content = _normal_user_content()
         result = before_model_callback(ctx, llm_request=MagicMock())
         assert result is None
@@ -139,18 +168,22 @@ class TestEscalationTrigger:
     """Tests for the standard escalation trigger path."""
 
     def _escalation_ctx(self, **overrides):
-        ctx = CallbackContext(state={
-            "_action_trigger": "escalate",
-            "_escalation_reason": "Customer wants human",
-            "_escalation_topic": "billing",
-            **overrides,
-        })
+        ctx = CallbackContext(
+            state={
+                "_action_trigger": "escalate",
+                "_escalation_reason": "Customer wants human",
+                "_escalation_topic": "billing",
+                **overrides,
+            }
+        )
         ctx.user_content = _normal_user_content()
         return ctx
 
     def test_escalation_returns_response(self):
-        """Trigger: _action_trigger = 'escalate' — returns escalation response."""
-        result = before_model_callback(self._escalation_ctx(), llm_request=MagicMock())
+        """Trigger: _action_trigger = 'escalate' -> escalation response."""
+        result = before_model_callback(
+            self._escalation_ctx(), llm_request=MagicMock()
+        )
         assert result is not None
 
     def test_escalation_clears_trigger(self):
@@ -161,21 +194,27 @@ class TestEscalationTrigger:
 
     def test_escalation_includes_text(self):
         """Response always includes text so customer hears something."""
-        result = before_model_callback(self._escalation_ctx(), llm_request=MagicMock())
+        result = before_model_callback(
+            self._escalation_ctx(), llm_request=MagicMock()
+        )
 
         # Check that at least one part has text
         has_text = any(
-            p.text_or_transcript() for p in result.content.parts
+            p.text_or_transcript()
+            for p in result.content.parts
             if hasattr(p, "text_or_transcript")
         )
         assert has_text, "Escalation response must include text"
 
     def test_escalation_resolves_state_references(self):
         """Payload args starting with '_' are resolved from state."""
-        result = before_model_callback(self._escalation_ctx(
-            _escalation_reason="Billing dispute",
-            _escalation_topic="billing",
-        ), llm_request=MagicMock())
+        result = before_model_callback(
+            self._escalation_ctx(
+                _escalation_reason="Billing dispute",
+                _escalation_topic="billing",
+            ),
+            llm_request=MagicMock(),
+        )
 
         # Find the payload_update_tool call and verify args
         for part in result.content.parts:
@@ -184,7 +223,7 @@ class TestEscalationTrigger:
                 assert fc.args["escalation_reason"] == "Billing dispute"
                 assert fc.args["main_topic"] == "billing"
                 return
-        assert False, "payload_update_tool not found in response"
+        raise AssertionError("payload_update_tool not found in response")
 
 
 class TestApiFailurePath:
@@ -196,26 +235,34 @@ class TestApiFailurePath:
         return ctx
 
     def test_api_failure_triggers_escalation(self):
-        """api_failed = 'true' triggers escalation even without _action_trigger."""
-        result = before_model_callback(self._api_failure_ctx(), llm_request=MagicMock())
+        """api_failed = 'true' triggers escalation without _action_trigger."""
+        result = before_model_callback(
+            self._api_failure_ctx(), llm_request=MagicMock()
+        )
         assert result is not None
 
     def test_api_failure_clears_flag(self):
-        """api_failed flag is cleared to prevent re-firing on next model call."""
+        """api_failed flag is cleared to prevent re-firing on next call."""
         ctx = self._api_failure_ctx()
         before_model_callback(ctx, llm_request=MagicMock())
         assert ctx.state["api_failed"] == "false"
 
     def test_api_failure_includes_apology_text(self):
         """API failure response includes empathetic text about the issue."""
-        result = before_model_callback(self._api_failure_ctx(), llm_request=MagicMock())
+        result = before_model_callback(
+            self._api_failure_ctx(), llm_request=MagicMock()
+        )
 
         text_parts = [
-            p.text_or_transcript() for p in result.content.parts
+            p.text_or_transcript()
+            for p in result.content.parts
             if hasattr(p, "text_or_transcript") and p.text_or_transcript()
         ]
         assert len(text_parts) > 0, "API failure response must include text"
-        assert "technical issue" in text_parts[0].lower() or "transfer" in text_parts[0].lower()
+        assert (
+            "technical issue" in text_parts[0].lower()
+            or "transfer" in text_parts[0].lower()
+        )
 
 
 class TestSilenceHandling:
@@ -232,7 +279,11 @@ class TestSilenceHandling:
         """Create user_content simulating a silence signal from the platform."""
         return Content(
             role="user",
-            parts=[Part(text="<context>no user activity detected for 10 seconds.</context>")],
+            parts=[
+                Part(
+                    text="<context>no user activity detected for 10 seconds.</context>"
+                )
+            ],
         )
 
     def _silence_ctx(self, counter="0"):
@@ -243,11 +294,13 @@ class TestSilenceHandling:
             Content(role="model", parts=[Part(text="How can I help you?")]),
             self._silence_content(),
         ]
-        ctx = CallbackContext(state={
-            "no_input_counter": counter,
-            "_action_trigger": "",
-            "api_failed": "false",
-        })
+        ctx = CallbackContext(
+            state={
+                "no_input_counter": counter,
+                "_action_trigger": "",
+                "api_failed": "false",
+            }
+        )
         ctx.user_content = self._silence_content()
         return ctx, llm_request
 
@@ -267,7 +320,11 @@ class TestSilenceHandling:
         """First silence response starts with 'Sorry, I didn't hear anything'."""
         ctx, llm_request = self._silence_ctx("0")
         result = before_model_callback(ctx, llm_request)
-        text = [p.text for p in result.content.parts if hasattr(p, "text") and p.text][0]
+        text = [
+            p.text
+            for p in result.content.parts
+            if hasattr(p, "text") and p.text
+        ][0]
         assert "sorry" in text.lower()
 
     def test_third_silence_ends_session(self):
@@ -277,7 +334,8 @@ class TestSilenceHandling:
         assert result is not None
         # Should include end_session function call
         has_end = any(
-            hasattr(p, "function_call") and p.function_call
+            hasattr(p, "function_call")
+            and p.function_call
             and p.function_call.name == "end_session"
             for p in result.content.parts
         )
@@ -285,11 +343,13 @@ class TestSilenceHandling:
 
     def test_normal_message_resets_counter(self):
         """A normal user message (not silence) resets the counter to 0."""
-        ctx = CallbackContext(state={
-            "no_input_counter": "2",
-            "_action_trigger": "",
-            "api_failed": "false",
-        })
+        ctx = CallbackContext(
+            state={
+                "no_input_counter": "2",
+                "_action_trigger": "",
+                "api_failed": "false",
+            }
+        )
         ctx.user_content = _normal_user_content()
         llm_request = MagicMock()
         llm_request.contents = [

@@ -73,17 +73,21 @@ class PlaybookTreeVisualizer:
             if in_params:
                 in_node = p_node.add("📥 [green]Input[/]")
                 for p in in_params:
-                    in_node.add(
-                        f"[cyan]{p['name']}[/] "
-                        f"([dim]{p.get('typeSchema', {}).get('inlineSchema', {}).get('type', 'UNKNOWN')}[/])"
+                    p_type = (
+                        p.get("typeSchema", {})
+                        .get("inlineSchema", {})
+                        .get("type", "UNKNOWN")
                     )
+                    in_node.add(f"[cyan]{p['name']}[/] ([dim]{p_type}[/])")
             if out_params:
                 out_node = p_node.add("📤 [magenta]Output[/]")
                 for p in out_params:
-                    out_node.add(
-                        f"[cyan]{p['name']}[/] "
-                        f"([dim]{p.get('typeSchema', {}).get('inlineSchema', {}).get('type', 'UNKNOWN')}[/])"
+                    p_type = (
+                        p.get("typeSchema", {})
+                        .get("inlineSchema", {})
+                        .get("type", "UNKNOWN")
                     )
+                    out_node.add(f"[cyan]{p['name']}[/] ([dim]{p_type}[/])")
 
         if "instruction" in self.pb and "steps" in self.pb["instruction"]:
             i_node = root.add("📝 [bold]Instructions & Logic[/]")

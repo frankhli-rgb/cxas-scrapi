@@ -129,10 +129,10 @@ class MissingTypeHints(Rule):
                         line=1,
                         message="Function arguments lack type hints",
                         fix=(
-                        "Add type hints: def"
-                        " tool_name(arg: str,"
-                        " count: int) -> dict:"
-                    ),
+                            "Add type hints: def"
+                            " tool_name(arg: str,"
+                            " count: int) -> dict:"
+                        ),
                     )
                 ]
         return []
@@ -184,16 +184,14 @@ class HighCardinalityArgs(Rule):
     id = "T005"
     name = "tool-high-cardinality"
     description = (
-        "High-cardinality input arguments"
-        " reduce deterministic tool selection"
+        "High-cardinality input arguments reduce deterministic tool selection"
     )
     default_severity = Severity.INFO
 
     HIGH_CARDINALITY_PATTERNS = [
         (
             r"timestamp",
-            "timestamp — hard for voice"
-            " users to express",
+            "timestamp — hard for voice users to express",
         ),
         (
             r"latitude|longitude|coordinates",
@@ -253,8 +251,7 @@ class ExcessiveReturnData(Rule):
             " directly — consider"
             " filtering to relevant"
             " fields only",
-            "Only return data that the"
-            " LLM needs to see",
+            "Only return data that the LLM needs to see",
         ),
     ]
 
@@ -296,9 +293,7 @@ class ToolNameNotSnakeCase(Rule):
                     self.make_result(
                         file=rel,
                         message=(
-                            f"Tool {field_name}"
-                            f" '{value}' is not"
-                            " snake_case"
+                            f"Tool {field_name} '{value}' is not snake_case"
                         ),
                         fix=f'Change to: "{field_name}": "{snake}"',
                     )
@@ -310,10 +305,7 @@ class ToolNameNotSnakeCase(Rule):
 class ToolDisplayNameUnreferenced(Rule):
     id = "T008"
     name = "tool-displayname-unreferenced"
-    description = (
-        "Tool displayName not referenced"
-        " by any agent's tools array"
-    )
+    description = "Tool displayName not referenced by any agent's tools array"
     default_severity = Severity.WARNING
 
     def check(
@@ -334,15 +326,10 @@ class ToolDisplayNameUnreferenced(Rule):
             return []
 
         referenced = any(
-            display_name
-            in json.loads(
-                agent_json.read_text()
-            ).get("tools", [])
+            display_name in json.loads(agent_json.read_text()).get("tools", [])
             for agent_dir in agents_dir.iterdir()
             if agent_dir.is_dir()
-            for agent_json in [
-                agent_dir / f"{agent_dir.name}.json"
-            ]
+            for agent_json in [agent_dir / f"{agent_dir.name}.json"]
             if agent_json.exists()
         )
 
@@ -385,15 +372,10 @@ class KwargsInSignature(Rule):
         content: str,
         context: LintContext,
     ) -> list[LintResult]:
-        rel = str(
-            file_path.relative_to(context.project_root)
-        )
+        rel = str(file_path.relative_to(context.project_root))
         fn_match = FUNC_DEF_RE.search(content)
         if fn_match and "**" in fn_match.group(2):
-            line = (
-                content[: fn_match.start()].count("\n")
-                + 1
-            )
+            line = content[: fn_match.start()].count("\n") + 1
             return [
                 self.make_result(
                     file=rel,
@@ -430,9 +412,7 @@ class ToolInvalidPythonSyntax(Rule):
         content: str,
         context: LintContext,
     ) -> list[LintResult]:
-        rel = str(
-            file_path.relative_to(context.project_root)
-        )
+        rel = str(file_path.relative_to(context.project_root))
         try:
             compile(content, rel, "exec")
         except SyntaxError as e:
@@ -440,10 +420,7 @@ class ToolInvalidPythonSyntax(Rule):
                 self.make_result(
                     file=rel,
                     line=e.lineno,
-                    message=(
-                        "Invalid Python syntax:"
-                        f" {e.msg}"
-                    ),
+                    message=(f"Invalid Python syntax: {e.msg}"),
                     fix=(
                         "Fix the syntax error"
                         " — invalid Python causes"
@@ -476,13 +453,10 @@ class NoneDefaultValue(Rule):
         if not fn_match:
             return []
 
-        rel = str(
-            file_path.relative_to(context.project_root)
-        )
+        rel = str(file_path.relative_to(context.project_root))
         args_str = fn_match.group(2)
-        line = (
-            content[: fn_match.start()].count("\n") + 1
-        )
+        line = content[: fn_match.start()].count("\n") + 1
+
         def _param_name(p):
             return p.split(":")[0].strip()
 
@@ -499,16 +473,11 @@ class NoneDefaultValue(Rule):
                     " defaults during import"
                 ),
                 fix=(
-                    "Use type-matching"
-                    " defaults: str = '',"
-                    " int = 0, list = []"
+                    "Use type-matching defaults: str = '', int = 0, list = []"
                 ),
             )
             for p in args_str.split(",")
-            if "=" in p
-            and re.search(
-                r"=\s*None\s*$", p.strip()
-            )
+            if "=" in p and re.search(r"=\s*None\s*$", p.strip())
         ]
 
 

@@ -14,13 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Optional, Any
 import datetime
 import logging
+from typing import Any, Dict, List
+
 import pandas as pd
-from google.cloud.ces_v1beta import AgentServiceClient, types
 import yaml
+from google.cloud.ces_v1beta import AgentServiceClient, types
+
 from cxas_scrapi.core.common import Common
+from cxas_scrapi.utils.latency_parser import LatencyParser
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +58,8 @@ class ConversationHistory(Common):
 
     @staticmethod
     def parse_conversation_to_yaml(filepath):
-        """Parses a direct CXAS Conversation History textproto into the target FDE YAML format."""
+        """Parses a direct CXAS Conversation History textproto into the
+        target FDE YAML format."""
         with open(filepath, "r") as f:
             text = f.read()
 
@@ -64,7 +68,8 @@ class ConversationHistory(Common):
 
     @staticmethod
     def conversation_dict_to_yaml(conv_dict):
-        """Parses a direct CXAS Conversation History dictionary into the target FDE YAML format."""
+        """Parses a direct CXAS Conversation History dictionary into the
+        target FDE YAML format."""
         turns = conv_dict.get("turns", [])
         if not isinstance(turns, list):
             turns = [turns]
@@ -130,8 +135,10 @@ class ConversationHistory(Common):
         """Lists conversations in the configured app.
 
         Args:
-            time_filter: An optional relative time filter (e.g. '7d', '24h', '1m').
-            source_filter: An optional enum string filter (e.g. 'LIVE', 'SIMULATOR', 'EVAL').
+            time_filter: An optional relative time filter (e.g. '7d',
+                '24h', '1m').
+            source_filter: An optional enum string filter (e.g. 'LIVE',
+                'SIMULATOR', 'EVAL').
         """
         filter_str = None
         if time_filter:
@@ -167,7 +174,8 @@ class ConversationHistory(Common):
                 request_kwargs["source"] = source_enum_val
             else:
                 logger.warning(
-                    f"Unrecognized source_filter format: {source_filter}. Ignoring."
+                    f"Unrecognized source_filter format: {source_filter}. "
+                    f"Ignoring."
                 )
 
         request = types.ListConversationsRequest(**request_kwargs)
@@ -185,15 +193,15 @@ class ConversationHistory(Common):
 
         Args:
             time_filter: Relative timeframe to fetch (e.g. '7d', '24h').
-            source_filter: Optional source environment to filter by (e.g. 'LIVE', 'SIMULATOR').
+            source_filter: Optional source environment to filter by (e.g.
+                'LIVE', 'SIMULATOR').
             limit: Maximum number of conversations to retrieve and parse.
 
         Returns:
-            Dictionary containing DataFrames: tool_summary, tool_details, callback_summary, callback_details, guardrail_summary, guardrail_details
+            Dictionary containing DataFrames: tool_summary, tool_details,
+            callback_summary, callback_details, guardrail_summary,
+            guardrail_details
         """
-        # pylint: disable=import-outside-toplevel
-        from cxas_scrapi.utils.latency_parser import LatencyParser
-
         limit = int(limit) if limit is not None else 50
 
         convs = self.list_conversations(
@@ -202,7 +210,8 @@ class ConversationHistory(Common):
         )
         if not convs:
             logger.warning(
-                f"No conversations found for time_filter: {time_filter} and source_filter: {source_filter}"
+                f"No conversations found for time_filter: {time_filter} "
+                f"and source_filter: {source_filter}"
             )
             return {
                 "tool_summary": pd.DataFrame(),

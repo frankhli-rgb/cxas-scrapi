@@ -221,8 +221,7 @@ class CamelCaseFunction(Rule):
                 self.make_result(
                     file=rel,
                     message=(
-                        f"camelCase function '{fn}'"
-                        " — CES requires snake_case"
+                        f"camelCase function '{fn}' — CES requires snake_case"
                     ),
                     fix="Rename to snake_case",
                 )
@@ -480,9 +479,7 @@ class WrongCallbackSignature(Rule):
         content: str,
         context: LintContext,
     ) -> list[LintResult]:
-        rel = str(
-            file_path.relative_to(context.project_root)
-        )
+        rel = str(file_path.relative_to(context.project_root))
         cb_type = file_path.parent.parent.name
         expected = EXPECTED_TYPED_SIGNATURES.get(cb_type)
         if not expected:
@@ -500,25 +497,15 @@ class WrongCallbackSignature(Rule):
         args_str = match.group(1)
         return_str = match.group(2)
         params_str = ", ".join(
-            f"{k}: {v}"
-            for k, v in expected["params"].items()
+            f"{k}: {v}" for k, v in expected["params"].items()
         )
-        expected_sig = (
-            f"def {fn_name}({params_str})"
-            f" -> {expected['return']}:"
-        )
+        expected_sig = f"def {fn_name}({params_str}) -> {expected['return']}:"
 
         results = []
-        for param in (
-            p.strip()
-            for p in args_str.split(",")
-            if p.strip()
-        ):
+        for param in (p.strip() for p in args_str.split(",") if p.strip()):
             parts = param.split(":")
             param_name = parts[0].strip()
-            expected_type = expected["params"].get(
-                param_name
-            )
+            expected_type = expected["params"].get(param_name)
             if not expected_type:
                 continue
             if len(parts) < 2:  # noqa: PLR2004
@@ -567,9 +554,7 @@ class WrongCallbackSignature(Rule):
                 )
             )
         else:
-            actual = (
-                return_str.strip().lstrip("->").strip()
-            )
+            actual = return_str.strip().lstrip("->").strip()
             if actual != expected["return"]:
                 results.append(
                     self.make_result(
@@ -601,9 +586,7 @@ class InvalidPythonSyntax(Rule):
     ) -> list[LintResult]:
         if not str(file_path).endswith(".py"):
             return []
-        rel = str(
-            file_path.relative_to(context.project_root)
-        )
+        rel = str(file_path.relative_to(context.project_root))
         try:
             compile(content, rel, "exec")
         except SyntaxError as e:
@@ -611,10 +594,7 @@ class InvalidPythonSyntax(Rule):
                 self.make_result(
                     file=rel,
                     line=e.lineno,
-                    message=(
-                        "Invalid Python syntax:"
-                        f" {e.msg}"
-                    ),
+                    message=(f"Invalid Python syntax: {e.msg}"),
                     fix=(
                         "Fix the syntax error"
                         " — invalid Python causes"

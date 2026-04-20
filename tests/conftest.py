@@ -13,11 +13,12 @@
 # limitations under the License.
 
 import sys
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 # Global Test Constants
-TEST_APP_ID = "projects/df-reference/locations/us/apps/f39d3ab5-a463-4025-8437-31fd09685d6b"
+TEST_APP_ID = "projects/df-reference/locations/us/apps/f39d3ab5-a463-4025-8437-31fd09685d6b"  # noqa: E501
 
 
 def pytest_addoption(parser):
@@ -68,8 +69,8 @@ def app_id():
     return TEST_APP_ID
 
 
-# Create a mock module structure for google.cloud.ces_v1beta if not running online
-import sys
+# Create a mock module structure for google.cloud.ces_v1beta if not
+# running online
 if "--run-online" not in sys.argv:
     mock_ces = MagicMock()
     mock_ces.AgentServiceClient = MagicMock
@@ -82,5 +83,7 @@ if "--run-online" not in sys.argv:
     mock_dfcx_services = MagicMock()
     mock_dfcx_types = MagicMock()
     sys.modules["google.cloud.dialogflowcx_v3beta1"] = mock_dfcx
-    sys.modules["google.cloud.dialogflowcx_v3beta1.services"] = mock_dfcx_services
+    sys.modules["google.cloud.dialogflowcx_v3beta1.services"] = (
+        mock_dfcx_services
+    )
     sys.modules["google.cloud.dialogflowcx_v3beta1.types"] = mock_dfcx_types

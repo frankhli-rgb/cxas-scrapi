@@ -14,8 +14,8 @@
 
 """Core Guardrails class for CXAS Scrapi."""
 
-import logging
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List
+
 from google.cloud.ces_v1beta import types
 from google.protobuf import field_mask_pb2
 
@@ -93,8 +93,9 @@ class Guardrails(Apps):
     ) -> types.Guardrail:
         """Creates a new guardrail given a specific payload dictionary.
 
-        The payload controls which of the 5 mutually exclusive guardrail types is instantiated
-        (content_filter, llm_policy, llm_prompt_security, model_safety, code_callback).
+        The payload controls which of the 5 mutually exclusive guardrail
+        types is instantiated (content_filter, llm_policy,
+        llm_prompt_security, model_safety, code_callback).
         """
         # Ensure any existing basic field inside payload doesn't conflict
         if "display_name" in payload:

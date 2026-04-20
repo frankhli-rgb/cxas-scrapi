@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from cxas_scrapi.core.tools import Tools
 
 
@@ -79,13 +81,16 @@ def test_get_tool(mock_client_cls, mock_ts_req_cls, mock_t_req_cls):
 
     # Test tool
     mock_client.get_tool.return_value = MagicMock(name="t1")
-    res = t.get_tool("projects/p/locations/l/apps/A/tools/T")
+    t.get_tool("projects/p/locations/l/apps/A/tools/T")
     mock_client.get_tool.assert_called_once()
-    assert mock_client.get_tool.call_args[1]["request"].name == "projects/p/locations/l/apps/A/tools/T"
+    assert (
+        mock_client.get_tool.call_args[1]["request"].name
+        == "projects/p/locations/l/apps/A/tools/T"
+    )
 
     # Test toolset
     mock_client.get_toolset.return_value = MagicMock(name="ts1")
-    res = t.get_tool("projects/p/locations/l/apps/A/toolsets/TS")
+    t.get_tool("projects/p/locations/l/apps/A/toolsets/TS")
     mock_client.get_toolset.assert_called_once()
     assert (
         mock_client.get_toolset.call_args[1]["request"].name
@@ -110,7 +115,7 @@ def test_create_tool(mock_client_cls, mock_req_cls, mock_tool_cls):
 
     t = Tools("projects/p/locations/l/apps/A")
 
-    res = t.create_tool(
+    t.create_tool(
         tool_id="t1",
         display_name="my_tool",
         payload={"python_code": "print(1)"},
@@ -142,7 +147,7 @@ def test_create_toolset(mock_client_cls, mock_req_cls, mock_tool_cls):
 
     t = Tools("projects/p/locations/l/apps/A")
 
-    res = t.create_tool(
+    t.create_tool(
         tool_id="ts1",
         display_name="my_toolset",
         payload={"open_api_schema": "yaml"},
@@ -174,7 +179,9 @@ def test_update_tool(mock_client_cls, mock_req_cls, mock_tool_cls):
     mock_tool_cls.side_effect = side_effect
 
     t = Tools("projects/p/locations/l/apps/A")
-    res = t.update_tool("projects/p/locations/l/apps/A/tools/T", display_name="new_name")
+    t.update_tool(
+        "projects/p/locations/l/apps/A/tools/T", display_name="new_name"
+    )
 
     mock_client.update_tool.assert_called_once()
     args = mock_client.update_tool.call_args[1]["request"]
@@ -198,7 +205,9 @@ def test_update_toolset(mock_client_cls, mock_req_cls, mock_ts_cls):
     mock_ts_cls.side_effect = side_effect
 
     t = Tools("projects/p/locations/l/apps/A")
-    res = t.update_tool("projects/p/locations/l/apps/A/toolsets/TS", display_name="new_name")
+    t.update_tool(
+        "projects/p/locations/l/apps/A/toolsets/TS", display_name="new_name"
+    )
 
     mock_client.update_toolset.assert_called_once()
     args = mock_client.update_toolset.call_args[1]["request"]
@@ -251,7 +260,9 @@ def test_execute_tool(mock_client_cls, mock_post):
     t.creds.token = "token"
 
     with patch.object(
-        t, "get_tools_map", return_value={"my_tool": "projects/p/locations/l/apps/A/tools/t1"}
+        t,
+        "get_tools_map",
+        return_value={"my_tool": "projects/p/locations/l/apps/A/tools/t1"},
     ):
         res = t.execute_tool(
             tool_display_name="my_tool",
@@ -261,7 +272,10 @@ def test_execute_tool(mock_client_cls, mock_post):
 
     mock_post.assert_called_once()
     args, kwargs = mock_post.call_args
-    assert args[0] == "https://ces.googleapis.com/v1beta/projects/p/locations/l/apps/A:executeTool"
+    assert (
+        args[0]
+        == "https://ces.googleapis.com/v1beta/projects/p/locations/l/apps/A:executeTool"
+    )
     assert kwargs["json"]["tool"] == "projects/p/locations/l/apps/A/tools/t1"
     assert kwargs["json"]["args"] == {"query": "test"}
     assert kwargs["json"]["variables"] == {"var1": "val1"}
@@ -291,7 +305,10 @@ def test_execute_toolset(mock_client_cls, mock_post):
         t,
         "get_tools_map",
         return_value={
-            "my_tool_in_toolset": "projects/p/locations/l/apps/A/toolsets/ts1/tools/my_tool_in_toolset"
+            "my_tool_in_toolset": (
+                "projects/p/locations/l/apps/A/toolsets/ts1/tools/"
+                "my_tool_in_toolset"
+            )
         },
     ):
         res = t.execute_tool(
@@ -301,8 +318,14 @@ def test_execute_toolset(mock_client_cls, mock_post):
 
     mock_post.assert_called_once()
     args, kwargs = mock_post.call_args
-    assert args[0] == "https://ces.googleapis.com/v1beta/projects/p/locations/l/apps/A:executeTool"
-    assert kwargs["json"]["toolsetTool"]["toolset"] == "projects/p/locations/l/apps/A/toolsets/ts1"
+    assert (
+        args[0]
+        == "https://ces.googleapis.com/v1beta/projects/p/locations/l/apps/A:executeTool"
+    )
+    assert (
+        kwargs["json"]["toolsetTool"]["toolset"]
+        == "projects/p/locations/l/apps/A/toolsets/ts1"
+    )
     assert kwargs["json"]["toolsetTool"]["toolId"] == "my_tool_in_toolset"
     assert kwargs["json"]["args"] == {"query": "test"}
     assert "variables" not in res
@@ -314,7 +337,11 @@ def test_execute_tool_not_found(mock_client_cls):
     t.creds = MagicMock()
 
     with patch.object(
-        t, "get_tools_map", return_value={"existing_tool": "projects/p/locations/l/apps/A/tools/o1"}
+        t,
+        "get_tools_map",
+        return_value={
+            "existing_tool": "projects/p/locations/l/apps/A/tools/o1"
+        },
     ):
         with pytest.raises(ValueError, match="Tool 'missing_tool' not found"):
             t.execute_tool(tool_display_name="missing_tool", args={})
@@ -337,7 +364,9 @@ def test_execute_tool_with_context(mock_client_cls, mock_post):
     t.creds.token = "token"
 
     with patch.object(
-        t, "get_tools_map", return_value={"my_tool": "projects/p/locations/l/apps/A/tools/t1"}
+        t,
+        "get_tools_map",
+        return_value={"my_tool": "projects/p/locations/l/apps/A/tools/t1"},
     ):
         res = t.execute_tool(
             tool_display_name="my_tool",
@@ -359,7 +388,10 @@ def test_execute_tool_with_context(mock_client_cls, mock_post):
 
     mock_post.assert_called_once()
     args, kwargs = mock_post.call_args
-    assert args[0] == "https://ces.googleapis.com/v1beta/projects/p/locations/l/apps/A:executeTool"
+    assert (
+        args[0]
+        == "https://ces.googleapis.com/v1beta/projects/p/locations/l/apps/A:executeTool"
+    )
     assert kwargs["json"]["tool"] == "projects/p/locations/l/apps/A/tools/t1"
     assert kwargs["json"]["args"] == {"query": "test"}
     assert kwargs["json"]["context"] == {

@@ -14,23 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
 import logging
-import pandas as pd
-from typing import Dict, List, Any, Callable
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable, Dict, List
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 
 class LatencyParser:
-    """A generic utility for parsing Conversational core span telemetry into DataFrames."""
+    """A generic utility for parsing Conversational core span telemetry into
+    DataFrames."""
 
     @staticmethod
     def fetch_conversation_traces(
         conv_ids: List[str], get_conversation_func: Callable
     ) -> Dict[str, Any]:
-        """Fetches detailed conversation traces concurrently with rate limiting."""
+        """Fetches detailed conversation traces concurrently with rate
+        limiting."""
         traces = {}
         # Rate Limiting: 600 requests per minute API quota = 10 req/s.
         # We will chunk into batches of 5 and sleep 1 second.
@@ -38,7 +41,8 @@ class LatencyParser:
         conv_list = list(set(conv_ids))
 
         print(
-            f"Fetching {len(conv_list)} conversation traces for detailed latency metrics..."
+            f"Fetching {len(conv_list)} conversation traces for detailed "
+            f"latency metrics..."
         )
 
         for i in range(0, len(conv_list), chunk_size):
@@ -82,7 +86,8 @@ class LatencyParser:
         llm_rows: List,
         context_key: str = "conversation_id",
     ) -> Dict[str, float]:
-        """Recursively walks span trees and accumulates granular component attributes."""
+        """Recursively walks span trees and accumulates granular component
+        attributes."""
         sums = {"LLM": 0.0, "Guardrail": 0.0, "Callback": 0.0}
         for s in spans:
             name = s.get("name")
@@ -164,7 +169,8 @@ class LatencyParser:
     def build_summary_df(
         df_d: pd.DataFrame, group_cols: List[str]
     ) -> pd.DataFrame:
-        """Aggregates a detailed DataFrame into counts and latency percentiles."""
+        """Aggregates a detailed DataFrame into counts and latency
+        percentiles."""
         if df_d.empty:
             return pd.DataFrame(
                 columns=group_cols
@@ -205,7 +211,8 @@ class LatencyParser:
     def _build_llm_summary_df(
         df_d: pd.DataFrame, group_cols: List[str]
     ) -> pd.DataFrame:
-        """Aggregates a detailed LLM DataFrame into counts, percentiles, and average tokens."""
+        """Aggregates a detailed LLM DataFrame into counts, percentiles, and
+        average tokens."""
         if df_d.empty:
             return pd.DataFrame(
                 columns=group_cols
@@ -259,8 +266,13 @@ class LatencyParser:
         Extracts execution traces from Conversation history objects.
 
         Args:
-            traces: A dictionary mapping `{conversation_id: Conversation object dict}`.
-            context_type: Whether the `context_id` should represent the native `conversation_id` or an `eval_result_id`. Currently defaults to mapping conversation_ids natively, as eval routing expects EvalUtils to coordinate the span tree walk directly for synchronized sequence generation.
+            traces: A dictionary mapping `{conversation_id: Conversation
+                object dict}`.
+            context_type: Whether the `context_id` should represent the
+                native `conversation_id` or an `eval_result_id`. Currently
+                defaults to mapping conversation_ids natively, as eval routing
+                expects EvalUtils to coordinate the span tree walk directly for
+                synchronized sequence generation.
 
         Returns:
             Dictionary mapped to generic 6 Pandas DataFrames.
@@ -278,7 +290,8 @@ class LatencyParser:
             for turn_idx, t in enumerate(conv_turns):
                 root = t.get("root_span", {})
                 if root:
-                    # In a generic conversation context, we use the conversation_id and absolute turn index as the link
+                    # In a generic conversation context, we use the
+                    # conversation_id and absolute turn index as the link
                     _ = LatencyParser._process_spans(
                         [root],
                         cid,

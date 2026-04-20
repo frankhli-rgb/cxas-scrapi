@@ -12,15 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-from unittest.mock import patch, MagicMock
 import argparse
-import os
-import subprocess
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from cxas_scrapi.core.github import (
-    _get_github_details,
     _auto_setup_wif,
+    _get_github_details,
     init_github_action,
 )
 
@@ -50,10 +49,11 @@ def test_get_github_details_fail():
 
 
 def test_auto_setup_wif_success():
-    with patch("subprocess.check_output") as mock_output, patch(
-        "subprocess.run"
-    ) as mock_run, patch("subprocess.check_call") as mock_call:
-
+    with (
+        patch("subprocess.check_output") as mock_output,
+        patch("subprocess.run") as mock_run,
+        patch("subprocess.check_call") as mock_call,
+    ):
         mock_output.return_value = "123456789\n"
         mock_run.return_value.returncode = 1  # describe fails, force creation
 
@@ -61,7 +61,7 @@ def test_auto_setup_wif_success():
 
         assert (
             wip
-            == "projects/123456789/locations/global/workloadIdentityPools/github-actions-pool-scrapi/providers/github-provider"
+            == "projects/123456789/locations/global/workloadIdentityPools/github-actions-pool-scrapi/providers/github-provider"  # noqa: E501
         )
         assert sa == "github-actions-sa@my-project.iam.gserviceaccount.com"
 
@@ -87,10 +87,11 @@ def test_init_github_action_auto_create():
         github_repo="owner/repo",
     )
 
-    with patch("cxas_scrapi.core.github._auto_setup_wif") as mock_setup, patch(
-        "builtins.open", MagicMock()
-    ), patch("os.chmod") as mock_chmod:
-
+    with (
+        patch("cxas_scrapi.core.github._auto_setup_wif") as mock_setup,
+        patch("builtins.open", MagicMock()),
+        patch("os.chmod"),
+    ):
         mock_setup.return_value = ("mock-wip", "mock-sa")
         init_github_action(args)
 
@@ -119,6 +120,9 @@ def test_init_github_action_missing_wif():
 
     with pytest.raises(
         ValueError,
-        match="Either provide --workload_identity_provider and --service_account, or use --auto-create-wif",
+        match=(
+            "Either provide --workload_identity_provider and "
+            "--service_account, or use --auto-create-wif"
+        ),
     ):
         init_github_action(args)

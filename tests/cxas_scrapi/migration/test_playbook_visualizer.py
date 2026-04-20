@@ -14,7 +14,6 @@
 
 """Unit tests for PlaybookTreeVisualizer."""
 
-import pytest
 from rich.console import Console
 from rich.tree import Tree
 
@@ -35,17 +34,13 @@ FULL_PB = {
     "inputParameterDefinitions": [
         {
             "name": "user_id",
-            "typeSchema": {
-                "inlineSchema": {"type": "STRING"}
-            },
+            "typeSchema": {"inlineSchema": {"type": "STRING"}},
         }
     ],
     "outputParameterDefinitions": [
         {
             "name": "result",
-            "typeSchema": {
-                "inlineSchema": {"type": "BOOLEAN"}
-            },
+            "typeSchema": {"inlineSchema": {"type": "BOOLEAN"}},
         }
     ],
     "instruction": {
@@ -53,15 +48,11 @@ FULL_PB = {
             {"text": "Greet the user."},
             {
                 "text": "Transfer to ${FLOW:Billing Flow}.",
-                "steps": [
-                    {"text": "If billing, use ${TOOL:BillingTool}."}
-                ],
+                "steps": [{"text": "If billing, use ${TOOL:BillingTool}."}],
             },
         ]
     },
-    "codeBlock": {
-        "code": "def helper():\n    return True\n"
-    },
+    "codeBlock": {"code": "def helper():\n    return True\n"},
 }
 
 
@@ -136,9 +127,7 @@ class TestPlaybookTreeVisualizer:
         pb = {
             "displayName": "Session PB",
             "instruction": {
-                "steps": [
-                    {"text": "Check $session.params.flag value."}
-                ]
+                "steps": [{"text": "Check $session.params.flag value."}]
             },
         }
         rendered = _render(PlaybookTreeVisualizer(pb).build_tree())

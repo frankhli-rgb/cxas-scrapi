@@ -45,8 +45,15 @@ KEY PATTERNS DEMONSTRATED:
 """
 
 import re
-from typing import Iterator, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
+if TYPE_CHECKING:
+    from cxas_scrapi.utils.callback_libs import (
+        CallbackContext,
+        LlmRequest,
+        LlmResponse,
+        Part,
+    )
 
 # -------------------------------------------------------------------------
 # SILENCE HANDLING HELPERS
@@ -64,6 +71,7 @@ from typing import Iterator, Optional
 #   3. no_input_counter tracks how many consecutive silences (1st, 2nd, 3rd)
 #   4. After 3 silences, end the session gracefully
 # -------------------------------------------------------------------------
+
 
 def is_user_inactive(contents: list) -> bool:
     """Check if the latest user message is a 'no activity' silence signal."""
@@ -95,15 +103,21 @@ def get_reversed_agent_messages(contents: list) -> Iterator[str]:
 # -------------------------------------------------------------------------
 ESCALATION_MAP = {
     "escalate": {
-        "text": "I understand. Let me connect you with a specialist who can help. Please hold for a moment.",
+        "text": (
+            "I understand. Let me connect you with a specialist who can help. "
+            "Please hold for a moment."
+        ),
         "payload": {
-            "escalation_reason": "_escalation_reason",   # read from state
-            "main_topic": "_escalation_topic",            # read from state
+            "escalation_reason": "_escalation_reason",  # read from state
+            "main_topic": "_escalation_topic",  # read from state
             "summary": "Customer requested escalation",
         },
     },
     "api_failure_escalate": {
-        "text": "I'm sorry, but I'm experiencing a technical issue. Let me transfer you to a representative who can assist you directly.",
+        "text": (
+            "I'm sorry, but I'm experiencing a technical issue. Let me "
+            "transfer you to a representative who can assist you directly."
+        ),
         "payload": {
             "escalation_reason": "System API failure",
             "main_topic": "technical",
@@ -113,7 +127,9 @@ ESCALATION_MAP = {
 }
 
 
-def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest) -> Optional[LlmResponse]:
+def before_model_callback(
+    callback_context: CallbackContext, llm_request: LlmRequest
+) -> Optional[LlmResponse]:
     state = callback_context.state
 
     # -------------------------------------------------------------------------
@@ -132,12 +148,13 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
     for part in callback_context.get_last_user_input():
         if part.text == "<event>session start</event>":
             greeting = (
-                "Hi, I am your virtual assistant. "
-                "How can I help you today?"
+                "Hi, I am your virtual assistant. How can I help you today?"
             )
-            return LlmResponse.from_parts(parts=[
-                Part.from_text(text=greeting),
-            ])
+            return LlmResponse.from_parts(
+                parts=[
+                    Part.from_text(text=greeting),
+                ]
+            )
 
     # -------------------------------------------------------------------------
     # SILENCE HANDLING: Detect "no user activity" and respond deterministically.
@@ -154,29 +171,48 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
             state["no_input_counter"] = str(no_input_counter)
 
             if no_input_counter < 3:
-                reversed_msgs = get_reversed_agent_messages(llm_request.contents)
+                reversed_msgs = get_reversed_agent_messages(
+                    llm_request.contents
+                )
                 if no_input_counter == 1:
                     last_msg = next(reversed_msgs, "How can I help you?")
-                    return LlmResponse.from_parts(parts=[
-                        Part.from_text(text=f"Sorry, I didn't hear anything. {last_msg}")
-                    ])
+                    return LlmResponse.from_parts(
+                        parts=[
+                            Part.from_text(
+                                text=(
+                                    f"Sorry, I didn't hear anything. {last_msg}"
+                                )
+                            )
+                        ]
+                    )
                 else:
-                    next(reversed_msgs, None)  # skip the "Sorry, I didn't hear" repeat
+                    next(
+                        reversed_msgs, None
+                    )  # skip the "Sorry, I didn't hear" repeat
                     original_msg = next(reversed_msgs, "How can I help you?")
-                    return LlmResponse.from_parts(parts=[
-                        Part.from_text(text=f"I still can't hear you. {original_msg}")
-                    ])
+                    return LlmResponse.from_parts(
+                        parts=[
+                            Part.from_text(
+                                text=f"I still can't hear you. {original_msg}"
+                            )
+                        ]
+                    )
             else:
-                return LlmResponse.from_parts(parts=[
-                    Part.from_text(
-                        text="I'm sorry, but I'm unable to hear you. "
-                             "Please try calling again later. Have a great day."
-                    ),
-                    Part.from_function_call(
-                        name="end_session",
-                        args={"session_escalated": False, "reason": "no_input_limit"},
-                    ),
-                ])
+                return LlmResponse.from_parts(
+                    parts=[
+                        Part.from_text(
+                            text="I'm sorry, but I'm unable to hear you. "
+                            "Please try calling again later. Have a great day."
+                        ),
+                        Part.from_function_call(
+                            name="end_session",
+                            args={
+                                "session_escalated": False,
+                                "reason": "no_input_limit",
+                            },
+                        ),
+                    ]
+                )
         else:
             # User spoke — reset the silence counter
             state["no_input_counter"] = "0"
@@ -191,10 +227,10 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
         state["api_failed"] = "false"  # clear to prevent re-firing
         trigger_value = "api_failure_escalate"
     else:
-        # -------------------------------------------------------------------------
+        # ----------------------------------------------------------------------
         # READ TRIGGER: The instruction told the LLM to call set_session_state
         # with _action_trigger = "escalate". We read and CLEAR it immediately.
-        # -------------------------------------------------------------------------
+        # ----------------------------------------------------------------------
         trigger_value = state.get("_action_trigger", "")
         if trigger_value:
             state["_action_trigger"] = ""  # clear to prevent re-firing
@@ -228,14 +264,16 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
     # including a text part, the customer always hears a farewell message.
     # No need for a has_text check — we always provide text here.
     # -------------------------------------------------------------------------
-    return LlmResponse.from_parts(parts=[
-        Part.from_text(text=escalation["text"]),
-        Part.from_function_call(
-            name="payload_update_tool",
-            args=payload_args,
-        ),
-        Part.from_function_call(
-            name="end_session",
-            args={"session_escalated": True},
-        ),
-    ])
+    return LlmResponse.from_parts(
+        parts=[
+            Part.from_text(text=escalation["text"]),
+            Part.from_function_call(
+                name="payload_update_tool",
+                args=payload_args,
+            ),
+            Part.from_function_call(
+                name="end_session",
+                args={"session_escalated": True},
+            ),
+        ]
+    )

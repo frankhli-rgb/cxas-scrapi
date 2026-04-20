@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import glob
+import os
+
 import pytest
+
 from cxas_scrapi.utils.eval_utils import EvalUtils
+
 
 def pytest_generate_tests(metafunc):
     """
@@ -25,12 +28,18 @@ def pytest_generate_tests(metafunc):
         eval_dir = metafunc.config.getoption("eval_dir")
         if eval_dir:
             target_dir = os.path.abspath(eval_dir)
-            yaml_files = sorted(glob.glob(os.path.join(target_dir, "*.yaml")) +
-                                glob.glob(os.path.join(target_dir, "*.yml")))
-            metafunc.parametrize("yaml_path", yaml_files, ids=lambda x: os.path.basename(x))
+            yaml_files = sorted(
+                glob.glob(os.path.join(target_dir, "*.yaml"))
+                + glob.glob(os.path.join(target_dir, "*.yml"))
+            )
+            metafunc.parametrize(
+                "yaml_path", yaml_files, ids=lambda x: os.path.basename(x)
+            )
         else:
-            # Fallback if no eval-dir is provided, parameterize with empty list or error
+            # Fallback if no eval-dir is provided, parameterize with empty list
+            # or error
             metafunc.parametrize("yaml_path", [])
+
 
 @pytest.mark.online
 def test_evaluation_from_yaml(yaml_path, request):
@@ -51,24 +60,25 @@ def test_evaluation_from_yaml(yaml_path, request):
     evaluations = eval_utils.load_golden_evals_from_yaml(yaml_path)
     if reload:
         for evaluation in evaluations:
-            eval_utils.update_evaluation(
-                evaluation=evaluation, app_id=app_id
-            )
-
+            eval_utils.update_evaluation(evaluation=evaluation, app_id=app_id)
 
     evals_to_run = [evaluation["displayName"] for evaluation in evaluations]
 
     # Run Evals
     responses = eval_utils.run_evaluation(evaluations=evals_to_run)
-    if hasattr(responses, 'result'):
+    if hasattr(responses, "result"):
         eval_response = responses.result()
     else:
         eval_response = responses
 
     # Wait for completion and get results
-    results = eval_utils.wait_for_run_and_get_results(eval_response.evaluation_run)
+    results = eval_utils.wait_for_run_and_get_results(
+        eval_response.evaluation_run
+    )
 
-    assert len(results) > 0, f"No evaluation results found for run {eval_response.evaluation_run}"
+    assert len(results) > 0, (
+        f"No evaluation results found for run {eval_response.evaluation_run}"
+    )
 
     # Each result should have an evaluation_status.
     failed_results = []
@@ -82,4 +92,6 @@ def test_evaluation_from_yaml(yaml_path, request):
         else:
             print(f"[PASS] {display_info}")
 
-    assert not failed_results, f"The following results failed:\n" + "\n".join(failed_results)
+    assert not failed_results, "The following results failed:\n" + "\n".join(
+        failed_results
+    )

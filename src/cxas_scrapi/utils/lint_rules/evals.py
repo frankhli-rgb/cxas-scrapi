@@ -332,10 +332,7 @@ class GoldenMissingAgentField(Rule):
                     " flagged as UNEXPECTED"
                     " RESPONSE"
                 ),
-                fix=(
-                    "Add an 'agent' field with"
-                    " the expected response text"
-                ),
+                fix=("Add an 'agent' field with the expected response text"),
             )
             for conv, i, turn in _iter_golden_turns(data)
             if "user" in turn and "agent" not in turn
@@ -476,15 +473,11 @@ class InvalidMatchType(Rule):
                     ):
                         continue
                     suggestion = self.COMMON_TYPOS.get(match_type)
-                    valid_vals = ", ".join(
-                        sorted(self.VALID_MATCH_TYPES)
-                    )
+                    valid_vals = ", ".join(sorted(self.VALID_MATCH_TYPES))
                     fix = (
-                        f'Did you mean'
-                        f' "{suggestion}"?'
+                        f'Did you mean "{suggestion}"?'
                         if suggestion
-                        else f"Valid values:"
-                        f" {valid_vals}"
+                        else f"Valid values: {valid_vals}"
                     )
                     results.append(
                         self.make_result(

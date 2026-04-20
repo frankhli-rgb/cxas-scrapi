@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from cxas_scrapi.core.guardrails import Guardrails
 
 
@@ -86,7 +86,7 @@ def test_create_guardrail(mock_client_cls, mock_req_cls, mock_gr_cls):
         "model_safety": {"safety_settings": []},
         "display_name": "ignore_me",
     }
-    res = grs.create_guardrail("gr_id", "my_gr", payload=payload)
+    grs.create_guardrail("gr_id", "my_gr", payload=payload)
     mock_client.create_guardrail.assert_called_once()
 
     args = mock_client.create_guardrail.call_args[1]["request"]
@@ -113,11 +113,13 @@ def test_update_guardrail(mock_client_cls, mock_req_cls, mock_gr_cls):
     mock_gr_cls.side_effect = side_effect
 
     grs = Guardrails("projects/p/locations/l/apps/A")
-    res = grs.update_guardrail("gr_id", action="DENY")
+    grs.update_guardrail("gr_id", action="DENY")
     mock_client.update_guardrail.assert_called_once()
 
     args = mock_client.update_guardrail.call_args[1]["request"]
-    assert args.guardrail.name == "projects/p/locations/l/apps/A/guardrails/gr_id"
+    assert (
+        args.guardrail.name == "projects/p/locations/l/apps/A/guardrails/gr_id"
+    )
     assert args.guardrail.action == "DENY"
 
 

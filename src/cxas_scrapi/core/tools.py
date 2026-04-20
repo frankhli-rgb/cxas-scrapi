@@ -14,19 +14,20 @@
 
 """Core Tools class for CXAS Scrapi."""
 
-from typing import Dict, List, Any, Optional
-from google.protobuf import struct_pb2, json_format, field_mask_pb2
+from typing import Any, Dict, List, Optional
+
+import requests
+import yaml
 from google.cloud.ces_v1beta import (
-    types,
-    ToolServiceClient,
     AgentServiceClient,
+    ToolServiceClient,
     types,
 )
+from google.protobuf import field_mask_pb2
 from google.protobuf.json_format import MessageToDict
 
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.variables import Variables
-import yaml
 
 
 class Tools(Apps):
@@ -55,7 +56,7 @@ class Tools(Apps):
             **kwargs,
         )
         self.app_name = app_name
-        self.app_id = app_name.split("/")[-1]
+        self.app_id = app_name.rsplit("/", maxsplit=1)[-1]
         self.resource_type = "tools"
         self.client = AgentServiceClient(
             credentials=self.creds,
@@ -89,10 +90,10 @@ class Tools(Apps):
         parsed_tools: Dict[str, str] = {}
         try:
             schema = yaml.safe_load(schema_str)
-            for path, methods in schema.get("paths", {}).items():
+            for _path, methods in schema.get("paths", {}).items():
                 if not isinstance(methods, dict):
                     continue
-                for method, details in methods.items():
+                for _method, details in methods.items():
                     if not isinstance(details, dict):
                         continue
                     op_id = details.get("operationId")
@@ -108,7 +109,8 @@ class Tools(Apps):
                             )
         except Exception as e:
             print(
-                f"[WARNING] Failed to parse OpenAPI schema for {display_name}: {e}"
+                f"[WARNING] Failed to parse OpenAPI schema for "
+                f"{display_name}: {e}"
             )
         return parsed_tools
 
@@ -144,7 +146,8 @@ class Tools(Apps):
                 app_default_vars_cache[var.name] = actual_data
 
             if isinstance(variables, list):
-                # If variables is a list, filter the app's default variables by this list
+                # If variables is a list, filter the app's default variables
+                # by this list
                 for var_name in variables:
                     if var_name in app_default_vars_cache:
                         final_variables[var_name] = app_default_vars_cache[
@@ -152,7 +155,8 @@ class Tools(Apps):
                         ]
                     else:
                         print(
-                            f"[WARNING] App variable '{var_name}' requested but not found in app."
+                            f"[WARNING] App variable '{var_name}' requested "
+                            f"but not found in app."
                         )
             else:
                 # No variables specified, use default variable values
@@ -170,7 +174,8 @@ class Tools(Apps):
 
         for tool in tools:
             if self._is_toolset(tool.name):
-                # Try to parse OpenAPI toolsets locally to avoid excessive API calls
+                # Try to parse OpenAPI toolsets locally to avoid excessive
+                # API calls
                 if getattr(tool, "open_api_toolset", None):
                     schema_str = getattr(
                         tool.open_api_toolset, "open_api_schema", None
@@ -193,11 +198,10 @@ class Tools(Apps):
                             tools_dict[toolset_tool.name] = (
                                 toolset_tool.display_name
                             )
+            elif reverse:
+                tools_dict[tool.display_name] = tool.name
             else:
-                if reverse:
-                    tools_dict[tool.display_name] = tool.name
-                else:
-                    tools_dict[tool.name] = tool.display_name
+                tools_dict[tool.name] = tool.display_name
 
         return tools_dict
 
@@ -236,8 +240,9 @@ class Tools(Apps):
     ) -> Any:
         """Creates a new tool or toolset.
 
-        If tool_type implies a toolset, it creates a Toolset wrapper (e.g. open_api_toolset).
-        Otherwise it creates a standard Tool wrapper (e.g. python_function).
+        If tool_type implies a toolset, it creates a Toolset wrapper
+        (e.g. open_api_toolset). Otherwise it creates a standard Tool wrapper
+        (e.g. python_function).
         """
         is_toolset = tool_type in [
             "open_api_toolset",
@@ -319,18 +324,18 @@ class Tools(Apps):
             args: Dictionary of arguments for the tool.
             variables: Can be:
                 - None: Fetches and passes ALL variables from the app.
-                - List[str]: Fetches variables from the app and filters by this list of names.
-                - Dict[str, Any]: Uses the provided dictionary directly (e.g. from Evals).
-            context: ToolContext object available to the Python Function tool. If context is
-                     provided, variables will be ignored.
+                - List[str]: Fetches variables from the app and filters by
+                  this list of names.
+                - Dict[str, Any]: Uses the provided dictionary directly
+                  (e.g. from Evals).
+            context: ToolContext object available to the Python Function tool.
+                     If context is provided, variables will be ignored.
 
         Returns:
             The tool execution response (JSON or Object).
         """
         # Use HTTP REST request instead of SDK because the current SDK version
         # is missing the 'variables' field in ExecuteToolRequest proto
-        import requests
-
         url = f"https://ces.googleapis.com/v1beta/{self.app_name}:executeTool"
 
         headers = {
@@ -346,7 +351,8 @@ class Tools(Apps):
 
         if not tool_name:
             raise ValueError(
-                f"Tool '{tool_display_name}' not found in App '{self.app_name}'. "
+                f"Tool '{tool_display_name}' not found in App "
+                f"'{self.app_name}'. "
             )
 
         if "toolsets/" in tool_name and "/tools/" in tool_name:

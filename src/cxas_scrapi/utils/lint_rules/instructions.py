@@ -270,9 +270,7 @@ class HardcodedData(Rule):
                             file=rel,
                             line=i,
                             message=(
-                                f"Possible hardcoded"
-                                f" {label}:"
-                                f" '{m.group()}'"
+                                f"Possible hardcoded {label}: '{m.group()}'"
                             ),
                             fix=(
                                 "Data should come from"

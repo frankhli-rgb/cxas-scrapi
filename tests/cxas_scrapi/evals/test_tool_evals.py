@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-from pydantic import ValidationError
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
+import pytest
+from pydantic import ValidationError
+
 from cxas_scrapi.evals.tool_evals import (
-    Operator,
+    SUMMARY_SCHEMA_COLUMNS,
     Expectation,
+    Operator,
     ToolEvals,
     ToolTestCase,
 )
@@ -45,9 +48,7 @@ def test_tool_evals_init(mock_variables, mock_tools):
     tu = ToolEvals(app_name="projects/p/locations/l/apps/test_app", creds=None)
     assert tu.app_name == "projects/p/locations/l/apps/test_app"
     assert tu.tool_map == {"tool1": "id1"}
-    mock_tools_instance.get_tools_map.assert_called_once_with(
-        reverse=True
-    )
+    mock_tools_instance.get_tools_map.assert_called_once_with(reverse=True)
 
 
 def test_parse_dict_input():
@@ -322,7 +323,9 @@ def test_run_tool_tests(mock_apps, mock_variables, mock_tools):
 @patch("cxas_scrapi.evals.tool_evals.Apps")
 def test_run_tool_tests_with_context(mock_apps, mock_variables, mock_tools):
     mock_tools_instance = mock_tools.return_value
-    mock_tools_instance.get_tools_map.return_value = {"tool1": "projects/p/locations/l/apps/test_app/tools/tool1"}
+    mock_tools_instance.get_tools_map.return_value = {
+        "tool1": "projects/p/locations/l/apps/test_app/tools/tool1"
+    }
     mock_tools_instance.execute_tool.return_value = {
         "response": {"status": "OK"}
     }
@@ -368,7 +371,9 @@ def test_run_tool_tests_with_context(mock_apps, mock_variables, mock_tools):
 @patch("cxas_scrapi.evals.tool_evals.Tools")
 @patch("cxas_scrapi.evals.tool_evals.Variables")
 @patch("cxas_scrapi.evals.tool_evals.Apps")
-def test_run_tool_tests_openapi_with_context_fails(mock_apps, mock_variables, mock_tools):
+def test_run_tool_tests_openapi_with_context_fails(
+    mock_apps, mock_variables, mock_tools
+):
     mock_tools_instance = mock_tools.return_value
     mock_tools_instance.get_tools_map.return_value = {
         "tool1": "toolsets/my_openapi_tool"
@@ -399,47 +404,69 @@ def test_run_tool_tests_openapi_with_context_fails(mock_apps, mock_variables, mo
     # execute_tool should not be called
     mock_tools_instance.execute_tool.assert_not_called()
 
+
 def test_calculate_stats():
-    import pandas as pd
     tu = ToolEvals.__new__(ToolEvals)
-    df = pd.DataFrame([
-        {"status": "PASSED", "latency (ms)": 100, "app_display_name": "App 1", "tester": "user@google.com"},
-        {"status": "FAILED", "latency (ms)": 200, "app_display_name": "App 1", "tester": "user@google.com"},
-        {"status": "PASSED", "latency (ms)": 300, "app_display_name": "App 1", "tester": "user@google.com"},
-    ])
-    
+    df = pd.DataFrame(
+        [
+            {
+                "status": "PASSED",
+                "latency (ms)": 100,
+                "app_display_name": "App 1",
+                "tester": "user@google.com",
+            },
+            {
+                "status": "FAILED",
+                "latency (ms)": 200,
+                "app_display_name": "App 1",
+                "tester": "user@google.com",
+            },
+            {
+                "status": "PASSED",
+                "latency (ms)": 300,
+                "app_display_name": "App 1",
+                "tester": "user@google.com",
+            },
+        ]
+    )
+
     stats = tu._calculate_stats(df)
-    
+
     assert stats.total_tests == 3
     assert stats.pass_count == 2
-    assert stats.pass_rate == 2/3
+    assert stats.pass_rate == 2 / 3
     assert stats.p50_latency_ms == 200.0
     assert stats.p90_latency_ms == 280.0
     assert stats.p99_latency_ms == 298.0
     assert stats.agent_name == "App 1"
     assert stats.tester == "user@google.com"
 
+
 def test_calculate_stats_empty():
-    import pandas as pd
     tu = ToolEvals.__new__(ToolEvals)
     df = pd.DataFrame()
-    
+
     stats = tu._calculate_stats(df)
     assert stats.total_tests == 0
     assert stats.pass_count == 0
     assert stats.pass_rate == 0.0
 
+
 def test_generate_report():
-    import pandas as pd
-    from cxas_scrapi.evals.tool_evals import SUMMARY_SCHEMA_COLUMNS
-    
     tu = ToolEvals.__new__(ToolEvals)
-    df = pd.DataFrame([
-        {"status": "PASSED", "latency (ms)": 100, "app_display_name": "App 1", "tester": "user@google.com"},
-    ])
-    
+    df = pd.DataFrame(
+        [
+            {
+                "status": "PASSED",
+                "latency (ms)": 100,
+                "app_display_name": "App 1",
+                "tester": "user@google.com",
+            },
+        ]
+    )
+
     report_df = tu.generate_report(df)
-    
+
     assert list(report_df.columns) == SUMMARY_SCHEMA_COLUMNS
     assert len(report_df) == 1
     assert report_df.iloc[0]["total_tests"] == 1

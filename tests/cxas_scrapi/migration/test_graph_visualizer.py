@@ -14,7 +14,6 @@
 
 """Unit tests for HighLevelGraphVisualizer."""
 
-import pytest
 import graphviz
 
 from cxas_scrapi.migration.graph_visualizer import HighLevelGraphVisualizer
@@ -38,9 +37,7 @@ MINIMAL_DATA: dict = {
 }
 
 DATA_WITH_PLAYBOOK = {
-    "agent": {
-        "startPlaybook": f"projects/p/l/a/playbooks/{PB_UUID}"
-    },
+    "agent": {"startPlaybook": f"projects/p/l/a/playbooks/{PB_UUID}"},
     "playbooks": [
         {
             "playbook": {
@@ -59,9 +56,7 @@ DATA_WITH_PLAYBOOK = {
 }
 
 DATA_WITH_FLOW = {
-    "agent": {
-        "startFlow": f"projects/p/l/a/flows/{FLOW_UUID}"
-    },
+    "agent": {"startFlow": f"projects/p/l/a/flows/{FLOW_UUID}"},
     "playbooks": [],
     "flows": [
         {
@@ -80,18 +75,14 @@ DATA_WITH_FLOW = {
 }
 
 DATA_WITH_PLAYBOOK_TO_FLOW = {
-    "agent": {
-        "startPlaybook": f"projects/p/l/a/playbooks/{PB_UUID}"
-    },
+    "agent": {"startPlaybook": f"projects/p/l/a/playbooks/{PB_UUID}"},
     "playbooks": [
         {
             "playbook": {
                 "name": f"projects/p/l/a/playbooks/{PB_UUID}",
                 "displayName": "Root PB",
                 "playbookRoutes": [],
-                "flowRoutes": [
-                    {"flowId": FLOW_UUID}
-                ],
+                "flowRoutes": [{"flowId": FLOW_UUID}],
                 "referencedTools": [],
                 "instruction": {"steps": []},
             }
@@ -158,9 +149,7 @@ class TestHighLevelGraphVisualizer:
 
     def test_tool_node_rendered_as_dashed(self):
         data = {
-            "agent": {
-                "startPlaybook": f"projects/p/l/a/playbooks/{PB_UUID}"
-            },
+            "agent": {"startPlaybook": f"projects/p/l/a/playbooks/{PB_UUID}"},
             "playbooks": [
                 {
                     "playbook": {
@@ -191,9 +180,7 @@ class TestHighLevelGraphVisualizer:
 
     def test_end_session_node_added_when_referenced(self):
         data = {
-            "agent": {
-                "startFlow": f"projects/p/l/a/flows/{FLOW_UUID}"
-            },
+            "agent": {"startFlow": f"projects/p/l/a/flows/{FLOW_UUID}"},
             "playbooks": [],
             "flows": [
                 {
@@ -222,9 +209,7 @@ class TestHighLevelGraphVisualizer:
 
     def test_show_code_blocks_adds_inline_functions(self):
         data = {
-            "agent": {
-                "startPlaybook": f"projects/p/l/a/playbooks/{PB_UUID}"
-            },
+            "agent": {"startPlaybook": f"projects/p/l/a/playbooks/{PB_UUID}"},
             "playbooks": [
                 {
                     "playbook": {
@@ -234,9 +219,7 @@ class TestHighLevelGraphVisualizer:
                         "flowRoutes": [],
                         "referencedTools": [],
                         "instruction": {"steps": []},
-                        "codeBlock": {
-                            "code": "def my_helper():\n    pass\n"
-                        },
+                        "codeBlock": {"code": "def my_helper():\n    pass\n"},
                     }
                 }
             ],
@@ -275,9 +258,7 @@ class TestHighLevelGraphVisualizer:
 
     def test_webhook_in_flow_fulfillment_rendered(self):
         data = {
-            "agent": {
-                "startFlow": f"projects/p/l/a/flows/{FLOW_UUID}"
-            },
+            "agent": {"startFlow": f"projects/p/l/a/flows/{FLOW_UUID}"},
             "playbooks": [],
             "flows": [
                 {
@@ -303,9 +284,7 @@ class TestHighLevelGraphVisualizer:
             "tools": [],
             "webhooks": [
                 {
-                    "name": (
-                        f"projects/p/l/a/webhooks/{WEBHOOK_UUID}"
-                    ),
+                    "name": (f"projects/p/l/a/webhooks/{WEBHOOK_UUID}"),
                     "displayName": "BackendWebhook",
                 }
             ],

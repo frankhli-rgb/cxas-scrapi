@@ -14,7 +14,10 @@
 
 """Unit tests for the CallbackEvals testing utility."""
 
+from unittest.mock import MagicMock, patch
+
 import pandas as pd
+
 from cxas_scrapi.evals.callback_evals import CallbackEvals
 
 
@@ -90,8 +93,6 @@ def test_run_callback_tests_failure(tmp_path):
 
 
 def test_test_single_callback_for_agent(tmp_path):
-    from unittest.mock import patch, MagicMock
-
     utils = CallbackEvals()
 
     test_file = tmp_path / "test_cb.py"

@@ -14,14 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-import sys
 import re
+import sys
 from typing import Any, Dict, List, Optional
 
-import pandas as pd
 import gspread
+import pandas as pd
 from gspread_dataframe import set_with_dataframe
+
 from cxas_scrapi.core.common import Common
 
 SHEETS_SCOPE = [
@@ -63,8 +63,10 @@ class GoogleSheetsUtils(Common):
             self._handle_api_error(e)
 
     def _preflight_api_checks(self):
-        """Runs a lightweight test to ensure Drive APIs are enabled on the quota project.
-        Skips if running in Google Colab since Colab's native auth handles this differently.
+        """Runs a lightweight test to ensure Drive APIs are enabled on the
+        quota project.
+        Skips if running in Google Colab since Colab's native auth handles
+        this differently.
         """
         if not self.sheets_client:
             return
@@ -77,7 +79,8 @@ class GoogleSheetsUtils(Common):
             raise e
 
     def _handle_api_error(self, e: Exception) -> None:
-        """Parses common Drive/Sheets API errors and raises a helpful exception."""
+        """Parses common Drive/Sheets API errors and raises a helpful
+        exception."""
         error_msg = str(e)
 
         if "has not been used in project" in error_msg:
@@ -87,26 +90,30 @@ class GoogleSheetsUtils(Common):
             )
 
             raise PermissionError(
-                f"\n{'='*80}\n"
+                f"\n{'=' * 80}\n"
                 f"🚀 API ENABLEMENT REQUIRED 🚀\n"
-                f"A necessary Google API (Drive or Sheets) is disabled on your Google Cloud Project."
+                f"A necessary Google API (Drive or Sheets) is disabled on "
+                f"your Google Cloud Project."
                 f"{link_text}"
-                f"After enabling, please wait 2-3 minutes for the changes to propagate.\n"
-                f"{'='*80}\n"
+                f"After enabling, please wait 2-3 minutes for the changes "
+                f"to propagate.\n"
+                f"{'=' * 80}\n"
             ) from e
 
         elif (
             "insufficient authentication scopes" in error_msg.lower()
             or "403" in error_msg
         ):
-            # Note: colab uses different auth, so this error mostly occurs for local ADC
+            # Note: colab uses different auth, so this error mostly occurs for
+            # local ADC
             raise PermissionError(
-                f"\n{'='*80}\n"
+                f"\n{'=' * 80}\n"
                 f"🚀 AUTHENTICATION FIX REQUIRED 🚀\n"
-                f"Your Application Default Credentials (ADC) lack the required Google Sheets scopes.\n"
+                f"Your Application Default Credentials (ADC) lack the "
+                f"required Google Sheets scopes.\n"
                 f"Please run the following command in your terminal:\n\n"
                 f'    gcloud auth application-default login --scopes="openid,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/sqlservice.login,https://www.googleapis.com/auth/drive,https://spreadsheets.google.com/feeds"\n\n'
-                f"{'='*80}\n"
+                f"{'=' * 80}\n"
             ) from e
         else:
             raise e
@@ -118,14 +125,16 @@ class GoogleSheetsUtils(Common):
 
         Args:
             sheet_name: The name of the Google Sheet document.
-            worksheet_name: The name of the specific worksheet tab. If None, defaults to the first sheet.
+            worksheet_name: The name of the specific worksheet tab. If None,
+                defaults to the first sheet.
 
         Returns:
             A pandas DataFrame containing the sheet data.
         """
         if not self.sheets_client:
             raise RuntimeError(
-                "Sheets client is not authorized. See earlier initialization errors."
+                "Sheets client is not authorized. See earlier "
+                "initialization errors."
             )
 
         try:
@@ -157,11 +166,13 @@ class GoogleSheetsUtils(Common):
         Args:
             dataframe: The pandas DataFrame to write.
             sheet_name: The name of the Google Sheet document.
-            worksheet_name: The name of the specific worksheet tab. If None, defaults to the first sheet.
+            worksheet_name: The name of the specific worksheet tab. If None,
+                defaults to the first sheet.
         """
         if not self.sheets_client:
             raise RuntimeError(
-                "Sheets client is not authorized. See earlier initialization errors."
+                "Sheets client is not authorized. See earlier "
+                "initialization errors."
             )
 
         try:
@@ -187,7 +198,8 @@ class GoogleSheetsUtils(Common):
         Args:
             dataframe: The pandas DataFrame to append.
             sheet_name: The name of the Google Sheet document.
-            worksheet_name: The name of the specific worksheet tab. If None, defaults to the first sheet.
+            worksheet_name: The name of the specific worksheet tab. If None,
+                defaults to the first sheet.
         """
         existing_df = self.sheets_to_dataframe(sheet_name, worksheet_name)
 

@@ -14,19 +14,19 @@
 
 """Utility functions for processing and generating CXAS Tool Tests."""
 
-from typing import Annotated, Any, Dict, List, Optional, NamedTuple
+import ast
+import enum
+import json
+import logging
 import os
 import time
 from datetime import datetime
-import yaml
-import json
-import logging
-import pandas as pd
-import enum
+from typing import Annotated, Any, Dict, List, NamedTuple, Optional
 
+import pandas as pd
+import yaml
 from google.protobuf.json_format import MessageToDict
 from jsonpath_ng import parse
-from proto.marshal.collections import maps, repeated
 from pydantic import (
     AliasChoices,
     AliasPath,
@@ -37,11 +37,11 @@ from pydantic import (
     model_validator,
 )
 
-from cxas_scrapi.core.common import Common
 from cxas_scrapi.core.apps import Apps
+from cxas_scrapi.core.common import Common
+from cxas_scrapi.core.conversation_history import ConversationHistory
 from cxas_scrapi.core.tools import Tools
 from cxas_scrapi.core.variables import Variables
-from cxas_scrapi.core.conversation_history import ConversationHistory
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +139,6 @@ class ToolEvals:
 
     @staticmethod
     def _parse_python_code(python_code: str) -> tuple[dict, list[str]]:
-        import ast
-
         try:
             tree = ast.parse(python_code)
         except SyntaxError:
@@ -245,7 +243,8 @@ class ToolEvals:
         return False
 
     def _parse_python_function(self, tool_dict: Dict) -> tuple[Dict, List[str]]:
-        """Parses a Python function tool for test template arguments and returns."""
+        """Parses a Python function tool for test template arguments and
+        returns."""
         template_args = {}
         expected_returns = []
 
@@ -280,10 +279,10 @@ class ToolEvals:
         if schema_str:
             try:
                 schema = yaml.safe_load(schema_str)
-                for path, methods in schema.get("paths", {}).items():
+                for _path, methods in schema.get("paths", {}).items():
                     if not isinstance(methods, dict):
                         continue
-                    for method, details in methods.items():
+                    for _method, details in methods.items():
                         if not isinstance(details, dict):
                             continue
                         op_id = details.get("operationId")
@@ -396,7 +395,8 @@ class ToolEvals:
             print(f"Skipping existing test file: {file_path}")
 
     def _mine_tool_data(self, limit: int) -> Dict[str, Dict[str, Any]]:
-        """Mines recent conversations for actual tool payloads to populate tests."""
+        """Mines recent conversations for actual tool payloads to populate
+        tests."""
         mined_data = {}
         try:
             history_client = ConversationHistory(
@@ -459,7 +459,9 @@ class ToolEvals:
                         name = call_info["name"]
                         response = turn_responses.get(tc_id, {})
 
-                        # Store if we don't have it yet, or if this one actually has a response payload and the old one didn't
+                        # Store if we don't have it yet, or if this one
+                        # actually has a response payload and the old one
+                        # didn't
                         if name not in mined_data or (
                             not mined_data[name].get("response") and response
                         ):
@@ -626,7 +628,7 @@ class ToolEvals:
                 continue
 
             if "toolsets/" in tool_id and test_case.context:
-                error = f"Context can only be specified for python tools."
+                error = "Context can only be specified for python tools."
                 print(f"FAILED: {error}")
                 results.append(
                     {
@@ -650,7 +652,8 @@ class ToolEvals:
                         final_variables[var_name] = app_vars_cache[var_name]
                     else:
                         print(
-                            f"[WARNING] App variable '{var_name}' requested but not found in app."
+                            f"[WARNING] App variable '{var_name}' requested "
+                            f"but not found in app."
                         )
                 else:
                     # User provided their own custom mock data
@@ -729,24 +732,28 @@ class ToolEvals:
         mine_tool_data: bool = False,
         mine_conversations_limit: int = 50,
     ) -> None:
-        """Generates configurable YAML test templates for tools defined in the app.
+        """Generates configurable YAML test templates for tools defined in
+        the app.
 
-        Parses the application's OpenAPI tool schemas or Python underlying functions
-        to try and intelligently scaffold the request arguments and expected responses.
+        Parses the application's OpenAPI tool schemas or Python underlying
+        functions to try and intelligently scaffold the request arguments and
+        expected responses.
 
         Args:
-            target_dir: The directory path where the generated YAML files will be saved.
-                Defaults to 'tool_tests'.
-            include_tools: An optional list of tool display names to restrict the
-                generation. If None, all tools in the app are evaluated.
-            exclude_tools: An optional list of tool display names (or prefixes) to exclude from
-                generation. Matches if a tool's display name starts with any string in this list.
-            overwrite: If True, existing YAML test templates in the target directory
-                will be overwritten. If False, existing files are skipped.
-            mine_tool_data: If True, queries recent conversations to populate generated
-                tests with real tool payload arguments.
-            mine_conversations_limit: The maximum number of conversations to scan when
-                mining real tool arguments.
+            target_dir: The directory path where the generated YAML files will
+                be saved. Defaults to 'tool_tests'.
+            include_tools: An optional list of tool display names to restrict
+                the generation. If None, all tools in the app are evaluated.
+            exclude_tools: An optional list of tool display names (or prefixes)
+                to exclude from generation. Matches if a tool's display name
+                starts with any string in this list.
+            overwrite: If True, existing YAML test templates in the target
+                directory will be overwritten. If False, existing files are
+                skipped.
+            mine_tool_data: If True, queries recent conversations to populate
+                generated tests with real tool payload arguments.
+            mine_conversations_limit: The maximum number of conversations to
+                scan when mining real tool arguments.
         """
         os.makedirs(target_dir, exist_ok=True)
 
@@ -770,7 +777,8 @@ class ToolEvals:
             try:
                 actual_tool_id = tool_id
                 if "toolsets/" in tool_id and "/tools/" in tool_id:
-                    # For tools inside a toolset, we need the toolset object to get the schema
+                    # For tools inside a toolset, we need the toolset object
+                    # to get the schema
                     actual_tool_id, _ = tool_id.split("/tools/")
 
                 tool_obj = self.tools_client.get_tool(actual_tool_id)
@@ -795,7 +803,9 @@ class ToolEvals:
                         )
                     ):
                         logger.info(
-                            f"Skipping test generation for '{display_name}' as it lacks a supported server-side execution implementation."
+                            f"Skipping test generation for '{display_name}' "
+                            f"as it lacks a supported server-side execution "
+                            f"implementation."
                         )
                         continue
 
@@ -895,7 +905,8 @@ class ToolEvals:
     @staticmethod
     def generate_report(results_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Generates a summary report DataFrame capturing key metrics from tool evaluation results.
+        Generates a summary report DataFrame capturing key metrics from tool
+        evaluation results.
         """
         stats = ToolEvals._calculate_stats(results_df)
 
@@ -944,6 +955,7 @@ class ToolTestCase(BaseModel):
     def validate_variables_and_context(self) -> "ToolTestCase":
         if self.variables and self.context:
             raise ValueError(
-                "A test case can provide either 'variables' or 'context', but not both."
+                "A test case can provide either 'variables' or 'context', "
+                "but not both."
             )
         return self

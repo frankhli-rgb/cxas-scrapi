@@ -316,9 +316,8 @@ for (
     _pfx,
     _resolve,
 ) in _RESOURCE_SCHEMAS:
-    def _make_init(
-        rid, rn, rd, rt, rp, rc, rpfx, rr
-    ):
+
+    def _make_init(rid, rn, rd, rt, rp, rc, rpfx, rr):
         def __init__(self):
             SchemaValid.__init__(
                 self,

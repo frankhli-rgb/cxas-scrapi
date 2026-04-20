@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from cxas_scrapi.core.versions import Versions
 
 
@@ -72,7 +72,10 @@ def test_get_version(mock_client_cls, mock_req_cls):
     res = v.get_version("v1")
     assert res.name == "projects/p/locations/l/apps/A/versions/v1"
     mock_client.get_app_version.assert_called_once()
-    assert mock_client.get_app_version.call_args[1]["request"].name == "projects/p/locations/l/apps/A/versions/v1"
+    assert (
+        mock_client.get_app_version.call_args[1]["request"].name
+        == "projects/p/locations/l/apps/A/versions/v1"
+    )
 
 
 @patch("cxas_scrapi.core.versions.types.DeleteAppVersionRequest")
@@ -110,7 +113,7 @@ def test_revert_version(mock_client_cls, mock_req_cls):
     mock_req_cls.side_effect = side_effect
 
     v = Versions("projects/p/locations/l/apps/A")
-    res = v.revert_version("v_id")
+    v.revert_version("v_id")
     mock_client.restore_app_version.assert_called_once()
     args = mock_client.restore_app_version.call_args[1]["request"]
     assert args.name == "projects/p/locations/l/apps/A/versions/v_id"
