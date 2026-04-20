@@ -31,6 +31,7 @@ from cxas_scrapi.migration.graph_visualizer import HighLevelGraphVisualizer
 from cxas_scrapi.migration.main_visualizer import MainVisualizer
 from cxas_scrapi.migration.playbook_visualizer import PlaybookTreeVisualizer
 from cxas_scrapi.migration.ai_augment import AIAugment
+from cxas_scrapi.migration.dfcx_migration_reporter import DFCXMigrationReporter
 
 __all__ = [
     "BaseDFCXClient",
@@ -45,5 +46,6 @@ __all__ = [
     "HighLevelGraphVisualizer",
     "PlaybookTreeVisualizer",
     "MainVisualizer",
+    "DFCXMigrationReporter",
     "AIAugment",
 ]
