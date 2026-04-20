@@ -216,3 +216,84 @@ class TestApiFailurePath:
         ]
         assert len(text_parts) > 0, "API failure response must include text"
         assert "technical issue" in text_parts[0].lower() or "transfer" in text_parts[0].lower()
+
+
+class TestSilenceHandling:
+    """Tests for the silence/no-input detection and response path.
+
+    WHY TEST THIS:
+        Silence handling is deterministic callback logic that the LLM would
+        otherwise handle inconsistently (hallucinating responses, asking random
+        questions). These tests verify the counter-based escalation pattern:
+        1st silence -> repeat, 2nd -> repeat with different prefix, 3rd -> end session.
+    """
+
+    def _silence_content(self):
+        """Create user_content simulating a silence signal from the platform."""
+        return Content(
+            role="user",
+            parts=[Part(text="<context>no user activity detected for 10 seconds.</context>")],
+        )
+
+    def _silence_ctx(self, counter="0"):
+        """Create a context with silence signal and configurable counter."""
+        llm_request = MagicMock()
+        # contents needs at least 2 entries for is_user_inactive to return True
+        llm_request.contents = [
+            Content(role="model", parts=[Part(text="How can I help you?")]),
+            self._silence_content(),
+        ]
+        ctx = CallbackContext(state={
+            "no_input_counter": counter,
+            "_action_trigger": "",
+            "api_failed": "false",
+        })
+        ctx.user_content = self._silence_content()
+        return ctx, llm_request
+
+    def test_first_silence_returns_response(self):
+        """First silence returns a repeat message, not None."""
+        ctx, llm_request = self._silence_ctx("0")
+        result = before_model_callback(ctx, llm_request)
+        assert result is not None
+
+    def test_first_silence_increments_counter(self):
+        """Counter goes from 0 to 1 after first silence."""
+        ctx, llm_request = self._silence_ctx("0")
+        before_model_callback(ctx, llm_request)
+        assert ctx.state["no_input_counter"] == "1"
+
+    def test_first_silence_includes_sorry_prefix(self):
+        """First silence response starts with 'Sorry, I didn't hear anything'."""
+        ctx, llm_request = self._silence_ctx("0")
+        result = before_model_callback(ctx, llm_request)
+        text = [p.text for p in result.content.parts if hasattr(p, "text") and p.text][0]
+        assert "sorry" in text.lower()
+
+    def test_third_silence_ends_session(self):
+        """Third consecutive silence ends the session gracefully."""
+        ctx, llm_request = self._silence_ctx("2")
+        result = before_model_callback(ctx, llm_request)
+        assert result is not None
+        # Should include end_session function call
+        has_end = any(
+            hasattr(p, "function_call") and p.function_call
+            and p.function_call.name == "end_session"
+            for p in result.content.parts
+        )
+        assert has_end, "Third silence must trigger end_session"
+
+    def test_normal_message_resets_counter(self):
+        """A normal user message (not silence) resets the counter to 0."""
+        ctx = CallbackContext(state={
+            "no_input_counter": "2",
+            "_action_trigger": "",
+            "api_failed": "false",
+        })
+        ctx.user_content = _normal_user_content()
+        llm_request = MagicMock()
+        llm_request.contents = [
+            Content(role="user", parts=[Part(text="My phone is broken")]),
+        ]
+        before_model_callback(ctx, llm_request)
+        assert ctx.state["no_input_counter"] == "0"

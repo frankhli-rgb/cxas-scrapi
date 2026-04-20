@@ -38,8 +38,9 @@ conversations:
   - conversation: escalation_customer_request
     session_parameters: {}
     turns:
-      - user: "Hi"
-        agent: "Welcome to Acme Corp support. How can I help you today?"
+      # First turn uses <event>welcome</event> to trigger the session start.
+      - user: "<event>welcome</event>"
+        agent: "Hi, I am your virtual assistant. How can I help you today?"
 
       # The instruction tells the LLM to acknowledge the request and call
       # set_session_state with _action_trigger = "escalate". The golden

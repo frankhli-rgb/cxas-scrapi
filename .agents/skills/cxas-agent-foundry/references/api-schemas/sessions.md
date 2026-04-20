@@ -1,16 +1,16 @@
 # API Schemas: Sessions & Conversations
 
 ### RunSessionRequest
-- **config** (→ SessionConfig): [required]
-- **inputs** (array[→ SessionInput]): [required]
+- **config** (-> SessionConfig): [required]
+- **inputs** (array[-> SessionInput]): [required]
 
 ### RunSessionResponse
-- **outputs** (array[→ SessionOutput])
+- **outputs** (array[-> SessionOutput])
 
 ### SessionConfig
-- **inputAudioConfig** (→ InputAudioConfig)
-- **outputAudioConfig** (→ OutputAudioConfig)
-- **historicalContexts** (array[→ Message]): Override session history.
+- **inputAudioConfig** (-> InputAudioConfig)
+- **outputAudioConfig** (-> OutputAudioConfig)
+- **historicalContexts** (array[-> Message]): Override session history.
 - **entryAgent** (string): Entry agent (default: root). Format: `projects/.../agents/{agent}`
 - **timeZone** (string): User's IANA time zone.
 - **useToolFakes** (boolean): Use fake tools.
@@ -19,17 +19,17 @@
 - **text** (string): User text.
 - **dtmf** (string): DTMF digits.
 - **audio** (string): Audio data.
-- **toolResponses** (→ ToolResponses): Client tool results.
-- **image** (→ Image)
-- **blob** (→ Blob)
+- **toolResponses** (-> ToolResponses): Client tool results.
+- **image** (-> Image)
+- **blob** (-> Blob)
 - **variables** (object): Session variables, keyed by name. Only declared variables used by CES.
-- **event** (→ Event)
+- **event** (-> Event)
 
 ### SessionOutput
 - **text** (string): Agent text.
 - **audio** (string): Agent audio.
-- **toolCalls** (→ ToolCalls): Tool requests for client.
-- **endSession** (→ EndSession): Session ended.
+- **toolCalls** (-> ToolCalls): Tool requests for client.
+- **endSession** (-> EndSession): Session ended.
 - **payload** (object): Custom structured payload.
 - **turnIndex** (integer): Turn number (from 1).
 - **turnCompleted** (boolean): Agent finished this turn.
@@ -39,14 +39,14 @@
 
 ### Message
 - **role** (string): `user` or `agent`.
-- **chunks** (array[→ Chunk])
+- **chunks** (array[-> Chunk])
 
 ### Chunk
 - **text** (string)
 - **transcript** (string): Audio transcript.
-- **toolCall** (→ ToolCall)
-- **toolResponse** (→ ToolResponse)
-- **agentTransfer** (→ AgentTransfer)
+- **toolCall** (-> ToolCall)
+- **toolResponse** (-> ToolResponse)
+- **agentTransfer** (-> AgentTransfer)
 - **updatedVariables** (object)
 
 ### Event
@@ -62,9 +62,9 @@
 
 ### Conversation
 - **name** (string): Format: `projects/.../conversations/{conversation}`
-- **turns** (array[→ ConversationTurn])
+- **turns** (array[-> ConversationTurn])
 - **turnCount** (integer): Output only.
 - **source** (enum: `LIVE` | `SIMULATOR` | `EVAL`): Output only.
 
 ### ConversationTurn
-- **messages** (array[→ Message])
+- **messages** (array[-> Message])

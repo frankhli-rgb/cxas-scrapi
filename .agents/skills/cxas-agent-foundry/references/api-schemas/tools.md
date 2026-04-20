@@ -4,10 +4,10 @@
 - **name** (string): Identifier. Format: `projects/.../tools/{tool}`
 - **displayName** (string): Output only. Derived from tool type's name.
 - **executionType** (enum: `SYNCHRONOUS` | `ASYNCHRONOUS`)
-- **pythonFunction** (→ PythonFunction)
-- **clientFunction** (→ ClientFunction)
-- **systemTool** (→ SystemTool)
-- **toolFakeConfig** (→ ToolFakeConfig): Fake mode config.
+- **pythonFunction** (-> PythonFunction)
+- **clientFunction** (-> ClientFunction)
+- **systemTool** (-> SystemTool)
+- **toolFakeConfig** (-> ToolFakeConfig): Fake mode config.
 
 ### PythonFunction
 - **name** (string): Function name. Must match function in pythonCode. Case sensitive.
@@ -15,12 +15,12 @@
 - **description** (string): Output only. Parsed from docstring.
 
 ### ClientFunction
-Client-side function — agent invokes, client executes and returns result.
+Client-side function -- agent invokes, client executes and returns result.
 
 - **name** (string): [required]
 - **description** (string)
-- **parameters** (→ Schema): Parameter schema.
-- **response** (→ Schema): Response schema.
+- **parameters** (-> Schema): Parameter schema.
+- **response** (-> Schema): Response schema.
 
 ### SystemTool
 Pre-defined: `end_session`, `customize_response`, `transfer_to_agent`.

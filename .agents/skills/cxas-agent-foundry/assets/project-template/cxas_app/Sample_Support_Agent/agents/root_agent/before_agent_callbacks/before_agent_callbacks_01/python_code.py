@@ -35,6 +35,13 @@ KEY PATTERNS DEMONSTRATED:
     4. Tool calls from callbacks: Use tools.ToolName(args) to call tools directly.
        Python function tools use the function name; API connector tools use
        DisplayName_OperationId format.
+
+PLATFORM GLOBALS (do NOT import these):
+    CallbackContext, Content, Part, LlmResponse, LlmRequest, LlmRequest
+    are auto-provided by the GECX sandbox at runtime. Importing them will
+    cause errors. The 'tools' global is also auto-provided for calling
+    tools from callbacks. Only standard library imports (typing, re, etc.)
+    need explicit import statements.
 """
 
 from typing import Optional

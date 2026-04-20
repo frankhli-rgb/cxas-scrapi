@@ -49,13 +49,15 @@ conversations:
   - conversation: auth_routing_happy_path
     session_parameters: {}
     turns:
-      - user: "Hi"
-        agent: "Welcome to Acme Corp support. How can I help you today?"
+      # First turn uses <event>welcome</event> to trigger the session start.
+      # Every turn MUST have both user and agent fields.
+      - user: "<event>welcome</event>"
+        agent: "Hi, I am your virtual assistant. How can I help you today?"
 
       - user: "I have a question about my bill."
         agent: "I'd be happy to help with your billing question. Let me pull up your account."
         tool_calls:
-          - action: account_lookup_tool
+          - action: lookup_account
             args:
               account_id: "9820598207"
 
@@ -77,7 +79,7 @@ conversations:
 
     expectations:
       - "The agent must greet the customer by name"
-      - "The agent must call account_lookup_tool with the correct account_id"
+      - "The agent must call lookup_account with the correct account_id"
       - "The agent must provide the account balance from the tool response"
       - "The agent must NOT reveal account details before authentication"
 

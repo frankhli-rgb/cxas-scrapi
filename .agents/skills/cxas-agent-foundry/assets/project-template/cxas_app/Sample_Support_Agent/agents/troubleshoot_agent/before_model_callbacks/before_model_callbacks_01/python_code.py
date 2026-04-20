@@ -40,6 +40,12 @@ FIX:
     In production, consider extracting the shared trigger logic into a common
     module and importing it in each agent's callback. For this template, we
     duplicate it for clarity.
+
+PLATFORM GLOBALS (do NOT import these):
+    CallbackContext, Content, Part, LlmResponse, LlmRequest are auto-provided
+    by the GECX sandbox at runtime. The 'tools' global is also auto-provided
+    for calling tools from callbacks. Only standard library imports (typing,
+    re, etc.) need explicit import statements.
 """
 
 from typing import Optional

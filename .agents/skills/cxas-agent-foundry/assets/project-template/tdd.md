@@ -1,6 +1,6 @@
 # Technical Design Document (TDD)
 
-> This is a **living document** — update it whenever requirements, agent behavior, or evals change.
+> This is a **living document** -- update it whenever requirements, agent behavior, or evals change.
 > Update the TDD first, then update evals to match.
 
 ## Agent Design
@@ -8,7 +8,7 @@
 ### Architecture
 <!-- Root agent + sub-agents. What each one handles. -->
 - **Root Agent:** Intent detection, authentication routing, escalation handling
-- **Sub-Agents:** List each sub-agent and its scope (e.g., Troubleshooting Agent — handles device/service diagnostics)
+- **Sub-Agents:** List each sub-agent and its scope (e.g., Troubleshooting Agent -- handles device/service diagnostics)
 
 ### Tools
 <!-- Tool name, type (Python function / API connector / system), and purpose. -->
@@ -18,10 +18,10 @@
 | `payload_update_tool` | Python function | Sends structured data to external systems |
 
 ### Routing Logic
-<!-- How customers get routed — auth status, issue type, flags, etc. -->
-- Unauthenticated users → limited self-service flow
-- Authenticated users → full support flow with sub-agent routing
-- API failures → deterministic escalation via callback
+<!-- How customers get routed -- auth status, issue type, flags, etc. -->
+- Unauthenticated users -> limited self-service flow
+- Authenticated users -> full support flow with sub-agent routing
+- API failures -> deterministic escalation via callback
 
 ### Variables
 <!-- Session variables, where they come from, naming conventions. -->
@@ -38,7 +38,7 @@
 | Callback | Agent | Purpose |
 |----------|-------|---------|
 | `before_agent` | root_agent | Auth/profile variable derivation from identifiers |
-| `before_model` | root_agent | Trigger pattern — reads `_action_trigger`, returns deterministic tools |
+| `before_model` | root_agent | Trigger pattern -- reads `_action_trigger`, returns deterministic tools |
 | `after_model` | root_agent | Text injection before end_session |
 | `before_model` | sub_agent | Same trigger pattern (callbacks on ALL agents) |
 
@@ -101,4 +101,4 @@
 
 | Date | Change | Author |
 |------|--------|--------|
-| YYYY-MM-DD | Initial TDD created | — |
+| YYYY-MM-DD | Initial TDD created | -- |

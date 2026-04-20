@@ -5,13 +5,12 @@ Run these gates IN ORDER after building agents/tools/callbacks. ALL must pass be
 ## Table of Contents
 
 - [CRITICAL: Always use the existing app](#critical-always-use-the-existing-app)
-- [Gate 1: Pull, Lint & Push](#gate-1-pull-lint--push)
+- [Gate 1: Pull, Lint and Push](#gate-1-pull-lint-and-push)
 - [Gate 2: Agent hierarchy](#gate-2-agent-hierarchy)
 - [Gate 3: Tool associations (including system tools)](#gate-3-tool-associations-including-system-tools)
 - [Gate 4: Callback inventory](#gate-4-callback-inventory)
 - [Gate 5: Single-turn smoke test](#gate-5-single-turn-smoke-test)
 - [Gate 6: Multi-turn smoke test](#gate-6-multi-turn-smoke-test)
-- [Gate 7: Simulation smoke test](#gate-7-simulation-smoke-test)
 
 ## CRITICAL: Always use the existing app
 
@@ -21,7 +20,7 @@ APP_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/apps/{APP_ID}"
 ```
 **NEVER call `apps.create_app()` or `cxas create` during verification or eval runs.** That creates a new orphaned app. Always use the existing `deployed_app_id` from `gecx-config.json` with every SCRAPI client, `cxas pull`, `cxas push`, and eval script command.
 
-## Gate 1: Pull, Lint & Push
+## Gate 1: Pull, Lint and Push
 Sync platform state to local, lint, fix issues, then push fixes back:
 ```bash
 # 1. Pull platform state to local
@@ -32,7 +31,7 @@ GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas pull \
 # 2. Run linter
 .venv/bin/cxas lint --app-dir cxas_app/
 
-# 3. If lint found issues — fix them locally in cxas_app/, then push back
+# 3. If lint found issues -- fix them locally in cxas_app/, then push back
 GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas push \
   --app-dir cxas_app/ \
   --to projects/$PROJECT_ID/locations/$LOCATION/apps/$APP_ID \
@@ -43,10 +42,10 @@ GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/cxas pull \
   projects/$PROJECT_ID/locations/$LOCATION/apps/$APP_ID \
   --project-id $PROJECT_ID --location $LOCATION --target-dir cxas_app/
 
-# 5. Re-lint — must pass clean
+# 5. Re-lint -- must pass clean
 .venv/bin/cxas lint --app-dir cxas_app/
 ```
-The `--to` flag in `cxas push` MUST use the full resource path `projects/.../apps/$APP_ID` — not just the UUID. Using the wrong path or omitting `--to` may create a new app.
+The `--to` flag in `cxas push` MUST use the full resource path `projects/.../apps/$APP_ID` -- not just the UUID. Using the wrong path or omitting `--to` may create a new app.
 
 ## Gate 2: Agent hierarchy
 ```python
@@ -70,10 +69,10 @@ for name, resource in agents_map.items():
     has_end = any("end_session" in t for t in (agent.tools or []))
     flag = ""
     if is_root and not has_end:
-        flag = " ⚠ ROOT MISSING end_session"
+        flag = " WARNING: ROOT MISSING end_session"
     print(f"  {name}: {tool_ids}{flag}")
 ```
-ALL agents MUST have `end_session` listed in their `tools` array in the agent JSON config. Without it, the platform throws `Tool not found: end_session` when the agent or its callbacks try to end the session. This includes sub-agents — even if they typically transfer back to root, the LLM or callbacks may call `end_session` (e.g., for escalation or silence handling).
+ALL agents MUST have `end_session` listed in their `tools` array in the agent JSON config. Without it, the platform throws `Tool not found: end_session` when the agent or its callbacks try to end the session. This includes sub-agents -- even if they typically transfer back to root, the LLM or callbacks may call `end_session` (e.g., for escalation or silence handling).
 
 ## Gate 4: Callback inventory
 ```python
@@ -96,7 +95,7 @@ sessions.parse_result(r)
 ```
 
 ## Gate 6: Multi-turn smoke test
-Test natural conversational pacing — provide info ONE piece at a time, like a real caller:
+Test natural conversational pacing -- provide info ONE piece at a time, like a real caller:
 ```python
 sid = f"gate6-{uuid.uuid4().hex[:8]}"
 r1 = sessions.run(session_id=sid, text="<intent matching a CUJ from TDD>")
@@ -121,29 +120,4 @@ sessions.parse_result(r5)
 ```
 **If the agent asks for DOB + ZIP + ID in a single turn, STOP and fix the instruction before proceeding.** Add: `<rule>Ask for ONE piece of information per turn.</rule>`
 
-## Gate 7: Simulation smoke test
-Create minimal sim files and run one:
-
-`evals/simulations/simulations.yaml` (app config comes from `gecx-config.json`):
-```yaml
-evals:
-- name: smoke_test
-  steps:
-    - goal: "<simple CUJ from TDD — e.g., ask a basic question>"
-      success_criteria: "<what the agent should do>"
-      response_guide: "<persona with auth info matching mock tool data>"
-      max_turns: 10
-  expectations:
-    - "<basic behavioral check>"
-  session_parameters: {}
-```
-
-Run:
-```bash
-GOOGLE_CLOUD_PROJECT=$PROJECT_ID .venv/bin/python \
-  .agents/skills/cxas-agent-foundry/scripts/scrapi-sim-runner.py run \
-  --eval smoke_test --verbose --channel text
-```
-Must PASS. If FAIL → read transcript, triage with debug skill, fix, re-gate.
-
-**Only proceed to writing evals after ALL 7 gates pass.**
+**Only proceed to writing evals after ALL 6 gates pass.**

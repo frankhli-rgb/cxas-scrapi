@@ -29,7 +29,8 @@
     "rootAgent": "root_agent",
     "tools": [
         "lookup_account",
-        "set_session_state"
+        "set_session_state",
+        "payload_update_tool"
     ],
 
     "_comment_model_settings": [
@@ -93,6 +94,7 @@
         {"name": "account_id", "description": "Customer account identifier from telephony platform", "schema": {"type": "STRING", "default": ""}},
         {"name": "customer_id", "description": "Customer identifier from telephony platform", "schema": {"type": "STRING", "default": ""}},
         {"name": "user_role", "description": "Derived user role from customer profile lookup", "schema": {"type": "STRING", "default": ""}},
+        {"name": "customer_name", "description": "Derived customer name from profile lookup", "schema": {"type": "STRING", "default": ""}},
         {"name": "_action_trigger", "description": "Internal trigger for deterministic callback actions", "schema": {"type": "STRING", "default": ""}},
         {"name": "_escalation_reason", "description": "Internal reason for escalation", "schema": {"type": "STRING", "default": ""}},
         {"name": "_escalation_topic", "description": "Internal topic category for escalation routing", "schema": {"type": "STRING", "default": ""}},

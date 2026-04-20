@@ -42,6 +42,12 @@ KEY PATTERNS DEMONSTRATED:
     5. Always include text: The response always includes a text part so the
        customer hears something before the session ends.
     6. LlmResponse.from_parts: Combines text + tool calls in a single response.
+
+PLATFORM GLOBALS (do NOT import these):
+    CallbackContext, Content, Part, LlmResponse, LlmRequest are auto-provided
+    by the GECX sandbox at runtime. The 'tools' global is also auto-provided
+    for calling tools from callbacks. Only standard library imports (typing,
+    re, etc.) need explicit import statements.
 """
 
 import re

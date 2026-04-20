@@ -7,11 +7,11 @@
 - **displayName** (string): [required] Unique within app.
 - **description** (string)
 - **tags** (array[string])
-- **golden** (→ EvaluationGolden): Golden config.
-- **scenario** (→ EvaluationScenario): Scenario config.
+- **golden** (-> EvaluationGolden): Golden config.
+- **scenario** (-> EvaluationScenario): Scenario config.
 - **evaluationStatus** (enum: `PASS` | `FAIL`): Output only.
-- **aggregatedMetrics** (→ AggregatedMetrics): Output only.
-- **lastCompletedResult** (→ EvaluationResult): Output only.
+- **aggregatedMetrics** (-> AggregatedMetrics): Output only.
+- **lastCompletedResult** (-> EvaluationResult): Output only.
 - **invalid** (boolean): Output only. True if eval references deleted tool/agent.
 
 ### EvaluationConfig
@@ -29,45 +29,45 @@ App-level settings.
 ## Goldens
 
 ### EvaluationGolden
-- **turns** (array[→ EvaluationGoldenTurn]): [required]
+- **turns** (array[-> EvaluationGoldenTurn]): [required]
 - **evaluationExpectations** (array[string]): Expectation resource names.
 
 ### EvaluationGoldenTurn
-- **steps** (array[→ EvaluationStep]): [required]
+- **steps** (array[-> EvaluationStep]): [required]
 
 ### EvaluationStep
-- **userInput** (→ SessionInput)
-- **agentTransfer** (→ AgentTransfer)
-- **expectation** (→ EvaluationGoldenExpectation)
+- **userInput** (-> SessionInput)
+- **agentTransfer** (-> AgentTransfer)
+- **expectation** (-> EvaluationGoldenExpectation)
 
 ### EvaluationGoldenExpectation
-- **toolCall** (→ ToolCall): Expected tool call.
-- **toolResponse** (→ ToolResponse): Expected tool response.
-- **agentResponse** (→ Message): Expected agent response.
-- **agentTransfer** (→ AgentTransfer): Expected transfer.
+- **toolCall** (-> ToolCall): Expected tool call.
+- **toolResponse** (-> ToolResponse): Expected tool response.
+- **agentResponse** (-> Message): Expected agent response.
+- **agentTransfer** (-> AgentTransfer): Expected transfer.
 - **updatedVariables** (object): Expected variable updates.
-- **mockToolResponse** (→ ToolResponse): Response to mock. Unspecified params hallucinated.
+- **mockToolResponse** (-> ToolResponse): Response to mock. Unspecified params hallucinated.
 - **note** (string): Label for reporting (e.g., "Check_Payment_Tool_Called").
 
 ## Scenarios
 
 ### EvaluationScenario
 - **task** (string): [required] Task description.
-- **userFacts** (array[→ EvaluationScenarioUserFact]): Facts known to sim user.
+- **userFacts** (array[-> EvaluationScenarioUserFact]): Facts known to sim user.
 - **maxTurns** (integer): Max turns. Default: until task complete.
 - **rubrics** (array[string]): [required] Rubrics to score against.
-- **scenarioExpectations** (array[→ EvaluationScenarioExpectation]): [required]
+- **scenarioExpectations** (array[-> EvaluationScenarioExpectation]): [required]
 - **variableOverrides** (object): Session parameter overrides.
 - **userGoalBehavior** (enum: `USER_GOAL_SATISFIED` | `USER_GOAL_REJECTED` | `USER_GOAL_IGNORED`)
 - **evaluationExpectations** (array[string]): Expectation resource names.
 
 ### EvaluationScenarioExpectation
-- **toolExpectation** (→ EvaluationScenarioExpectationToolExpectation)
-- **agentResponse** (→ Message)
+- **toolExpectation** (-> EvaluationScenarioExpectationToolExpectation)
+- **agentResponse** (-> Message)
 
 ### EvaluationScenarioExpectationToolExpectation
-- **expectedToolCall** (→ ToolCall): [required]
-- **mockToolResponse** (→ ToolResponse): [required]
+- **expectedToolCall** (-> ToolCall): [required]
+- **mockToolResponse** (-> ToolResponse): [required]
 
 ### EvaluationScenarioUserFact
 - **name** (string): [required]
@@ -78,7 +78,7 @@ App-level settings.
 ### EvaluationExpectation
 - **name** (string): Format: `projects/.../evaluationExpectations/{evaluation_expectation}`
 - **displayName** (string): [required] Unique within app.
-- **llmCriteria** (→ EvaluationExpectationLlmCriteria)
+- **llmCriteria** (-> EvaluationExpectationLlmCriteria)
 - **tags** (array[string])
 
 ### EvaluationExpectationLlmCriteria
@@ -90,7 +90,7 @@ App-level settings.
 - **name** (string): [required]
 - **displayName** (string): [required] Unique within app.
 - **personality** (string): [required] Behavioral instructions.
-- **speechConfig** (→ EvaluationPersonaSpeechConfig)
+- **speechConfig** (-> EvaluationPersonaSpeechConfig)
 
 ### EvaluationPersonaSpeechConfig
 - **speakingRate** (number): 1.0 = normal, 0.8 = slow, 1.5 = fast.
@@ -100,14 +100,14 @@ App-level settings.
 ## Scoring Thresholds
 
 ### EvaluationMetricsThresholds
-- **goldenEvaluationMetricsThresholds** (→ GoldenEvaluationMetricsThresholds)
+- **goldenEvaluationMetricsThresholds** (-> GoldenEvaluationMetricsThresholds)
 - **goldenHallucinationMetricBehavior** (enum: `DISABLED` | `ENABLED`)
 - **scenarioHallucinationMetricBehavior** (enum: `DISABLED` | `ENABLED`)
 
 ### GoldenEvaluationMetricsThresholds
-- **turnLevelMetricsThresholds** (→ TurnLevelMetricsThresholds)
-- **expectationLevelMetricsThresholds** (→ ExpectationLevelMetricsThresholds)
-- **toolMatchingSettings** (→ ToolMatchingSettings)
+- **turnLevelMetricsThresholds** (-> TurnLevelMetricsThresholds)
+- **expectationLevelMetricsThresholds** (-> ExpectationLevelMetricsThresholds)
+- **toolMatchingSettings** (-> ToolMatchingSettings)
 
 ### TurnLevelMetricsThresholds
 - **semanticSimilaritySuccessThreshold** (integer): 0-4. Default: >= 3.
@@ -126,23 +126,23 @@ App-level settings.
 - **name** (string): Format: `projects/.../evaluations/{evaluation}/results/{result}`
 - **evaluationStatus** (enum: `PASS` | `FAIL`): Output only.
 - **executionState** (enum: `RUNNING` | `COMPLETED` | `ERROR`): Output only.
-- **goldenResult** (→ GoldenResult)
-- **scenarioResult** (→ ScenarioResult)
-- **evaluationMetricsThresholds** (→ EvaluationMetricsThresholds): Thresholds used.
-- **config** (→ EvaluationConfig)
+- **goldenResult** (-> GoldenResult)
+- **scenarioResult** (-> ScenarioResult)
+- **evaluationMetricsThresholds** (-> EvaluationMetricsThresholds): Thresholds used.
+- **config** (-> EvaluationConfig)
 - **goldenRunMethod** (enum: `STABLE` | `NAIVE`)
-- **persona** (→ EvaluationPersona)
-- **errorInfo** (→ EvaluationErrorInfo)
+- **persona** (-> EvaluationPersona)
+- **errorInfo** (-> EvaluationErrorInfo)
 
 ### GoldenResult (EvaluationResultGoldenResult)
-- **turnReplayResults** (array[→ TurnReplayResult])
-- **evaluationExpectationResults** (array[→ EvaluationExpectationResult])
+- **turnReplayResults** (array[-> TurnReplayResult])
+- **evaluationExpectationResults** (array[-> EvaluationExpectationResult])
 
 ### TurnReplayResult (EvaluationResultGoldenResultTurnReplayResult)
-- **expectationOutcome** (array[→ GoldenExpectationOutcome])
-- **hallucinationResult** (→ HallucinationResult)
-- **semanticSimilarityResult** (→ SemanticSimilarityResult)
-- **overallToolInvocationResult** (→ OverallToolInvocationResult)
+- **expectationOutcome** (array[-> GoldenExpectationOutcome])
+- **hallucinationResult** (-> HallucinationResult)
+- **semanticSimilarityResult** (-> SemanticSimilarityResult)
+- **overallToolInvocationResult** (-> OverallToolInvocationResult)
 - **toolOrderedInvocationScore** (number)
 
 ### SemanticSimilarityResult
@@ -161,12 +161,12 @@ App-level settings.
 - **outcome** (enum: `PASS` | `FAIL`)
 
 ### GoldenExpectationOutcome
-- **expectation** (→ EvaluationGoldenExpectation)
+- **expectation** (-> EvaluationGoldenExpectation)
 - **outcome** (enum: `PASS` | `FAIL`)
-- **observedToolCall** (→ ToolCall)
-- **observedToolResponse** (→ ToolResponse)
-- **observedAgentResponse** (→ Message)
-- **toolInvocationResult** (→ ToolInvocationResult)
+- **observedToolCall** (-> ToolCall)
+- **observedToolResponse** (-> ToolResponse)
+- **observedAgentResponse** (-> Message)
+- **toolInvocationResult** (-> ToolInvocationResult)
 
 ### ToolInvocationResult
 - **parameterCorrectnessScore** (number): Percent of expected params present.
@@ -176,11 +176,11 @@ App-level settings.
 ### ScenarioResult (EvaluationResultScenarioResult)
 - **conversation** (string)
 - **task** (string)
-- **expectationOutcomes** (array[→ ScenarioExpectationOutcome])
-- **rubricOutcomes** (array[→ RubricOutcome])
+- **expectationOutcomes** (array[-> ScenarioExpectationOutcome])
+- **rubricOutcomes** (array[-> RubricOutcome])
 - **taskCompleted** (boolean): Composite of all checks.
 - **allExpectationsSatisfied** (boolean)
-- **userGoalSatisfactionResult** (→ UserGoalSatisfactionResult)
+- **userGoalSatisfactionResult** (-> UserGoalSatisfactionResult)
 
 ### UserGoalSatisfactionResult
 - **score** (integer): -1, 0, or 1. 1=Satisfied, 0=Not Satisfied, -1=Unspecified.
@@ -207,8 +207,8 @@ App-level settings.
 - **name** (string): Format: `projects/.../evaluationRuns/{evaluationRun}`
 - **evaluationType** (enum: `GOLDEN` | `SCENARIO` | `MIXED`)
 - **state** (enum: `RUNNING` | `COMPLETED` | `ERROR`)
-- **progress** (→ EvaluationRunProgress)
-- **config** (→ EvaluationConfig)
+- **progress** (-> EvaluationRunProgress)
+- **config** (-> EvaluationConfig)
 - **runCount** (integer)
 - **goldenRunMethod** (enum: `STABLE` | `NAIVE`)
 
@@ -223,6 +223,6 @@ App-level settings.
 - **app** (string): [required] Format: `projects/.../apps/{app}`
 - **evaluations** (array[string]): Evaluations to run.
 - **evaluationDataset** (string): Dataset to run.
-- **config** (→ EvaluationConfig)
+- **config** (-> EvaluationConfig)
 - **runCount** (integer): Default: 1 per golden, 5 per scenario.
 - **goldenRunMethod** (enum: `STABLE` | `NAIVE`): Default: STABLE.

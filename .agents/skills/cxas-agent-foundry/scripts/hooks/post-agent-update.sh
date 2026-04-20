@@ -18,7 +18,7 @@
 # Works with both Claude Code and Gemini CLI
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../.agents/skills/cxas-agent-foundry/scripts/resolve-project.sh"
+source "${SCRIPT_DIR}/../resolve-project.sh"
 
 input=$(cat)
 
@@ -36,16 +36,15 @@ if echo "$cmd" | grep -qE 'update_agent'; then
     location=$(jq -r '.location' "$config_file")
     app_id=$(jq -r '.deployed_app_id' "$config_file")
     app_resource="projects/${project}/locations/${location}/apps/${app_id}"
-    if GOOGLE_CLOUD_PROJECT="$project" cxas pull "$app_resource" --project_id "$project" --location "$location" --target_dir "$app_dir" 2>/dev/null; then
+    if GOOGLE_CLOUD_PROJECT="$project" cxas pull "$app_resource" --project-id "$project" --location "$location" --target-dir "$app_dir" 2>/dev/null; then
       pull_msg="AUTO-SYNC: Pulled latest agent state to $app_dir. "
     fi
   fi
 
   # Auto-sync callbacks from platform to local test dirs
   sync_msg=""
-  WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-  if [ -f "${WORKSPACE_ROOT}/.agents/skills/cxas-agent-foundry/scripts/sync-callbacks.py" ]; then
-    sync_output=$(python3 "${WORKSPACE_ROOT}/.agents/skills/cxas-agent-foundry/scripts/sync-callbacks.py" 2>&1) && \
+  if [ -f ".agents/skills/cxas-agent-foundry/scripts/sync-callbacks.py" ]; then
+    sync_output=$(python3 .agents/skills/cxas-agent-foundry/scripts/sync-callbacks.py 2>&1) && \
       sync_msg="AUTO-SYNC: Callbacks synced to evals/callback_tests/. " || true
   fi
 

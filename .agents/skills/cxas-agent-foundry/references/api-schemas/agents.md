@@ -4,18 +4,18 @@
 - **name** (string): Identifier. Format: `projects/.../agents/{agent}`
 - **displayName** (string): [required]
 - **description** (string)
-- **modelSettings** (→ ModelSettings)
+- **modelSettings** (-> ModelSettings)
 - **instruction** (string): LLM instructions.
 - **tools** (array[string]): Tool resource names.
 - **childAgents** (array[string]): Child agent resource names.
-- **beforeAgentCallbacks** (array[→ Callback]): Before agent. Sequential; stops on override.
-- **afterAgentCallbacks** (array[→ Callback]): After agent.
-- **beforeModelCallbacks** (array[→ Callback]): Before each model call. Fires multiple times if multi-model-call turn.
-- **afterModelCallbacks** (array[→ Callback]): After each model call.
-- **beforeToolCallbacks** (array[→ Callback]): Before each tool invocation.
-- **afterToolCallbacks** (array[→ Callback]): After each tool invocation.
+- **beforeAgentCallbacks** (array[-> Callback]): Before agent. Sequential; stops on override.
+- **afterAgentCallbacks** (array[-> Callback]): After agent.
+- **beforeModelCallbacks** (array[-> Callback]): Before each model call. Fires multiple times if multi-model-call turn.
+- **afterModelCallbacks** (array[-> Callback]): After each model call.
+- **beforeToolCallbacks** (array[-> Callback]): Before each tool invocation.
+- **afterToolCallbacks** (array[-> Callback]): After each tool invocation.
 - **guardrails** (array[string])
-- **transferRules** (array[→ TransferRule]): First match wins.
+- **transferRules** (array[-> TransferRule]): First match wins.
 
 ### AgentTransfer
 - **targetAgent** (string): [required] Format: `projects/.../agents/{agent}`

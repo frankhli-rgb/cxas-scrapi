@@ -73,7 +73,7 @@ def lookup_account(account_id: str) -> dict:
                 "account_id": account_id,
                 "plan": "Premium",
                 "balance": "$45.00",
-                "next_billing_date": "2025-02-01",
+                "next_billing_date": "2099-01-15",  # Stub data -- replace with actual API call
                 "service_status": "active",
             },
         }

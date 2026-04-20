@@ -2,7 +2,13 @@
     "name": "root_agent",
     "displayName": "root_agent",
     "instruction": "agents/root_agent/instruction.txt",
-    "tools": ["set_session_state", "lookup_account", "end_session"],
+    "_comment_tools": [
+        "TOOL LIST:",
+        "  end_session is a platform-provided SYSTEM tool. Do not create a tool",
+        "  directory for it -- just reference it by name here. The other tools are",
+        "  custom Python function tools defined in the tools/ directory."
+    ],
+    "tools": ["set_session_state", "lookup_account", "payload_update_tool", "end_session"],
     "_comment_child_agents": [
         "CHILD AGENTS (CRITICAL LINTER/PLATFORM QUIRK):",
         "  The cxas lint tool may expect spaces matching the 'displayName',",

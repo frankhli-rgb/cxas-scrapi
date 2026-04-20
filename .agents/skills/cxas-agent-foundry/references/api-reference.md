@@ -19,7 +19,7 @@ For exact field names, enum values, or threshold structures, see the schema file
 - [Evaluations](#evaluations)
 - [Inspecting an Existing App](#inspecting-an-existing-app)
 - [Version Management](#version-management)
-- [Legacy REST](#legacy-rest)
+- [Diagnostic REST Commands](#diagnostic-rest-commands)
 
 ## Authentication
 
@@ -36,17 +36,17 @@ agents = Agents(app_name="projects/my-project/locations/us/apps/APP_ID")
 
 ## Before Making ANY API Call
 
-Check the actual source code — docs may be stale:
+Check the actual source code -- docs may be stale:
 ```bash
 grep -A 20 "def create_" .venv/lib/python3.13/site-packages/cxas_scrapi/core/<module>.py
 ```
 
 ## Build Order
 
-1. Set model on app (may fail if no root agent — catch and retry after step 3)
+1. Set model on app (may fail if no root agent -- catch and retry after step 3)
 2. Check existing agents with `get_agents_map(reverse=True)` to avoid ALREADY_EXISTS
 3. Create agents (skip existing), link sub-agents via `child_agents`
-4. Associate system tools (`end_session`) — built-in, do NOT create
+4. Associate system tools (`end_session`) -- built-in, do NOT create
 5. Create custom tools, associate with agents via `update_agent(tools=[...])`
 6. Create variables
 7. Create callbacks
@@ -57,13 +57,13 @@ grep -A 20 "def create_" .venv/lib/python3.13/site-packages/cxas_scrapi/core/<mo
 
 ## Common Mistakes
 
-- `Agents()` needs full resource path as `app_name` — not separate project/app/location args
-- `parent_agent` and `sub_agents` do NOT exist — use `child_agents`
-- Set model on app BEFORE creating agents — default `gemini-2.5-flash` may not be available
-- Check `get_agents_map()` before creating — duplicates cause ALREADY_EXISTS errors
-- Tools must be associated via `update_agent(tools=[...])` — creating them is not enough
-- `end_session` is a built-in system tool — associate it, don't create it
-- `create_callback` APPENDS — be aware when calling multiple times
+- `Agents()` needs full resource path as `app_name` -- not separate project/app/location args
+- `parent_agent` and `sub_agents` do NOT exist -- use `child_agents`
+- Set model on app BEFORE creating agents -- default `gemini-2.5-flash` may not be available
+- Check `get_agents_map()` before creating -- duplicates cause ALREADY_EXISTS errors
+- Tools must be associated via `update_agent(tools=[...])` -- creating them is not enough
+- `end_session` is a built-in system tool -- associate it, don't create it
+- `create_callback` APPENDS -- be aware when calling multiple times
 - Variables: use `variable_name` not `name`, only `STRING`/`BOOLEAN` types, parse counters with `int(val or 0)`
 
 ## Apps
@@ -82,7 +82,7 @@ app_name = app.name  # Full resource path
 agents = Agents(app_name=app_name)
 root = agents.create_agent(display_name="root_agent", instruction="...")
 
-# Link sub-agents — use child_agents, NOT parent_agent
+# Link sub-agents -- use child_agents, NOT parent_agent
 agents.update_agent(agent_name=root.name, child_agents=[sub.name])
 ```
 
@@ -110,18 +110,18 @@ agents.update_agent(agent_name=root.name, child_agents=[sub.name])
 }
 ```
 
-**IMPORTANT — tool naming:** Agent JSON files reference tools by `displayName`. Use **snake_case** for both `name` and `displayName` (e.g., `"lookup_benefits"`, NOT `"Lookup Benefits"`). The `displayName` must exactly match the string in the agent's `tools` array. Mismatched names cause `Reference not found` errors on push.
+**IMPORTANT -- tool naming:** Agent JSON files reference tools by `displayName`. Use **snake_case** for both `name` and `displayName` (e.g., `"lookup_benefits"`, NOT `"Lookup Benefits"`). The `displayName` must exactly match the string in the agent's `tools` array. Mismatched names cause `Reference not found` errors on push.
 
-**Tool Python code**: Tools access session state via the `context` global — NOT as a function parameter. The platform injects `context` at runtime. Do NOT use `**kwargs` in tool function signatures — GECX requires explicit named parameters to generate the tool schema. Do NOT use `None` as a default value for parameters (e.g., `member_id: str = None`) — the platform requires defaults to be strictly type-matching JSON-serializable values (use `""` for strings, `0` for ints). Both `**kwargs` and `None` defaults cause tools to be silently dropped during import with no error.
+**Tool Python code**: Tools access session state via the `context` global -- NOT as a function parameter. The platform injects `context` at runtime. Do NOT use `**kwargs` in tool function signatures -- GECX requires explicit named parameters to generate the tool schema. Do NOT use `None` as a default value for parameters (e.g., `member_id: str = None`) -- the platform requires defaults to be strictly type-matching JSON-serializable values (use `""` for strings, `0` for ints). Both `**kwargs` and `None` defaults cause tools to be silently dropped during import with no error.
 ```python
 def my_tool(arg1: str, arg2: str = "") -> dict:
-    # Access state via the context global — do NOT add context as a parameter
+    # Access state via the context global -- do NOT add context as a parameter
     auth = context.state.get("auth_status", "")
     context.state["my_var"] = "value"
     return {"status": "success"}
 ```
 
-System tools (`end_session`, `customize_response`, `transfer_to_agent`) are built-in — reference by name in agent JSON, don't create.
+System tools (`end_session`, `customize_response`, `transfer_to_agent`) are built-in -- reference by name in agent JSON, don't create.
 
 **Schema:** `api-schemas/tools.md`
 
@@ -137,7 +137,7 @@ Valid types: `STRING`, `BOOLEAN` only. `INT`/`INTEGER`/`NUMBER` raise `ValueErro
 ## Callbacks
 
 ```python
-from google.protobuf import field_mask_pb2  # MUST import — SDK bug
+from google.protobuf import field_mask_pb2  # MUST import -- SDK bug
 callbacks = Callbacks(app_name=app_name)
 
 callbacks.create_callback(
@@ -147,7 +147,7 @@ callbacks.create_callback(
 )
 ```
 
-**Callback signatures (with types — no imports needed, lint-enforced by C009):**
+**Callback signatures (with types -- no imports needed, lint-enforced by C009):**
 - `before_agent_callback(callback_context: CallbackContext) -> Optional[Content]`
 - `after_agent_callback(callback_context: CallbackContext) -> Optional[Content]`
 - `before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest) -> Optional[LlmResponse]`
@@ -156,9 +156,9 @@ callbacks.create_callback(
 - `after_tool_callback(tool: Tool, input: dict[str, Any], callback_context: CallbackContext, tool_response: dict[str, Any]) -> Optional[dict[str, Any]]`
 
 **Callback runtime API (inside callback code):**
-- `callback_context.state` (dict) for variables — NOT `.session`
-- Return `None` from before_model to proceed — do NOT return `llm_request`
-- Platform types (`Part`, `Content`, `LlmResponse`, `LlmRequest`, `CallbackContext`) are auto-provided as globals — do NOT import them. Everything else (including `from typing import Optional, Iterator`) must be explicitly imported or the callback will fail at push time.
+- `callback_context.state` (dict) for variables -- NOT `.session`
+- Return `None` from before_model to proceed -- do NOT return `llm_request`
+- Platform types (`Part`, `Content`, `LlmResponse`, `LlmRequest`, `CallbackContext`) are auto-provided as globals -- do NOT import them. Everything else (including `from typing import Optional, Iterator`) must be explicitly imported or the callback will fail at push time.
 - `llm_request.messages` (plural) NOT `.message`
 - Parse counters safely: `int(state.get("x") or 0)`
 - **CRITICAL: `before_agent_callback` fires on EVERY turn**, not just when the agent starts. Any state initialization in this callback MUST have an early-return guard (e.g., `if state.get("auth_status"): return None`) to avoid resetting state on every turn.
@@ -193,7 +193,7 @@ dfs = utils.evals_to_dataframe(eval_names=["golden_auth"])
 # dfs["summary"], dfs["failures"], dfs["trace"]
 ```
 
-**Schema:** `api-schemas/evaluations.md` — includes threshold fields, scoring enums, result structures
+**Schema:** `api-schemas/evaluations.md` -- includes threshold fields, scoring enums, result structures
 
 ## Inspecting an Existing App
 
@@ -209,14 +209,41 @@ print(agent.instruction)
 
 ```python
 versions = Versions(app_name=app_name)
+versions.create_version(display_name="Pre-improvement snapshot")  # for rollback
 versions.list_versions()
 versions.revert_version(version_name=version_name)
 ```
 
-## Legacy REST
+## Diagnostic REST Commands
+
+For ad-hoc debugging when SCRAPI doesn't cover your use case. Requires `TOKEN=$(gcloud auth print-access-token)` and `BASE="https://ces.googleapis.com/v1beta/projects/${PROJECT}/locations/${LOCATION}/apps/${APP_ID}"`.
 
 ```bash
-TOKEN=$(gcloud auth print-access-token)
-BASE="https://ces.googleapis.com/v1beta/projects/${PROJECT}/locations/${LOCATION}/apps/${APP_ID}"
-curl -s "${BASE}/agents" -H "Authorization: Bearer ${TOKEN}"
+# Review conversations (live or simulator)
+curl -s "${BASE}/conversations?sources=LIVE&pageSize=10" -H "Authorization: Bearer ${TOKEN}"
+curl -s "${BASE}/conversations/${CONVERSATION_ID}" -H "Authorization: Bearer ${TOKEN}" | jq '.turns[].messages[]'
+
+# Check recent changes
+curl -s "${BASE}/changelogs?pageSize=20" -H "Authorization: Bearer ${TOKEN}" | jq '.changelogs[] | {createTime, action, resourceType, author}'
+
+# Check guardrails
+curl -s "${BASE}/guardrails" -H "Authorization: Bearer ${TOKEN}"
+
+# Execute a tool directly (bypass agent)
+curl -s -X POST "${BASE}:executeTool" -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" \
+  -d '{"tool": "'"${BASE}"'/tools/${TOOL_ID}", "arguments": {"param1": "value1"}}'
+
+# Stream session (real-time debugging)
+curl -s -X POST "${BASE}/sessions/${SESSION_ID}:streamRunSession" -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" -d '{"config": {"enableTextStreaming": true}, "inputs": [{"text": "Hello"}]}'
+
+# Test with fake tools (bypass real API calls)
+curl -s -X POST "${BASE}/sessions/${SESSION_ID}:runSession" -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" -d '{"config": {"useToolFakes": true}, "inputs": [{"text": "Hello"}]}'
+
+# Check deployments
+curl -s "${BASE}/deployments" -H "Authorization: Bearer ${TOKEN}"
+
+# Retrieve toolset tools (MCP/OpenAPI debugging)
+curl -s -X POST "${BASE}/toolsets/${TOOLSET_ID}:retrieveTools" -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" -d '{}'
 ```

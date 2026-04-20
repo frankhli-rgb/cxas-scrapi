@@ -1,10 +1,10 @@
 # Callback API Reference
 
-The GECX sandbox auto-provides these globals. Do NOT import them. Use ONLY the methods listed here — do not guess at additional attributes or constructors.
+The GECX sandbox auto-provides these globals. Do NOT import them. Use ONLY the methods listed here -- do not guess at additional attributes or constructors.
 
 ## Part
 
-**Creating Parts** — always use factory methods, never raw constructors:
+**Creating Parts** -- always use factory methods, never raw constructors:
 
 ```python
 # Text
@@ -18,27 +18,27 @@ Part.from_function_call(name="lookup_benefits", args={"member_id": "H123", "plan
 **Reading Parts:**
 
 ```python
-part.text                        # str | None — text content (text mode only)
-part.text_or_transcript()        # str | None — text OR audio transcript (use this for audio-safe detection)
-part.has_function_call("end_session")  # bool — check if this part is a specific function call
-part.function_call               # object | None — the function call (has .name, .args)
-part.function_response           # object | None — the function response
+part.text                        # str | None -- text content (text mode only)
+part.text_or_transcript()        # str | None -- text OR audio transcript (use this for audio-safe detection)
+part.has_function_call("end_session")  # bool -- check if this part is a specific function call
+part.function_call               # object | None -- the function call (has .name, .args)
+part.function_response           # object | None -- the function response
 ```
 
 **DO NOT USE:**
-- `Part(text=...)` — use `Part.from_text()` instead
-- `part.custom_metadata` — does not exist
-- `part.inline_data` — internal, use `text_or_transcript()` instead
+- `Part(text=...)` -- use `Part.from_text()` instead
+- `part.custom_metadata` -- does not exist
+- `part.inline_data` -- internal, use `text_or_transcript()` instead
 
 ## Content
 
 ```python
-content.parts    # list[Part] — the parts in this content
-content.role     # str — "model" or "user"
+content.parts    # list[Part] -- the parts in this content
+content.role     # str -- "model" or "user"
 ```
 
 **DO NOT USE:**
-- `Content(parts=[...])` — use `LlmResponse.from_parts()` to build responses
+- `Content(parts=[...])` -- use `LlmResponse.from_parts()` to build responses
 
 ## LlmResponse
 
@@ -55,37 +55,37 @@ LlmResponse.from_parts(parts=[
 **Reading responses** (in after_model callbacks):
 
 ```python
-llm_response.content        # Content — the response content
-llm_response.content.parts  # list[Part] — iterate over parts
+llm_response.content        # Content -- the response content
+llm_response.content.parts  # list[Part] -- iterate over parts
 ```
 
 **DO NOT USE:**
-- `LlmResponse(content=Content(parts=[...]))` — use `LlmResponse.from_parts()` instead
+- `LlmResponse(content=Content(parts=[...]))` -- use `LlmResponse.from_parts()` instead
 
 ## LlmRequest
 
 **Reading requests** (in before_model callbacks):
 
 ```python
-llm_request.contents    # list[Content] — full conversation history
-llm_request.contents[-1]  # Content — last message (usually user input)
+llm_request.contents    # list[Content] -- full conversation history
+llm_request.contents[-1]  # Content -- last message (usually user input)
 ```
 
 ## CallbackContext
 
 ```python
-callback_context.state              # dict — session state (read/write)
-callback_context.events             # list — full session event history
-callback_context.get_last_user_input()  # list[Part] — parts from last user message
+callback_context.state              # dict -- session state (read/write)
+callback_context.events             # list -- full session event history
+callback_context.get_last_user_input()  # list[Part] -- parts from last user message
 ```
 
 **Events** (for walking session history):
 
 ```python
 for event in reversed(callback_context.events):
-    event.is_user()    # bool — is this a user event?
-    event.is_agent()   # bool — is this an agent event?
-    event.parts()      # list[Part] — parts in this event
+    event.is_user()    # bool -- is this a user event?
+    event.is_agent()   # bool -- is this an agent event?
+    event.parts()      # list[Part] -- parts in this event
 ```
 
 ## Common Patterns
@@ -95,7 +95,7 @@ for event in reversed(callback_context.events):
 ```python
 for part in callback_context.get_last_user_input():
     if part.text == "<event>session start</event>":
-        # First model call — return greeting
+        # First model call -- return greeting
 ```
 
 ### Detect silence / no-input
@@ -133,7 +133,7 @@ has_end_session = any(
 
 ## Session State
 
-- All values are **strings** — GECX state only supports string values
+- All values are **strings** -- GECX state only supports string values
 - Booleans: use `"true"` / `"false"`, check with `str(state.get("flag", "false")).lower() == "true"`
 - Counters: use `str(int(state.get("counter", "0")) + 1)`
 - Access via `callback_context.state` in callbacks, `context.state` in tools

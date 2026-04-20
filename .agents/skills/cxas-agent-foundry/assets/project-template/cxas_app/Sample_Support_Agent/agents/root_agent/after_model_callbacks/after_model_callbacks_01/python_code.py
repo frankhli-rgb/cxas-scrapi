@@ -48,6 +48,11 @@ KEY PATTERNS DEMONSTRATED:
        between now and then has text, the agent already spoke.
     3. Prepend text before end_session: Put the farewell Part BEFORE the
        end_session Part so the customer hears it first.
+
+PLATFORM GLOBALS (do NOT import these):
+    CallbackContext, Content, Part, LlmResponse, LlmRequest are auto-provided
+    by the GECX sandbox at runtime. Only standard library imports need explicit
+    import statements.
 """
 
 from typing import Optional
