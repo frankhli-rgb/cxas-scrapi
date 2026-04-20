@@ -14,9 +14,10 @@
 
 """Tests for GuardrailEvals class in cxas_scrapi."""
 
-import pytest
-import pandas as pd
 from unittest.mock import MagicMock, patch
+
+import pandas as pd
+import pytest
 
 from cxas_scrapi.evals.guardrail_evals import GuardrailEvals
 
@@ -53,7 +54,6 @@ def test_guardrail_execution_flow(
     # Setup Mocks
     mock_sessions = mock_sessions_class.return_value
     mock_apps = mock_apps_class.return_value
-    mock_agents = mock_agents_class.return_value
 
     mock_sessions.create_session_id.return_value = (
         "projects/p/locations/l/sessions/123"
@@ -102,12 +102,12 @@ def test_guardrail_execution_flow(
 
     # Verify first test passed its evaluation logic
     # (Expects Profanity, actually got Profanity)
-    assert results_df.iloc[0]["pass"] == True
+    assert results_df.iloc[0]["pass"]
     assert results_df.iloc[0]["actual_guardrail_name"] == "Profanity"
 
     # Verify second test passed its evaluation logic
     # (Expects None, actually got None)
-    assert results_df.iloc[1]["pass"] == True
+    assert results_df.iloc[1]["pass"]
     assert results_df.iloc[1]["actual_guardrail_name"] is None
 
     # Test the reporting functionality

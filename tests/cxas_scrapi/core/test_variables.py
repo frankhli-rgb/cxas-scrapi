@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from cxas_scrapi.core.variables import Variables
 
 
@@ -131,11 +133,12 @@ def test_check_schema_type():
 
 
 def test_create_variable_already_exists():
-    with patch(
-        "cxas_scrapi.core.variables.Variables.update_app"
-    ) as mock_update_app, patch(
-        "cxas_scrapi.core.variables.Variables.get_app"
-    ) as mock_get_app:
+    with (
+        patch(
+            "cxas_scrapi.core.variables.Variables.update_app"
+        ) as mock_update_app,
+        patch("cxas_scrapi.core.variables.Variables.get_app") as mock_get_app,
+    ):
         mock_app = MagicMock()
         v1 = MagicMock()
         v1.name = "my_var"
@@ -149,11 +152,12 @@ def test_create_variable_already_exists():
 
 
 def test_delete_variable_not_found():
-    with patch(
-        "cxas_scrapi.core.variables.Variables.update_app"
-    ) as mock_update_app, patch(
-        "cxas_scrapi.core.variables.Variables.get_app"
-    ) as mock_get_app:
+    with (
+        patch(
+            "cxas_scrapi.core.variables.Variables.update_app"
+        ) as mock_update_app,
+        patch("cxas_scrapi.core.variables.Variables.get_app") as mock_get_app,
+    ):
         mock_app = MagicMock()
         mock_app.variable_declarations = []
         mock_get_app.return_value = mock_app

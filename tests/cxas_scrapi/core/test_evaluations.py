@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, mock_open, patch
 
-sys.modules["google.cloud.ces_v1beta"] = MagicMock()
 import pytest
-from unittest.mock import patch, MagicMock
+from google.cloud.ces_v1beta import types
+
 from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
 
 
@@ -326,9 +325,7 @@ def test_create_evaluation_expectation(mock_client_cls):
     evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
 
     # Test with dict
-    res = evals_client.create_evaluation_expectation(
-        {"display_name": "New Exp"}
-    )
+    evals_client.create_evaluation_expectation({"display_name": "New Exp"})
 
     mock_client.create_evaluation_expectation.assert_called_once()
 
@@ -365,20 +362,14 @@ def test_get_evaluation_thresholds(mock_agent_client_cls):
     mock_agent_client = mock_agent_client_cls.return_value
 
     # Create a mock App with thresholds
-    from google.cloud.ces_v1beta import types
-
     app_obj = types.App()
 
     # Safely assign values simulating what the API would return
-    thresholds = (
-        app_obj.evaluation_metrics_thresholds.golden_evaluation_metrics_thresholds
-    )
-    thresholds.turn_level_metrics_thresholds.semantic_similarity_success_threshold = (
-        3
-    )
-    thresholds.turn_level_metrics_thresholds.overall_tool_invocation_correctness_threshold = (
-        1.0
-    )
+    metrics_thresholds = app_obj.evaluation_metrics_thresholds
+    thresholds = metrics_thresholds.golden_evaluation_metrics_thresholds
+    turn_thresholds = thresholds.turn_level_metrics_thresholds
+    turn_thresholds.semantic_similarity_success_threshold = 3
+    turn_thresholds.overall_tool_invocation_correctness_threshold = 1.0
 
     mock_agent_client.get_app.return_value = app_obj
 
@@ -412,7 +403,6 @@ def test_get_evaluation_thresholds(mock_agent_client_cls):
 @patch("cxas_scrapi.core.evaluations.EvaluationServiceClient")
 def test_run_evaluation(mock_client_cls, mock_types):
     """Test Evaluations.run_evaluation."""
-    mock_client = mock_client_cls.return_value
 
     evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
 
@@ -506,7 +496,9 @@ def test_list_evaluation_results_by_run(mock_client_cls, mock_types):
         evaluation_run_id="projects/p/locations/l/apps/other/evaluationRuns/r1"
     )
 
-    mock_client.get_evaluation_run.assert_called_once_with(name="projects/p/locations/l/apps/other/evaluationRuns/r1")
+    mock_client.get_evaluation_run.assert_called_once_with(
+        name="projects/p/locations/l/apps/other/evaluationRuns/r1"
+    )
     assert mock_client.get_evaluation_result.call_count == 2
     assert len(res) == 2
 
@@ -632,7 +624,9 @@ def test_search_evaluations(mock_client_cls, mock_tools_cls, mock_agents_cls):
     with pytest.raises(
         ValueError, match="Must provide at least one search term"
     ):
-        evals_client.search_evaluations(app_name="projects/p/locations/l/apps/a")
+        evals_client.search_evaluations(
+            app_name="projects/p/locations/l/apps/a"
+        )
 
 
 @patch("cxas_scrapi.core.evaluations.json_format")
@@ -683,8 +677,6 @@ def test_evaluations_create_evaluation(
 @patch.object(Evaluations, "get_evaluations_map")
 def test_bulk_export_evals(mock_get_map, mock_export, mock_makedirs):
     """Test Evaluations.bulk_export_evals."""
-    from unittest.mock import mock_open
-
     evals_client = Evaluations(app_name="projects/p/locations/l/apps/a")
 
     # Mock get_evaluations_map
@@ -740,7 +732,8 @@ def test_bulk_export_evals(mock_get_map, mock_export, mock_makedirs):
     ):
         evals_client.bulk_export_evals("typo", "/valid/dir")
 
-    # Test 4: File write exception inside the loop (invalid file path logic, caught by try/except)
+    # Test 4: File write exception inside the loop (invalid file path logic,
+    # caught by try/except)
     mock_export.reset_mock()
     mock_export.side_effect = Exception("Export failed")
 

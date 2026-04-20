@@ -17,6 +17,7 @@
 import argparse
 import logging
 import sys
+
 from cxas_scrapi.utils.local.create_utils import CreateUtils
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,9 @@ def handle_local_create(args: argparse.Namespace) -> None:
         app_dir = getattr(args, "app_dir", ".")
 
         if type_name == "agent":
-            path = create_utils.create_agent(display_name=args.name, app_dir=app_dir)
+            path = create_utils.create_agent(
+                display_name=args.name, app_dir=app_dir
+            )
         elif type_name == "tool":
             path = create_utils.create_tool(
                 display_name=args.name,

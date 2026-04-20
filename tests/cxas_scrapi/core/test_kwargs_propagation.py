@@ -14,9 +14,9 @@
 
 """Tests to ensure the **kwargs authentication regression doesn't reappear."""
 
+import importlib
 import inspect
 import pkgutil
-import importlib
 
 import cxas_scrapi.core
 from cxas_scrapi.core.common import Common
@@ -35,10 +35,11 @@ def test_core_classes_accept_kwargs():
         full_module_name = f"{package.__name__}.{module_name}"
         module = importlib.import_module(full_module_name)
 
-        for name, obj in inspect.getmembers(module):
+        for _name, obj in inspect.getmembers(module):
             # Check if it is a class and inherits from Common
             if inspect.isclass(obj) and issubclass(obj, Common):
-                # Ignore the base Common class itself since it natively implements kwargs
+                # Ignore the base Common class itself since it natively
+                # implements kwargs
                 if obj is Common:
                     continue
 
@@ -55,6 +56,7 @@ def test_core_classes_accept_kwargs():
                         )
 
     assert not missing_kwargs_classes, (
-        "The following core wrapper classes are missing **kwargs in their __init__ "
+        "The following core wrapper classes are missing **kwargs in their "
+        "__init__ "
         f"signature, which breaks creds inheritance: {missing_kwargs_classes}"
     )

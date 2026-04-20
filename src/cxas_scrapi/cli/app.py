@@ -178,10 +178,14 @@ def app_push(args: argparse.Namespace) -> Optional[str]:  # noqa: C901
         identifier = target_app or app_id_arg
 
         if identifier:
-            apps_client, app_id, display_name = _resolve_app_args(identifier, args)
+            apps_client, app_id, display_name = _resolve_app_args(
+                identifier, args
+            )
             print("Pushing to existing app... Overwriting if supported.")
         else:
-            apps_client = Apps(project_id=args.project_id, location=args.location)
+            apps_client = Apps(
+                project_id=args.project_id, location=args.location
+            )
             app_id = None
             print("No target specified, using existing name if needed.")
             display_name = getattr(args, "display_name", None) or "Pushed Agent"
@@ -206,7 +210,9 @@ def app_push(args: argparse.Namespace) -> Optional[str]:  # noqa: C901
             result = apps_client.import_as_new_app(
                 display_name=display_name, app_content=app_content
             )
-        return _handle_import_result(result, "pushed to" if target_app else "pushed")
+        return _handle_import_result(
+            result, "pushed to" if target_app else "pushed"
+        )
 
     except Exception as e:
         print(f"Failed to push app: {e}")
@@ -320,7 +326,8 @@ def apps_list(args: argparse.Namespace) -> None:
             import pandas as pd  # noqa: PLC0415
 
             data = [
-                {"Display Name": app.display_name, "Name": app.name} for app in apps
+                {"Display Name": app.display_name, "Name": app.name}
+                for app in apps
             ]
             df = pd.DataFrame(data)
             print("\nApps:")
@@ -424,7 +431,9 @@ def app_lint(args: argparse.Namespace) -> None:  # noqa: C901
                             "file": str(app_dir),
                             "severity": "error",
                             "rule_id": "SETUP",
-                            "message": ("No app directory " f"found under {app_dir}"),
+                            "message": (
+                                f"No app directory found under {app_dir}"
+                            ),
                         }
                     ]
                 )
@@ -480,7 +489,9 @@ def app_init(args: argparse.Namespace) -> None:
 
     if not skills_root.exists():
         print(f"ERROR: Bundled skills not found at {skills_root}")
-        print("This may happen if cxas-scrapi was " "installed without skill data.")
+        print(
+            "This may happen if cxas-scrapi was installed without skill data."
+        )
         sys.exit(1)
 
     overwrite_all = force
@@ -518,7 +529,8 @@ def _prompt_overwrite(name: str) -> str:
     while True:
         choice = (
             input(
-                f"  '{name}' already exists. " "[o]verwrite / [a]ll / [s]kip / [q]uit? "
+                f"  '{name}' already exists. "
+                "[o]verwrite / [a]ll / [s]kip / [q]uit? "
             )
             .strip()
             .lower()

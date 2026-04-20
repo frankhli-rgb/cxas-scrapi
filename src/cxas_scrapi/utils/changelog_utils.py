@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
 import functools
 import json
-import datetime
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 # Assuming google.genai is available in the environment if the user uses this
 try:
@@ -25,7 +25,6 @@ except ImportError:
 
 
 class ChangelogUtils:
-
     @staticmethod
     def _get_nested_val(data: Dict, path: List[str], default=None):
         """Safely gets a value from a nested dictionary."""
@@ -105,7 +104,8 @@ class ChangelogUtils:
         for field in fields_to_extract:
             value = resource.get(field)
             if value is not None:
-                # Simplify complex fields like lists of callbacks/variables/tools/guardrails
+                # Simplify complex fields like lists of
+                # callbacks/variables/tools/guardrails
                 if field in ["tools", "guardrails", "childAgents"]:
                     parts[field] = sorted(
                         [item.split("/")[-1] for item in value]
@@ -120,7 +120,8 @@ class ChangelogUtils:
                     "beforeToolCallbacks",
                     "afterToolCallbacks",
                 ]:
-                    # Represent callbacks by their description or index if description missing
+                    # Represent callbacks by their description or index if
+                    # description missing
                     parts[field] = sorted(
                         [
                             cb.get("description", f"callback_{i}")
@@ -128,7 +129,8 @@ class ChangelogUtils:
                         ]
                     )
                 elif isinstance(value, (dict, list)):
-                    # Convert other complex types to compact JSON string for the prompt
+                    # Convert other complex types to compact JSON string for
+                    # the prompt
                     try:
                         parts[field] = json.dumps(
                             value, sort_keys=True, separators=(",", ":")
@@ -143,7 +145,8 @@ class ChangelogUtils:
 
     @staticmethod
     def _format_changelog_for_prompt(changelog: Dict[str, Any]) -> str:
-        """Formats changelog info, providing Original/New snippets for Updates."""
+        """Formats changelog info, providing Original/New snippets for
+        Updates."""
         action = changelog.get("action")
         resource_type = changelog.get("resourceType")
         display_name = changelog.get("displayName", "N/A")
@@ -169,25 +172,30 @@ class ChangelogUtils:
                     new_str = json.dumps(
                         new_parts, sort_keys=True, separators=(",", ":")
                     )
-                except (
-                    TypeError
-                ):  # Fallback if parts aren't serializable (shouldn't happen often)
+                except TypeError:
+                    # Fallback if parts aren't serializable (shouldn't happen
+                    # often)
                     original_str = str(original_parts)
                     new_str = str(new_parts)
 
                 # Only include Original/New if they are different
                 if original_str != new_str:
                     return (
-                        f"- Action: Update, ResourceType: {resource_type}, Name: '{display_name}'\n"
+                        f"- Action: Update, ResourceType: {resource_type}, "
+                        f"Name: '{display_name}'\n"
                         f"  Original: {original_str}\n"
                         f"  New: {new_str}"
                     )
                 else:
-                    # If resources are identical despite 'Update' action, treat as no-op or minor internal change
-                    # Return a generic format, but indicate it was an update context
+                    # If resources are identical despite 'Update' action, treat
+                    # as no-op or minor internal change
+                    # Return a generic format, but indicate it was an update
+                    # context
                     return (
-                        f"- Action: Update (No detected change), ResourceType: {resource_type}, "
-                        f"Name: '{display_name}', Description: '{changelog_description}'"
+                        f"- Action: Update (No detected change), "
+                        f"ResourceType: {resource_type}, "
+                        f"Name: '{display_name}', "
+                        f"Description: '{changelog_description}'"
                     )
 
         # Fallback for Create, Delete, or Updates where Original/New are missing
@@ -210,7 +218,8 @@ class ChangelogUtils:
             ]
             if not valid_versions:
                 print(
-                    "No valid versions with createTime found. Returning all changelogs."
+                    "No valid versions with createTime found. Returning all "
+                    "changelogs."
                 )
                 return all_changelogs
 
@@ -237,7 +246,8 @@ class ChangelogUtils:
             return recent_changelogs
         except (ValueError, KeyError, TypeError) as e:
             print(
-                f"Error processing version or changelog timestamps: {e}. Returning all changelogs."
+                f"Error processing version or changelog timestamps: {e}. "
+                f"Returning all changelogs."
             )
             return all_changelogs
 
@@ -247,7 +257,8 @@ class ChangelogUtils:
         changelogs: List[Dict[str, Any]],
         project_id: str = None,
     ) -> str:
-        """Summarizes each non-evaluation changelog into a simple, specific one-liner."""
+        """Summarizes each non-evaluation changelog into a simple, specific
+        one-liner."""
         resource_types_to_exclude = [
             "Version",
             "AppVersion",
@@ -263,7 +274,8 @@ class ChangelogUtils:
         if not filtered_changelogs:
             return "No user-facing changes to summarize."
 
-        # Format each changelog entry, potentially producing multi-line strings for updates
+        # Format each changelog entry, potentially producing multi-line
+        # strings for updates
         formatted_log_entries = [
             ChangelogUtils._format_changelog_for_prompt(cl)
             for cl in filtered_changelogs
@@ -288,14 +300,27 @@ class ChangelogUtils:
             return "No user-facing changes to summarize."
 
         prompt = f"""
-        You are an AI assistant that analyzes technical log entries, specifically focusing on 'Update' actions by comparing 'Original' and 'New' configuration snippets. Your goal is to generate a concise, single-line summary describing the *exact* change that occurred for each entry.
+        You are an AI assistant that analyzes technical log entries,
+        specifically focusing on 'Update' actions by comparing 'Original' and
+        'New' configuration snippets. Your goal is to generate a concise,
+        single-line summary describing the *exact* change that occurred for
+        each entry.
 
         Rules:
-        - **CRITICAL**: Provide one summary line for each numbered entry in the input. Maintain a 1-to-1 correspondence.
-        - For 'Update' entries with 'Original' and 'New' snippets: Compare them carefully to identify the precise difference. Describe only that specific change (e.g., "Disabled barge-in", "Added variable 'X'", "Updated agent instructions", "Added tool 'Y'").
-        - For 'Create' or 'Delete' entries (or 'Update' entries without Original/New comparison data): Generate a summary based on the Action, ResourceType, Name, and Description provided (e.g., "Created tool 'get_weather'", "Deleted agent 'old_agent'").
-        - Be specific. Avoid generic phrases like "Updated settings" or "Changed configuration". State *what* was updated.
-        - The final output must be a bulleted list, starting each line with '-'.
+        - **CRITICAL**: Provide one summary line for each numbered entry in
+          the input. Maintain a 1-to-1 correspondence.
+        - For 'Update' entries with 'Original' and 'New' snippets: Compare
+          them carefully to identify the precise difference. Describe only
+          that specific change (e.g., "Disabled barge-in", "Added variable
+          'X'", "Updated agent instructions", "Added tool 'Y'").
+        - For 'Create' or 'Delete' entries (or 'Update' entries without
+          Original/New comparison data): Generate a summary based on the
+          Action, ResourceType, Name, and Description provided (e.g.,
+          "Created tool 'get_weather'", "Deleted agent 'old_agent'").
+        - Be specific. Avoid generic phrases like "Updated settings" or
+          "Changed configuration". State *what* was updated.
+        - The final output must be a bulleted list, starting each line with
+          '-'.
 
         Here is the raw changelog data to summarize:
         ---
@@ -317,7 +342,8 @@ class ChangelogUtils:
             response = cl.models.generate_content(
                 model="gemini-2.5-flash", contents=prompt
             )
-            # Basic post-processing to clean up potential numbering/extra whitespace
+            # Basic post-processing to clean up potential numbering/extra
+            # whitespace
             lines = response.text.strip().split("\n")
             cleaned_lines = [
                 line.strip() for line in lines if line.strip().startswith("-")

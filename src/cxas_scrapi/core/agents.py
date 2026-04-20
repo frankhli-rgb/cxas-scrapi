@@ -14,13 +14,13 @@
 
 """Core Agents class for CXAS Scrapi."""
 
-from typing import Dict, Any, Optional, List, Union
-import uuid
-import json
+from typing import Any, Dict, List, Optional, Union
+
 import requests
-from google.protobuf import field_mask_pb2
-from google.protobuf import json_format
+from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.cloud.ces_v1beta import AgentServiceClient, types
+from google.protobuf import field_mask_pb2, json_format
+
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.workflows import WorkflowAgent
 
@@ -109,7 +109,8 @@ class Agents(Apps):
             agent_type: One of 'llm', 'dfcx', 'workflow'.
             model: (LLM) Model name to use.
             instruction: (LLM) System instruction.
-            timeout: (LLM) Timeout (not standard field yet? ignoring for now or mapping to model_settings).
+            timeout: (LLM) Timeout (not standard field yet? ignoring for
+                now or mapping to model_settings).
             dfcx_agent_resource: (DFCX) Full resource name of DFCX agent.
             workflow_config: (Workflow) Dict config or WorkflowAgent object.
             **kwargs: Additional fields for types.Agent.
@@ -117,15 +118,10 @@ class Agents(Apps):
         agent_data = {"display_name": display_name, **kwargs}
         if agent_type == "llm":
             # Construct LLM Agent
-            # Note: based on inspection, LLMAgent field key is likely 'llm_agent'
-            # and 'instruction' / 'model_settings' are top level on Agent (based on inspection output).
-            # Agent fields: [..., 'llm_agent', ..., 'model_settings', 'instruction', ...]
 
             if instruction:
                 agent_data["instruction"] = instruction
 
-            # If model is provided, check where it goes.
-            # Usually model_settings = {'model': '...'}
             if model:
                 # Assuming top-level model_settings
                 agent_data["model_settings"] = types.ModelSettings(model=model)
@@ -157,21 +153,19 @@ class Agents(Apps):
             raise ValueError(f"Unknown agent_type: {agent_type}")
 
         if agent_type == "workflow":
-            # REST Fallback for Workflow Agents to bypass local proto descriptor check
-            # internal "workflow_agent" field might be missing in local descriptors
+            # REST Fallback for Workflow Agents to bypass local proto
+            # descriptor check internal "workflow_agent" field might be
+            # missing in local descriptors
 
             # Construct URL
-            # Endpoint from self.client.transport.host works but standard is usually ces.googleapis.com
+            # Endpoint from self.client.transport.host works but standard
+            # is usually ces.googleapis.com
             # We can use Common logic or just standard "https://ces.googleapis.com"
             api_endpoint = "https://ces.googleapis.com"
             url = f"{api_endpoint}/v1beta/{self.app_name}/agents"
 
             # Refresh token just in case
             if self.creds.expired:
-                from google.auth.transport.requests import (
-                    Request as GoogleAuthRequest,
-                )
-
                 self.creds.refresh(GoogleAuthRequest())
 
             headers = {
@@ -188,8 +182,9 @@ class Agents(Apps):
                 )
 
             # Convert response JSON back to Agent object
-            # We use ignore_unknown_fields=True just in case response contains workflow_agent
-            # and we still can't parse it into the local object, but at least we return a valid base object.
+            # We use ignore_unknown_fields=True just in case response
+            # contains workflow_agent and we still can't parse it into the
+            # local object, but at least we return a valid base object.
             return json_format.ParseDict(
                 response.json(), types.Agent(), ignore_unknown_fields=True
             )

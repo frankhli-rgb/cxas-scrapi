@@ -12,13 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
-from unittest.mock import MagicMock
-
-sys.modules["google.cloud.ces_v1beta"] = MagicMock()
-import sys
 import os
-import pytest
+import sys
 from unittest.mock import MagicMock, patch
 
 # Ensure correct path
@@ -26,12 +21,12 @@ sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../src"))
 )
 
-from cxas_scrapi.core.common import Common
+from cxas_scrapi.core.common import Common  # noqa: E402
 
 
 def test_common_init():
     try:
-        base = Common()
+        Common()
         print("PASS: Initialized Common with default creds (ADC).")
     except Exception as e:
         print(f"WARN: Failed to init with ADC (expected if no ADC): {e}")
@@ -60,20 +55,20 @@ def test_project_id_extraction():
         Common._get_project_id("projects/test-proj/locations/us/apps/abc")
         == "test-proj"
     )
-    assert Common._get_project_id("invalid-format") == None
+    assert Common._get_project_id("invalid-format") is None
 
 
 def test_location_extraction():
     assert (
         Common._get_location("projects/test-proj/locations/us/apps/abc") == "us"
     )
-    assert Common._get_location("invalid-format") == None
+    assert Common._get_location("invalid-format") is None
 
 
 def test_unwrap_value():
     assert Common.unwrap_value({"string_value": "hello"}) == "hello"
     assert Common.unwrap_value({"number_value": 42}) == 42
-    assert Common.unwrap_value({"bool_value": True}) == True
+    assert Common.unwrap_value({"bool_value": True})
     assert Common.unwrap_value(
         {"list_value": {"values": [{"string_value": "a"}]}}
     ) == ["a"]

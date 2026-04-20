@@ -23,6 +23,13 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.tree import Tree
 
+try:
+    from google.colab import files  # type: ignore[import]
+
+    HAS_COLAB = True
+except ImportError:
+    HAS_COLAB = False
+
 from cxas_scrapi.migration.flow_visualizer import (
     FlowDependencyResolver,
     FlowTreeVisualizer,
@@ -93,13 +100,10 @@ class MainVisualizer:
                 )
                 generic_web_service = webhook_data.get("genericWebService", {})
                 if generic_web_service:
-                    webhook_node.add(
-                        f"[dim]URI:[/] {escape(generic_web_service.get('uri', ''))}"
-                    )
-                    webhook_node.add(
-                        f"[dim]Type:[/] "
-                        f"{escape(generic_web_service.get('webhookType', 'STANDARD'))}"
-                    )
+                    uri = generic_web_service.get("uri", "")
+                    webhook_node.add(f"[dim]URI:[/] {escape(uri)}")
+                    wt = generic_web_service.get("webhookType", "STANDARD")
+                    webhook_node.add(f"[dim]Type:[/] {escape(wt)}")
                     if generic_web_service.get("httpMethod"):
                         webhook_node.add(
                             f"[dim]Method:[/] "
@@ -145,32 +149,37 @@ class MainVisualizer:
                         display: flex; justify-content: space-between;
                         align-items: center;">
                 <div>
-                    <strong style="margin-right: 10px; font-family: sans-serif;">
+                    <strong style="margin-right: 10px;
+                            font-family: sans-serif;">
                         Zoom Controls:
                     </strong>
                     <button onclick="zoomIn_{uid}()"
                             style="padding: 6px 12px; margin-right: 5px;
                                    cursor: pointer; background: #e9ecef;
-                                   border: 1px solid #ced4da; border-radius: 4px;">
+                                   border: 1px solid #ced4da;
+                                   border-radius: 4px;">
                         ➕ In
                     </button>
                     <button onclick="zoomOut_{uid}()"
                             style="padding: 6px 12px; margin-right: 5px;
                                    cursor: pointer; background: #e9ecef;
-                                   border: 1px solid #ced4da; border-radius: 4px;">
+                                   border: 1px solid #ced4da;
+                                   border-radius: 4px;">
                         ➖ Out
                     </button>
                     <button onclick="resetZoom_{uid}()"
                             style="padding: 6px 12px; cursor: pointer;
                                    background: #e9ecef;
-                                   border: 1px solid #ced4da; border-radius: 4px;">
+                                   border: 1px solid #ced4da;
+                                   border-radius: 4px;">
                         🔄 Reset
                     </button>
                 </div>
                 <button id="btn_toggle_{uid}" onclick="toggleTools_{uid}()"
                         style="padding: 6px 12px; cursor: pointer;
                                background: #1976d2; color: white;
-                               border: none; border-radius: 4px; font-weight: bold;">
+                               border: none; border-radius: 4px;
+                                font-weight: bold;">
                     Show Detailed Code Blocks View
                 </button>
             </div>
@@ -336,10 +345,8 @@ class MainVisualizer:
         with open(md_filename, "w", encoding="utf-8") as md_file:
             md_file.write(capture_console.export_text())
 
-        try:
-            from google.colab import files  # type: ignore[import]
-
+        if HAS_COLAB:
             files.download(svg_filename)
             files.download(md_filename)
-        except ImportError:
+        else:
             print(f"Files saved locally: {svg_filename}, {md_filename}")

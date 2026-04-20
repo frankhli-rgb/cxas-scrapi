@@ -15,7 +15,8 @@
 """Core Variables class for CXAS Scrapi."""
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
 from google.cloud.ces_v1beta import types
 from proto.marshal.collections import maps, repeated
 
@@ -35,8 +36,10 @@ class Variables(Apps):
         **kwargs,
     ):
         """Initializes the Variables client.
-        Note that Variables are resources of the App itself, not a standalone resource.
-        This class is a wrapper around the App class to make it easier to manage Variables.
+
+        Note that Variables are resources of the App itself, not a standalone
+        resource. This class is a wrapper around the App class to make it
+        easier to manage Variables.
         """
         project_id = app_name.split("/")[1]
         location = app_name.split("/")[3]
@@ -51,12 +54,13 @@ class Variables(Apps):
             **kwargs,
         )
         self.app_name = app_name
-        self.app_id = app_name.split("/")[-1]
+        self.app_id = app_name.rsplit("/", maxsplit=1)[-1]
         self.resource_type = "variables"
 
     @staticmethod
     def _check_schema_type(input_type: str):
-        # these are the only valid types mapping to types.App.VariableDeclaration.Schema.Type
+        # these are the only valid types mapping to
+        # types.App.VariableDeclaration.Schema.Type
         if input_type.upper() not in [
             "STRING",
             "INTEGER",
@@ -161,7 +165,7 @@ class Variables(Apps):
         vars_list = list(app.variable_declarations)
 
         updated = False
-        for i, var in enumerate(vars_list):
+        for var in vars_list:
             if var.name == variable_name:
                 var.schema.type_ = getattr(
                     types.App.VariableDeclaration.Schema.Type,

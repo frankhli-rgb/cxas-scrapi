@@ -35,6 +35,7 @@ from cxas_scrapi.utils.linter import (
 
 # ── Severity ─────────────────────────────────────────────────────────────
 
+
 def test_severity_from_str():
     assert Severity.from_str("error") == Severity.ERROR
     assert Severity.from_str("WARNING") == Severity.WARNING
@@ -48,6 +49,7 @@ def test_severity_from_str_invalid():
 
 
 # ── LintResult ───────────────────────────────────────────────────────────
+
 
 def test_lint_result_str_format():
     result = LintResult(
@@ -94,6 +96,7 @@ def test_lint_result_to_dict():
 
 # ── LintReport ───────────────────────────────────────────────────────────
 
+
 def test_lint_report_add_and_counts():
     report = LintReport()
     report.add(LintResult("a.txt", "I001", Severity.ERROR, "err"))
@@ -123,6 +126,7 @@ def test_lint_report_empty(capsys):
 
 
 # ── RuleRegistry ─────────────────────────────────────────────────────────
+
 
 def test_rule_registry_lookup():
     registry = RuleRegistry()
@@ -158,6 +162,7 @@ def test_rule_decorator_deduplication():
         name = "dedup-test"
         description = "test"
         default_severity = Severity.INFO
+
         def check(self, fp, content, ctx):
             return []
 
@@ -171,6 +176,7 @@ def test_rule_decorator_deduplication():
         name = "dedup-test"
         description = "test"
         default_severity = Severity.INFO
+
         def check(self, fp, content, ctx):
             return []
 
@@ -212,6 +218,7 @@ def test_reset_registry():
     import cxas_scrapi.utils.lint_rules.schema as mod_v  # noqa: PLC0415,I001
     import cxas_scrapi.utils.lint_rules.structure as mod_s  # noqa: PLC0415,I001
     import cxas_scrapi.utils.lint_rules.tools as mod_t  # noqa: PLC0415,I001
+
     for mod in [mod_i, mod_c, mod_t, mod_e, mod_a, mod_s, mod_v]:
         importlib.reload(mod)
 
@@ -220,6 +227,7 @@ def test_reset_registry():
 
 
 # ── LintConfig ───────────────────────────────────────────────────────────
+
 
 def test_lint_config_load_defaults(tmp_path):
     config = LintConfig.load(tmp_path)
@@ -308,13 +316,14 @@ def test_lint_config_is_ignored():
 
 # ── Discovery ────────────────────────────────────────────────────────────
 
+
 def _make_app(tmp_path, agents=None, tools=None):
     """Helper to create a minimal app directory structure."""
     (tmp_path / "app.json").write_text(
         '{"name": "test", "displayName": "Test"}'
     )
     (tmp_path / "agents").mkdir()
-    for name in (agents or []):
+    for name in agents or []:
         agent_dir = tmp_path / "agents" / name
         agent_dir.mkdir()
         (agent_dir / "instruction.txt").write_text("<role>test</role>")
@@ -324,7 +333,7 @@ def _make_app(tmp_path, agents=None, tools=None):
         for name in tools:
             tool_dir = tmp_path / "tools" / name / "python_function"
             tool_dir.mkdir(parents=True)
-            (tool_dir / "python_code.py").write_text(f'def {name}(): pass')
+            (tool_dir / "python_code.py").write_text(f"def {name}(): pass")
 
 
 def test_discovery_direct_app_root(tmp_path):
@@ -369,8 +378,11 @@ def test_discovery_tools(tmp_path):
 def test_discovery_callbacks(tmp_path):
     _make_app(tmp_path, agents=["root_agent"])
     cb_dir = (
-        tmp_path / "agents" / "root_agent"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path
+        / "agents"
+        / "root_agent"
+        / "before_model_callbacks"
+        / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     (cb_dir / "python_code.py").write_text(
@@ -432,8 +444,7 @@ def test_discovery_tool_callbacks(tmp_path):
     """before_tool_callbacks and after_tool_callbacks are discovered."""
     _make_app(tmp_path, agents=["root_agent"])
     cb_dir = (
-        tmp_path / "agents" / "root_agent"
-        / "before_tool_callbacks" / "log_01"
+        tmp_path / "agents" / "root_agent" / "before_tool_callbacks" / "log_01"
     )
     cb_dir.mkdir(parents=True)
     (cb_dir / "python_code.py").write_text(
@@ -447,6 +458,7 @@ def test_discovery_tool_callbacks(tmp_path):
 
 
 # ── Runner ───────────────────────────────────────────────────────────────
+
 
 def test_build_registry_all_rules():
     registry = build_registry()
@@ -474,8 +486,9 @@ def test_run_rules_categories_filter(tmp_path):
 
     # Run only config rules
     report = LintReport()
-    run_rules(registry, config, context, discovery, report,
-              categories=["config"])
+    run_rules(
+        registry, config, context, discovery, report, categories=["config"]
+    )
 
     # Should only have config rule results (A-prefixed)
     for r in report.results:
@@ -490,8 +503,9 @@ def test_run_rules_specific_rules_filter(tmp_path):
     registry = build_registry()
 
     report = LintReport()
-    run_rules(registry, config, context, discovery, report,
-              specific_rules={"I001"})
+    run_rules(
+        registry, config, context, discovery, report, specific_rules={"I001"}
+    )
 
     for r in report.results:
         assert r.rule_id == "I001", f"Expected I001, got {r.rule_id}"
@@ -511,14 +525,16 @@ def test_run_rules_handles_directory_targets(tmp_path):
     registry = build_registry()
 
     from unittest.mock import patch  # noqa: PLC0415,I001
-    with patch(
-        "cxas_scrapi.utils.lint_rules.schema"
-        ".json_format.ParseDict"
-    ):
+
+    with patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
         report = LintReport()
         run_rules(
-            registry, config, context, discovery,
-            report, categories=["schema"],
+            registry,
+            config,
+            context,
+            discovery,
+            report,
+            categories=["schema"],
         )
 
     # Should not crash -- directories are handled gracefully
@@ -530,9 +546,7 @@ def test_run_rules_with_gecx_nested_layout(tmp_path):
     app_root = tmp_path / "cxas_app" / "my-agent"
     app_root.mkdir(parents=True)
     _make_app(app_root, agents=["root_agent"])
-    (tmp_path / "gecx-config.json").write_text(
-        '{"app_dir": "cxas_app/"}'
-    )
+    (tmp_path / "gecx-config.json").write_text('{"app_dir": "cxas_app/"}')
 
     config = LintConfig.load(tmp_path)
     app_dir = tmp_path / config.app_dir
@@ -543,13 +557,17 @@ def test_run_rules_with_gecx_nested_layout(tmp_path):
     registry = build_registry()
 
     from unittest.mock import patch  # noqa: PLC0415,I001
-    with patch(
-        "cxas_scrapi.utils.lint_rules.schema"
-        ".json_format.ParseDict"
-    ):
+
+    with patch("cxas_scrapi.utils.lint_rules.schema.json_format.ParseDict"):
         report = LintReport()
-        run_rules(registry, config, context, discovery, report,
-                  specific_rules={"I001"})
+        run_rules(
+            registry,
+            config,
+            context,
+            discovery,
+            report,
+            specific_rules={"I001"},
+        )
 
     # I001 checks instruction tags — our _make_app only has <role>
     assert any(r.rule_id == "I001" for r in report.results)
@@ -577,17 +595,27 @@ def test_structure_rules_dispatched_by_target(tmp_path):
         target = "agent_config"
 
         def check(self, file_path, content, ctx):
-            return [self.make_result(
-                str(file_path), "S999 was dispatched correctly"
-            )]
+            return [
+                self.make_result(
+                    str(file_path), "S999 was dispatched correctly"
+                )
+            ]
 
     registry = build_registry()
     report = LintReport()
-    run_rules(registry, config, context, discovery, report,
-              categories=["structure"], specific_rules={"S999"})
+    run_rules(
+        registry,
+        config,
+        context,
+        discovery,
+        report,
+        categories=["structure"],
+        specific_rules={"S999"},
+    )
 
-    assert any(r.rule_id == "S999" for r in report.results), \
+    assert any(r.rule_id == "S999" for r in report.results), (
         "S999 with target='agent_config' was not dispatched by the runner"
+    )
 
     # Cleanup: remove the fake rule so it doesn't affect other tests
     _RULE_REGISTRY["structure"] = [

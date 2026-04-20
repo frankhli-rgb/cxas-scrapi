@@ -14,8 +14,8 @@
 
 """Core Workflows class for CXAS Scrapi."""
 
-from typing import List, Optional, Dict, Any, Union
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional
 
 
 @dataclass

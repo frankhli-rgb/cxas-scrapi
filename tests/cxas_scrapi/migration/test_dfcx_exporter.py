@@ -17,15 +17,13 @@
 import io
 import json
 import zipfile
-import pytest
+
 from cxas_scrapi.migration.dfcx_exporter import DFCXAgentExporter
 
 
 def test_process_zip_content_minimal():
     extractor = DFCXAgentExporter()
-    agent_id = (
-        "projects/test-project/locations/global/agents/test-agent"
-    )
+    agent_id = "projects/test-project/locations/global/agents/test-agent"
 
     # Create a minimal zip in memory
     zip_buffer = io.BytesIO()
@@ -59,9 +57,7 @@ def test_process_zip_content_minimal():
 
 def test_process_zip_content_complex():
     extractor = DFCXAgentExporter()
-    agent_id = (
-        "projects/test-project/locations/global/agents/test-agent"
-    )
+    agent_id = "projects/test-project/locations/global/agents/test-agent"
 
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(
@@ -77,17 +73,23 @@ def test_process_zip_content_complex():
 
         # 2. Flows & Pages
         flow_json = {"displayName": "Main Flow"}
-        zip_file.writestr("flows/main_flow/main_flow.json", json.dumps(flow_json))
+        zip_file.writestr(
+            "flows/main_flow/main_flow.json", json.dumps(flow_json)
+        )
 
         page_json = {"displayName": "Page 1", "name": "page-1-id"}
-        zip_file.writestr("flows/main_flow/pages/page1.json", json.dumps(page_json))
+        zip_file.writestr(
+            "flows/main_flow/pages/page1.json", json.dumps(page_json)
+        )
 
         # 3. Generators
         gen_json = {"displayName": "My Generator", "name": "gen-id"}
         zip_file.writestr("generators/my_gen/my_gen.json", json.dumps(gen_json))
 
         phrase_json = {"phrases": [{"text": "hello"}]}
-        zip_file.writestr("generators/my_gen/phrases/en.json", json.dumps(phrase_json))
+        zip_file.writestr(
+            "generators/my_gen/phrases/en.json", json.dumps(phrase_json)
+        )
 
         # 4. Test Cases
         tc_json = {"displayName": "Test Case 1"}
@@ -95,7 +97,9 @@ def test_process_zip_content_complex():
 
         # 5. Agent TRGs
         trg_json = {"displayName": "My TRG", "name": "trg-id"}
-        zip_file.writestr("agentTransitionRouteGroups/my_trg.json", json.dumps(trg_json))
+        zip_file.writestr(
+            "agentTransitionRouteGroups/my_trg.json", json.dumps(trg_json)
+        )
 
         # 6. Generative Settings
         gs_json = {"fallbackSettings": {"enabled": True}}
@@ -126,8 +130,13 @@ def test_process_zip_content_complex():
 
     # Verify Agent TRGs
     assert len(result.agent_transition_route_groups) == 1
-    assert result.agent_transition_route_groups[0]["name"] == f"{agent_id}/agentTransitionRouteGroups/trg-id"
+    assert (
+        result.agent_transition_route_groups[0]["name"]
+        == f"{agent_id}/agentTransitionRouteGroups/trg-id"
+    )
 
     # Verify Generative Settings
     assert "en" in result.generative_settings
-    assert result.generative_settings["en"]["fallbackSettings"]["enabled"] is True
+    assert (
+        result.generative_settings["en"]["fallbackSettings"]["enabled"] is True
+    )

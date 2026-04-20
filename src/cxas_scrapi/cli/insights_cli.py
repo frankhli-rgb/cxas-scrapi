@@ -17,12 +17,10 @@
 import argparse
 import sys
 import tempfile
-from typing import Sequence
-import logging
 
+import cxas_scrapi.utils.scorecard_template_manager as template_manager
 from cxas_scrapi.core.scorecards import Scorecards
 from cxas_scrapi.utils.insights_utils import InsightsUtils
-import cxas_scrapi.utils.scorecard_template_manager as template_manager
 
 
 def _get_project_and_location_from_parent(parent: str) -> tuple[str, str]:
@@ -30,7 +28,8 @@ def _get_project_and_location_from_parent(parent: str) -> tuple[str, str]:
     parts = parent.split("/")
     if len(parts) < 4 or parts[0] != "projects" or parts[2] != "locations":
         print(
-            f"Error: Invalid parent format: {parent}. Expected projects/PROJ/locations/LOC"
+            f"Error: Invalid parent format: {parent}. "
+            f"Expected projects/PROJ/locations/LOC"
         )
         sys.exit(1)
     return parts[1], parts[3]
@@ -54,7 +53,8 @@ def handle_list(args: argparse.Namespace) -> None:
 def handle_export(args: argparse.Namespace) -> None:
     """Handles the 'insights export' command."""
     print(f"Exporting scorecard {args.scorecard_name} to {args.template}")
-    # Extract project/location from the full scorecard name. Format: projects/PROJ/locations/LOC/qaScorecards/ID
+    # Extract project/location from the full scorecard name.
+    # Format: projects/PROJ/locations/LOC/qaScorecards/ID
     project_id, location = _get_project_and_location_from_parent(
         args.scorecard_name
     )
@@ -93,7 +93,8 @@ def handle_import(args: argparse.Namespace) -> None:
     """Handles the 'insights import' command."""
     if not args.scorecard_name and not args.parent:
         print(
-            "Error: Must provide either --scorecard_name or --parent for import."
+            "Error: Must provide either --scorecard_name or --parent for "
+            "import."
         )
         sys.exit(1)
 
@@ -132,7 +133,8 @@ def handle_copy(args: argparse.Namespace) -> None:
     """Handles the 'insights copy' command."""
     if not args.dst_scorecard_name and not args.parent:
         print(
-            "Error: Must provide either --dst_scorecard_name or --parent for destination."
+            "Error: Must provide either --dst_scorecard_name or --parent "
+            "for destination."
         )
         sys.exit(1)
 
@@ -154,7 +156,7 @@ def handle_copy(args: argparse.Namespace) -> None:
         import_args.template = template_path
         handle_import(import_args)
 
-    print(f"Successfully completed copy operation.")
+    print("Successfully completed copy operation.")
 
 
 def populate_insights_parser(parser_insights: argparse.ArgumentParser) -> None:
@@ -184,7 +186,8 @@ def populate_insights_parser(parser_insights: argparse.ArgumentParser) -> None:
     parser_export.add_argument(
         "--scorecard_name",
         required=True,
-        help="Full resource name of the scorecard (e.g. projects/*/locations/*/qaScorecards/*).",
+        help="Full resource name of the scorecard (e.g. "
+        "projects/*/locations/*/qaScorecards/*).",
     )
     parser_export.add_argument(
         "--template",
@@ -196,7 +199,8 @@ def populate_insights_parser(parser_insights: argparse.ArgumentParser) -> None:
     # 4. 'import-scorecard-to-insights' subcommand
     parser_import = insights_subparsers.add_parser(
         "import-scorecard-to-insights",
-        help="Import a JSON/YAML template as an editable SDK Scorecard revision.",
+        help="Import a JSON/YAML template as an editable SDK Scorecard "
+        "revision.",
     )
     parser_import.add_argument(
         "--template",
@@ -205,11 +209,14 @@ def populate_insights_parser(parser_insights: argparse.ArgumentParser) -> None:
     )
     parser_import.add_argument(
         "--scorecard_name",
-        help="Optional: Full resource name of an existing scorecard to overwrite. If omitted, --parent must be provided.",
+        help="Optional: Full resource name of an existing scorecard to "
+        "overwrite. If omitted, --parent must be provided.",
     )
     parser_import.add_argument(
         "--parent",
-        help="Optional: Parent resource name (projects/*/locations/*) to create a brand new scorecard under. If omitted, --scorecard_name must be provided.",
+        help="Optional: Parent resource name (projects/*/locations/*) to "
+        "create a brand new scorecard under. If omitted, --scorecard_name "
+        "must be provided.",
     )
     parser_import.set_defaults(func=handle_import)
 
@@ -225,10 +232,13 @@ def populate_insights_parser(parser_insights: argparse.ArgumentParser) -> None:
     )
     parser_copy.add_argument(
         "--dst_scorecard_name",
-        help="Optional: Full resource name of the DESTINATION scorecard to overwrite. If omitted, --parent must be provided.",
+        help="Optional: Full resource name of the DESTINATION scorecard to "
+        "overwrite. If omitted, --parent must be provided.",
     )
     parser_copy.add_argument(
         "--parent",
-        help="Optional: Parent resource name to create a brand new copied scorecard under. If omitted, --dst_scorecard_name must be provided.",
+        help="Optional: Parent resource name to create a brand new copied "
+        "scorecard under. If omitted, --dst_scorecard_name must be "
+        "provided.",
     )
     parser_copy.set_defaults(func=handle_copy)

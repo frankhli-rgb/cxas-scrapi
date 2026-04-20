@@ -14,14 +14,18 @@
 
 """Unit tests for the eval conversation utility."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from cxas_scrapi.evals.simulation_evals import LLMUserConversation
-from cxas_scrapi.evals.simulation_evals import Step
-from cxas_scrapi.evals.simulation_evals import StepProgress
-from cxas_scrapi.evals.simulation_evals import StepStatus
-from cxas_scrapi.evals.simulation_evals import SimulationEvals
+import pandas as pd
+
+from cxas_scrapi.evals.simulation_evals import (
+    LLMUserConversation,
+    SimulationEvals,
+    SimulationReport,
+    Step,
+    StepProgress,
+    StepStatus,
+)
 from cxas_scrapi.utils.eval_utils import (
     ExpectationResult,
     ExpectationStatus,
@@ -70,9 +74,7 @@ def test_llm_user_conversation():
     got_user_utterance_0, _ = llm_conv.next_user_utterance("")
     assert got_user_utterance_0 == user_utterance_0
     assert llm_conv.get_num_turns() == 1
-    assert llm_conv.get_transcript() == "\n".join(
-        [f"User: {user_utterance_0}"]
-    )
+    assert llm_conv.get_transcript() == "\n".join([f"User: {user_utterance_0}"])
 
     got_user_utterance_1, _ = llm_conv.next_user_utterance(agent_response_1)
     assert got_user_utterance_1 == user_utterance_1
@@ -129,9 +131,7 @@ def test_llm_user_conversation_max_turns():
     got_user_utterance_0, _ = llm_conv.next_user_utterance("")
     assert got_user_utterance_0 == user_utterance_0
     assert llm_conv.get_num_turns() == 1
-    assert llm_conv.get_transcript() == "\n".join(
-        [f"User: {user_utterance_0}"]
-    )
+    assert llm_conv.get_transcript() == "\n".join([f"User: {user_utterance_0}"])
 
     # Last turn since we reached the max turns.
     got_user_utterance_1, _ = llm_conv.next_user_utterance(agent_response_1)
@@ -148,6 +148,7 @@ def test_llm_user_conversation_max_turns():
     # LLM call never gets made because we reached the max turns.
     mock_genai_client.models.generate_content.assert_not_called()
     assert llm_conv.steps_progress[0].status == StepStatus.NOT_STARTED
+
 
 @patch("cxas_scrapi.evals.simulation_evals.Sessions")
 @patch("cxas_scrapi.evals.simulation_evals.LLMUserConversation")
@@ -199,12 +200,16 @@ def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
         session_id="123", event="welcome", variables={}, modality="text"
     )
     mock_sessions.run.assert_any_call(
-        session_id="123", text="I want to book a flight", variables={}, modality="text"
+        session_id="123",
+        text="I want to book a flight",
+        variables={},
+        modality="text",
     )
     mock_eval_conv.next_user_utterance.assert_any_call("Where to?")
     mock_eval_conv.next_user_utterance.assert_any_call("Flight booked.")
     assert result_conv == mock_eval_conv
     assert mock_sessions.run.call_count == 2
+
 
 @patch("cxas_scrapi.evals.simulation_evals.Sessions")
 @patch("cxas_scrapi.evals.simulation_evals.LLMUserConversation")
@@ -223,7 +228,7 @@ def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
     # text capture)
     mock_response_1 = MagicMock()
     mock_output_1 = MagicMock()
-    mock_output_1.text = "" # Empty high-level text
+    mock_output_1.text = ""  # Empty high-level text
 
     mock_msg_1 = MagicMock()
     mock_msg_1.role = "model"
@@ -252,7 +257,7 @@ def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
             simulator = SimulationEvals(app_name=app_name)
 
     test_case = {"steps": []}
-    result_conv = simulator.simulate_conversation(
+    simulator.simulate_conversation(
         test_case=test_case,
         session_id="123",
         console_logging=False,
@@ -263,7 +268,10 @@ def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
         session_id="123", event="welcome", variables={}, modality="audio"
     )
     mock_sessions.run.assert_any_call(
-        session_id="123", text="I want to book a flight", variables={}, modality="audio"
+        session_id="123",
+        text="I want to book a flight",
+        variables={},
+        modality="audio",
     )
 
     # Verify text was extracted from Diagnostic Info
@@ -271,6 +279,7 @@ def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
     mock_eval_conv.next_user_utterance.assert_any_call("Where to?")
     mock_eval_conv.next_user_utterance.assert_any_call("Flight booked.")
     assert mock_sessions.run.call_count == 2
+
 
 def test_parse_agent_response_standard():
     mock_response = MagicMock()
@@ -302,6 +311,7 @@ def test_parse_agent_response_standard():
     assert any("Tool Call (Output): some_tool" in c for c in trace_chunks)
     assert not session_ended
 
+
 def test_parse_agent_response_diagnostic():
     mock_response = MagicMock()
     mock_output = MagicMock()
@@ -324,13 +334,14 @@ def test_parse_agent_response_diagnostic():
         with patch("cxas_scrapi.core.apps.AgentServiceClient"):
             simulator = SimulationEvals(app_name=app_name)
 
-    agent_text, trace_chunks, session_ended = (
-        simulator._parse_agent_response(mock_response)
+    agent_text, trace_chunks, session_ended = simulator._parse_agent_response(
+        mock_response
     )
 
     assert agent_text == "Hello from diag"
     assert any("Agent Text (Diag): Hello from diag" in c for c in trace_chunks)
     assert not session_ended
+
 
 def test_evaluate_expectations():
     app_name = "projects/test/locations/us/apps/123-abc"
@@ -360,10 +371,8 @@ def test_evaluate_expectations():
 
     assert eval_conv.expectation_results == mock_output.results
 
-def test_simulation_report_rendering():
-    import pandas as pd
-    from cxas_scrapi.evals.simulation_evals import SimulationReport
 
+def test_simulation_report_rendering():
     goals_df = pd.DataFrame([{"goal": "Goal 1", "status": "Met"}])
     expectations_df = pd.DataFrame([{"expectation": "Exp 1", "status": "Met"}])
 
@@ -378,4 +387,3 @@ def test_simulation_report_rendering():
     html_report = report._repr_html_()
     assert "<h3>Goal Progress</h3>" in html_report
     assert "<h3>Expectations</h3>" in html_report
-

@@ -16,10 +16,10 @@
 Utility class for setting up templates for local ces apps.
 """
 
-import os
 import json
 import re
 from pathlib import Path
+
 from google.cloud.ces_v1beta import types
 from google.protobuf import json_format
 
@@ -29,7 +29,9 @@ AGENT_INSTRUCTION_TEMPLATE = """
 </role>
 
 <persona>
-  <primary_goal><!-- Specifies the main objective the agent should achieve --></primary_goal>
+  <primary_goal>
+    <!-- Specifies the main objective the agent should achieve -->
+  </primary_goal>
     <!-- Describes the agent's personality, tone, and behavioral guidelines -->
 </persona>
 
@@ -43,12 +45,15 @@ AGENT_INSTRUCTION_TEMPLATE = """
     </chunking>
     <bolding>
       - Bold the most important data points for instant visibility.
-      - Always Bold: **Product Names**, **Prices**, **Dates**, **Order Numbers**, and **Deadlines**.
+      - Always Bold: **Product Names**, **Prices**, **Dates**,
+        **Order Numbers**, and **Deadlines**.
       - Example: "The **Classic Tee** is currently **$25.00**."
     </bolding>
     <lists>
-      - Automatically convert any mention of more than two items or steps into a list.
-      - Use standard bullets (-) for options and numbered lists (1.) for instructions.
+      - Automatically convert any mention of more than two items or steps
+        into a list.
+      - Use standard bullets (-) for options and numbered lists (1.) for
+        instructions.
     </lists>
   </text_formatting>
 </constraints>
@@ -58,9 +63,11 @@ AGENT_INSTRUCTION_TEMPLATE = """
 </constraints>
 
 <taskflow>
-<!-- Defines the conversational subtasks that you can take. Each subtask has a sequence of steps that should be taken in order. -->
+<!-- Defines the conversational subtasks that you can take. Each subtask has a
+     sequence of steps that should be taken in order. -->
     <subtask name="Initial Engagement">
-    <!-- A specific part of the conversation flow, containing one or more steps. -->
+    <!-- A specific part of the conversation flow, containing one or more
+         steps. -->
         <step name="Greeting">
         <!-- An individual step that includes a trigger and an action. -->
             <trigger><!-- The condition or user input that initiates a step. -->
@@ -106,7 +113,8 @@ class CreateUtils:
 
         json_file = target_dir / f"{safe_name}.json"
         agent_obj = types.Agent(
-            display_name=display_name, instruction=f"agents/{safe_name}/instruction.txt"
+            display_name=display_name,
+            instruction=f"agents/{safe_name}/instruction.txt",
         )
         template = json_format.MessageToDict(agent_obj._pb)
 
@@ -158,7 +166,9 @@ class CreateUtils:
             code_dir.mkdir(parents=True, exist_ok=True)
             code_file = code_dir / "python_code.py"
             tool_obj.python_function.name = safe_name
-            tool_obj.python_function.description = f"Description for {display_name}"
+            tool_obj.python_function.description = (
+                f"Description for {display_name}"
+            )
             tool_obj.python_function.python_code = (
                 f"tools/{safe_name}/python_function/python_code.py"
             )
@@ -174,11 +184,16 @@ class CreateUtils:
         if add_to_agent_obj:
             agent_safe_name = self._get_safe_display_name(add_to_agent)
             agent_json_file = (
-                app_path / "agents" / agent_safe_name / f"{agent_safe_name}.json"
+                app_path
+                / "agents"
+                / agent_safe_name
+                / f"{agent_safe_name}.json"
             )
             add_to_agent_obj.tools.append(display_name)
             with open(agent_json_file, "w") as f:
-                json.dump(json_format.MessageToDict(add_to_agent_obj._pb), f, indent=2)
+                json.dump(
+                    json_format.MessageToDict(add_to_agent_obj._pb), f, indent=2
+                )
 
         return str(target_dir)
 

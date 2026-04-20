@@ -16,6 +16,7 @@
 
 import enum
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -69,7 +70,9 @@ class DFCXAgentIR(BaseModel):
     generative_settings: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     playbook_generative_settings: Optional[Dict[str, Any]] = None
     generators: List[Dict[str, Any]] = Field(default_factory=list)
-    agent_transition_route_groups: List[Dict[str, Any]] = Field(default_factory=list)
+    agent_transition_route_groups: List[Dict[str, Any]] = Field(
+        default_factory=list
+    )
 
 
 # --- Target Migration IR Models ---
@@ -80,7 +83,9 @@ class IRMetadata(BaseModel):
 
     app_name: str  # The display name of the target Polysynth app
     app_id: Optional[str] = None  # The UUID generated for the new Polysynth app
-    app_resource_name: Optional[str] = None  # The full resource name of the Polysynth app
+    app_resource_name: Optional[str] = (
+        None  # The full resource name of the Polysynth app
+    )
     default_model: str = "gemini-2.5-flash-001"
 
 

@@ -16,8 +16,10 @@
 
 import json
 from pathlib import Path
-import pytest
 from unittest import mock
+
+import pytest
+
 from cxas_scrapi.utils.local.create_utils import CreateUtils
 
 
@@ -33,7 +35,9 @@ def test_create_agent(tmp_path):
         "displayName": display_name,
         "instruction": f"agents/{safe_name}/instruction.txt",
     }
-    patch_path = "cxas_scrapi.utils.local.create_utils.json_format.MessageToDict"
+    patch_path = (
+        "cxas_scrapi.utils.local.create_utils.json_format.MessageToDict"
+    )
     with mock.patch(patch_path, return_value=mock_dict):
         result_path = utils.create_agent(display_name, app_dir)
     target_dir = tmp_path / "agents" / safe_name
@@ -65,7 +69,9 @@ def test_create_tool_non_python(tmp_path):
     display_name = "My Test Tool"
 
     mock_dict = {"displayName": display_name}
-    patch_path = "cxas_scrapi.utils.local.create_utils.json_format.MessageToDict"
+    patch_path = (
+        "cxas_scrapi.utils.local.create_utils.json_format.MessageToDict"
+    )
     with mock.patch(patch_path, return_value=mock_dict):
         result_path = utils.create_tool(display_name, app_dir)
 
@@ -98,9 +104,13 @@ def test_create_tool_python(tmp_path):
         "displayName": display_name,
         "pythonFunction": {"name": safe_name},
     }
-    patch_path = "cxas_scrapi.utils.local.create_utils.json_format.MessageToDict"
+    patch_path = (
+        "cxas_scrapi.utils.local.create_utils.json_format.MessageToDict"
+    )
     with mock.patch(patch_path, return_value=mock_dict):
-        result_path = utils.create_tool(display_name, app_dir, tool_type="PYTHON")
+        result_path = utils.create_tool(
+            display_name, app_dir, tool_type="PYTHON"
+        )
 
     target_dir = tmp_path / "tools" / safe_name
 
@@ -161,10 +171,14 @@ def test_create_tool_add_to_agent(tmp_path):
     display_name = "My Added Tool"
     safe_name = "My_Added_Tool"
     mock_dict = {"displayName": agent_name, "tools": [display_name]}
-    patch_path = "cxas_scrapi.utils.local.create_utils.json_format.MessageToDict"
+    patch_path = (
+        "cxas_scrapi.utils.local.create_utils.json_format.MessageToDict"
+    )
 
     with mock.patch(patch_path, return_value=mock_dict):
-        result_path = utils.create_tool(display_name, app_dir, add_to_agent=agent_name)
+        result_path = utils.create_tool(
+            display_name, app_dir, add_to_agent=agent_name
+        )
 
     # Verify tool created
     assert Path(result_path) == tmp_path / "tools" / safe_name
@@ -187,9 +201,13 @@ def test_create_tool_add_to_agent_missing(tmp_path):
 
     display_name = "My Tool"
     mock_dict = {"displayName": display_name}
-    patch_path = "cxas_scrapi.utils.local.create_utils.json_format.MessageToDict"
+    patch_path = (
+        "cxas_scrapi.utils.local.create_utils.json_format.MessageToDict"
+    )
 
     with mock.patch(patch_path, return_value=mock_dict):
         with pytest.raises(FileNotFoundError) as exc_info:
-            utils.create_tool(display_name, app_dir, add_to_agent="Nonexistent Agent")
+            utils.create_tool(
+                display_name, app_dir, add_to_agent="Nonexistent Agent"
+            )
     assert "config not found" in str(exc_info.value)

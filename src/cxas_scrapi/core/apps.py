@@ -15,7 +15,8 @@
 # limitations under the License.
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
 from google.cloud.ces_v1beta import AgentServiceClient, types
 from google.protobuf import field_mask_pb2
 
@@ -173,7 +174,8 @@ class Apps(Common):
         Args:
             app_name: The full resource name of the app to export.
             gcs_uri: Optional. The Google Cloud Storage URI to export to.
-            local_path: Optional. Local file path to write the exported zip archive.
+            local_path: Optional. Local file path to write the exported zip
+                archive.
             export_format: The format to export the app in ('JSON' or 'YAML').
         """
         # Validate that exactly one source is provided if both are given
@@ -227,7 +229,8 @@ class Apps(Common):
         )
         if sources_provided != 1:
             raise ValueError(
-                "Exactly one of 'app_content', 'gcs_uri', or 'local_path' must be provided."
+                "Exactly one of 'app_content', 'gcs_uri', or 'local_path' "
+                "must be provided."
             )
 
         request_kwargs = {
@@ -265,7 +268,8 @@ class Apps(Common):
             app_content: Optional. The raw bytes of the zip archive of the app.
             gcs_uri: Optional. The Google Cloud Storage URI to export to.
             local_path: Optional. The local path to the zip archive of the app.
-            conflict_strategy: Optional. The conflict resolution strategy to use ('REPLACE' or 'OVERWRITE').
+            conflict_strategy: Optional. The conflict resolution strategy to
+                use ('REPLACE' or 'OVERWRITE').
         """
         # Validate that exactly one source is provided
         sources_provided = sum(
@@ -277,13 +281,16 @@ class Apps(Common):
         )
         if sources_provided != 1:
             raise ValueError(
-                "Exactly one of 'app_content', 'gcs_uri', or 'local_path' must be provided."
+                "Exactly one of 'app_content', 'gcs_uri', or 'local_path' "
+                "must be provided."
             )
 
         # Extract the short ID if a full resource name is provided
         # format is: projects/{project_id}/locations/{location}/apps/{app_id}
         app_id_extracted = (
-            app_name.split("/")[-1] if "/" in app_name else app_name
+            app_name.rsplit("/", maxsplit=1)[-1]
+            if "/" in app_name
+            else app_name
         )
 
         request_kwargs = {

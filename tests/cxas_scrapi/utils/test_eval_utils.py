@@ -14,9 +14,8 @@
 
 """Tests for evaluation utility functions."""
 
-from unittest.mock import MagicMock, patch, mock_open
-import yaml
 import sys
+from unittest.mock import MagicMock, mock_open, patch
 
 # Mock dependencies before importing EvalUtils
 sys.modules["google.cloud.texttospeech"] = MagicMock()
@@ -26,8 +25,7 @@ sys.modules["google.cloud.secretmanager"] = MagicMock()
 sys.modules["google.cloud.bigquery"] = MagicMock()
 sys.modules["pandas_gbq"] = MagicMock()
 
-from cxas_scrapi.utils.eval_utils import EvalUtils, Turn
-
+from cxas_scrapi.utils.eval_utils import EvalUtils, Turn  # noqa: E402
 
 
 def test_evals_to_dataframe_empty():
@@ -53,9 +51,7 @@ def test_evals_to_dataframe_with_data():
         "evaluation_run": "eval_run/123",
         "golden_result": {
             "semantic_similarity_result": {"score": 5},
-            "overall_tool_invocation_result": {
-                "tool_invocation_score": 1.0
-            },
+            "overall_tool_invocation_result": {"tool_invocation_score": 1.0},
             "expectation_results": [
                 {
                     "expectation": "Agent should pass",
@@ -82,7 +78,6 @@ def test_evals_to_dataframe_with_data():
     assert df_dict["metadata"].iloc[0]["expected"] == "Agent should pass"
     assert df_dict["metadata"].iloc[0]["outcome"] == "FAIL"
     assert df_dict["metadata"].iloc[0]["score"] == "0 / 1"
-    
 
 
 def test_to_bigquery():
@@ -124,7 +119,8 @@ def test_load_golden_eval_from_compressed_yaml():
     ):
         mock_uuid.return_value = "mock_uuid"
         mock_eval_instance = mock_eval_cls.return_value
-        mock_eval_instance.find_or_create_evaluation_expectation.return_value = (
+        foc_mock = mock_eval_instance.find_or_create_evaluation_expectation
+        foc_mock.return_value = (
             "projects/p/locations/l/apps/a/evaluationExpectations/exp1"
         )
 
@@ -162,12 +158,18 @@ def test_load_golden_eval_from_compressed_yaml():
 
         # First tool: retrieve_intent_matches
         tool1 = turn1_steps[1]["expectation"]["toolCall"]
-        assert tool1["tool"] == "projects/p/locations/l/apps/a/tools/retrieve_intent_matches"
+        assert (
+            tool1["tool"]
+            == "projects/p/locations/l/apps/a/tools/retrieve_intent_matches"
+        )
         assert tool1["id"] == "adk-mock_uuid"
 
         # Second tool: transfer_to_cx
         tool2 = turn1_steps[2]["expectation"]["toolCall"]
-        assert tool2["tool"] == "projects/p/locations/l/apps/a/tools/transfer_to_cx"
+        assert (
+            tool2["tool"]
+            == "projects/p/locations/l/apps/a/tools/transfer_to_cx"
+        )
         assert tool2["id"] == "adk-mock_uuid"
         assert tool2["args"] == {"intent": "Unlock"}
 
@@ -179,7 +181,10 @@ def test_load_golden_eval_from_compressed_yaml():
             == "projects/p/locations/l/apps/a/evaluationExpectations/exp1"
         )
         mock_eval_instance.find_or_create_evaluation_expectation.assert_any_call(
-            llm_prompt="There must be a transfer_to_cx tool call with the intent parameter set to Unlock"
+            llm_prompt=(
+                "There must be a transfer_to_cx tool call with the intent "
+                "parameter set to Unlock"
+            )
         )
 
 
@@ -223,11 +228,13 @@ def test_load_golden_eval_from_exported_yaml():
         patch("cxas_scrapi.utils.eval_utils.Evaluations") as mock_eval_cls,
     ):
         mock_uuid.return_value = "mock_uuid"
-        
+
         # Make the mock stringify the display_name so it passes assertion
         mock_eval_instance = mock_eval_cls.return_value
         mock_eval_instance.find_or_create_evaluation_expectation.side_effect = (
-            lambda **kwargs: kwargs.get("display_name", "Simple tool expectation 1")
+            lambda **kwargs: kwargs.get(
+                "display_name", "Simple tool expectation 1"
+            )
         )
 
         utils = EvalUtils(app_name="projects/p/locations/l/apps/a")
@@ -297,21 +304,34 @@ def test_process_dataset_turn_with_multi_agent_responses():
         "user": "hello",
         "agent": ["response 1", "response 2"],
     }
-    result_list = utils._process_dataset_turn(Turn.model_validate(turn_list), {}, False)
+    result_list = utils._process_dataset_turn(
+        Turn.model_validate(turn_list), {}, False
+    )
     steps_list = result_list["steps"]
     assert steps_list[0]["userInput"]["text"] == "hello"
-    assert steps_list[1]["expectation"]["agentResponse"]["chunks"][0]["text"] == "response 1"
-    assert steps_list[2]["expectation"]["agentResponse"]["chunks"][0]["text"] == "response 2"
+    assert (
+        steps_list[1]["expectation"]["agentResponse"]["chunks"][0]["text"]
+        == "response 1"
+    )
+    assert (
+        steps_list[2]["expectation"]["agentResponse"]["chunks"][0]["text"]
+        == "response 2"
+    )
 
     # Case 2: Single string response (backward compatibility)
     turn_str = {
         "user": "hi",
         "agent": "single response",
     }
-    result_str = utils._process_dataset_turn(Turn.model_validate(turn_str), {}, False)
+    result_str = utils._process_dataset_turn(
+        Turn.model_validate(turn_str), {}, False
+    )
     steps_str = result_str["steps"]
     assert steps_str[0]["userInput"]["text"] == "hi"
-    assert steps_str[1]["expectation"]["agentResponse"]["chunks"][0]["text"] == "single response"
+    assert (
+        steps_str[1]["expectation"]["agentResponse"]["chunks"][0]["text"]
+        == "single response"
+    )
 
 
 def test_create_and_run_evaluation_from_yaml():
@@ -364,9 +384,8 @@ def test_load_golden_eval_from_direct_export_yaml():
         patch("cxas_scrapi.utils.eval_utils.Evaluations") as mock_eval_cls,
     ):
         mock_eval_instance = mock_eval_cls.return_value
-        mock_eval_instance.find_or_create_evaluation_expectation.return_value = (
-            "exp/1"
-        )
+        foc_mock = mock_eval_instance.find_or_create_evaluation_expectation
+        foc_mock.return_value = "exp/1"
 
         utils = EvalUtils(app_name="p/l/a/a")
         result = utils.load_golden_eval_from_yaml("dummy.yaml")

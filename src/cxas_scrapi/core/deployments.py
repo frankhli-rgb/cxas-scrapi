@@ -14,8 +14,8 @@
 
 """Core Deployments class for CXAS Scrapi."""
 
-import logging
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List
+
 from google.cloud.ces_v1beta import types
 from google.protobuf import field_mask_pb2
 
@@ -90,7 +90,6 @@ class Deployments(Apps):
         channel_profile: str = "WEB_AND_MOBILE",
     ) -> types.Deployment:
         """Creates a new deployment."""
-        # channel_profile can also simply not be passed if not mapped in SDK, but assuming string works
         deployment = types.Deployment(
             display_name=display_name, app_version=app_version
         )

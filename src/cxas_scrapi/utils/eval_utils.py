@@ -14,28 +14,26 @@
 
 """Utility functions for processing and exporting CXAS Evaluation Results."""
 
-from typing import Any, Dict, List, Optional, Union
-import time
 import enum
-import pydantic
 import json
-import os
 import logging
+import os
+import time
 import uuid
-from google import genai
-
-from cxas_scrapi.core.common import Common
-from cxas_scrapi.prompts import llm_user_prompts
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
+import pydantic
 import yaml
+from google import genai
 from pydantic import BaseModel
 
 from cxas_scrapi.core.agents import Agents
-from cxas_scrapi.core.conversation_history import ConversationHistory
+from cxas_scrapi.core.common import Common
 from cxas_scrapi.core.evaluations import Evaluations
 from cxas_scrapi.core.tools import Tools
 from cxas_scrapi.core.variables import Variables
+from cxas_scrapi.prompts import llm_user_prompts
 from cxas_scrapi.utils.latency_parser import LatencyParser
 
 logger = logging.getLogger(__name__)
@@ -97,7 +95,13 @@ class EvalUtils(Evaluations):
             logger.warning(
                 "Failed to fetch agent map for %s: %s", self.app_name, e
             )
-            self.agent_map = {}
+        # Defer import to break circular dependency:
+        # conversation_history -> latency_parser -> eval_utils
+        # -> conversation_history
+        from cxas_scrapi.core.conversation_history import (  # noqa: PLC0415
+            ConversationHistory,
+        )
+
         self.ch_client = ConversationHistory(
             app_name=self.app_name, creds=self.creds
         )
@@ -803,6 +807,13 @@ class EvalUtils(Evaluations):
             if target_app == getattr(self, "app_name", None):
                 ch_getter = self.ch_client.get_conversation
             else:
+                # Defer import to break circular dependency:
+                # conversation_history -> latency_parser -> eval_utils
+                # -> conversation_history
+                from cxas_scrapi.core.conversation_history import (  # noqa: PLC0415
+                    ConversationHistory,
+                )
+
                 ch_client = ConversationHistory(
                     app_name=target_app, creds=self.creds
                 )
@@ -1420,6 +1431,5 @@ def evaluate_expectations(
         output: ExpectationOutput = response.parsed
         return output.results
     except Exception as e:
-
         logging.getLogger(__name__).error(f"Error evaluating expectations: {e}")
         return []

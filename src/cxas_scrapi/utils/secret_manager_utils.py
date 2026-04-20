@@ -25,19 +25,20 @@ class SecretManagerUtils:
         self.client = secretmanager.SecretManagerServiceClient()
 
     def create_or_get_secret(self, secret_id: str, payload: str = None) -> str:
-        """Retrieves a Secret via Secret ID, or creates a new one if it doesn't exist.
+        """Retrieves a Secret via Secret ID, or creates a new one if it
+        doesn't exist.
 
         Args:
             secret_id: The ID of the Secret to retrieve or create.
-            payload: The string payload to add as a new Secret Version if creating
-                     a new secret.
+            payload: The string payload to add as a new Secret Version if
+                     creating a new secret.
 
         Returns:
-            The full resource name path to the latest version of the Secret, e.g.
+            The full resource name path to the latest version of the
+            Secret, e.g.
             `projects/{project_id}/secrets/{secret_id}/versions/latest`.
         """
         parent = f"projects/{self.project_id}"
-        full_secret_name = f"{parent}/secrets/{secret_id}"
 
         # Check if secret already exists
         request = {"parent": parent}
@@ -52,7 +53,8 @@ class SecretManagerUtils:
         # Secret doesn't exist, create it
         if payload is None:
             raise ValueError(
-                "Secret does not exist and no payload was provided to create one."
+                "Secret does not exist and no payload was provided to "
+                "create one."
             )
 
         print(f"Creating new secret: {secret_id}")

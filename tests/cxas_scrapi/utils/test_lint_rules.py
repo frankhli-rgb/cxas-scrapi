@@ -37,6 +37,7 @@ def context(tmp_path):
 
 # ── Instruction Rules ────────────────────────────────────────────────────
 
+
 def test_i001_missing_tags(tmp_path, context):
     from cxas_scrapi.utils.lint_rules.instructions import RequiredXmlStructure  # noqa: PLC0415,I001
 
@@ -57,7 +58,9 @@ def test_i001_all_tags_present(tmp_path, context):
 
     rule = RequiredXmlStructure()
     f = tmp_path / "instruction.txt"
-    f.write_text("<role>test</role><persona>test</persona><taskflow>test</taskflow>")
+    f.write_text(
+        "<role>test</role><persona>test</persona><taskflow>test</taskflow>"
+    )
 
     results = rule.check(f, f.read_text(), context)
     assert len(results) == 0
@@ -81,8 +84,7 @@ def test_i002_taskflow_with_subtask(tmp_path, context):
     rule = TaskflowChildren()
     f = tmp_path / "instruction.txt"
     f.write_text(
-        "<taskflow><subtask name='greet'>"
-        "<step>hi</step></subtask></taskflow>"
+        "<taskflow><subtask name='greet'><step>hi</step></subtask></taskflow>"
     )
 
     results = rule.check(f, f.read_text(), context)
@@ -94,11 +96,13 @@ def test_i003_excessive_if_else(tmp_path, context):
 
     rule = ExcessiveIfElse()
     f = tmp_path / "instruction.txt"
-    content = "\n".join([
-        "IF condition1 ELSE do something",
-        "IF condition2 ELSE do another",
-        "IF condition3 ELSE do third",
-    ])
+    content = "\n".join(
+        [
+            "IF condition1 ELSE do something",
+            "IF condition2 ELSE do another",
+            "IF condition3 ELSE do third",
+        ]
+    )
     f.write_text(content)
 
     results = rule.check(f, content, context)
@@ -170,13 +174,13 @@ def test_i008_valid_agent_ref(tmp_path, context):
 
 # ── Callback Rules ───────────────────────────────────────────────────────
 
+
 def test_c001_wrong_fn_name(tmp_path, context):
     from cxas_scrapi.utils.lint_rules.callbacks import WrongFunctionName  # noqa: PLC0415,I001
 
     rule = WrongFunctionName()
     cb_dir = (
-        tmp_path / "agents" / "root"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path / "agents" / "root" / "before_model_callbacks" / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     f = cb_dir / "python_code.py"
@@ -192,8 +196,7 @@ def test_c001_correct_fn_name(tmp_path, context):
 
     rule = WrongFunctionName()
     cb_dir = (
-        tmp_path / "agents" / "root"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path / "agents" / "root" / "before_model_callbacks" / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     f = cb_dir / "python_code.py"
@@ -222,8 +225,7 @@ def test_c001_no_function(tmp_path, context):
 
     rule = WrongFunctionName()
     cb_dir = (
-        tmp_path / "agents" / "root"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path / "agents" / "root" / "before_model_callbacks" / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     f = cb_dir / "python_code.py"
@@ -252,14 +254,12 @@ def test_c002_correct_arg_count(tmp_path, context):
 
     rule = WrongArgCount()
     cb_dir = (
-        tmp_path / "agents" / "root"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path / "agents" / "root" / "before_model_callbacks" / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     f = cb_dir / "python_code.py"
     f.write_text(
-        "def before_model_callback"
-        "(callback_context, llm_request): pass"
+        "def before_model_callback(callback_context, llm_request): pass"
     )
 
     results = rule.check(f, f.read_text(), context)
@@ -294,8 +294,7 @@ def test_c004_returns_dict(tmp_path, context):
 
     rule = ReturnsDictNotLlmResponse()
     cb_dir = (
-        tmp_path / "agents" / "root"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path / "agents" / "root" / "before_model_callbacks" / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     f = cb_dir / "python_code.py"
@@ -325,9 +324,7 @@ def test_c005_hardcoded_phrases(tmp_path, context):
     rule = HardcodedPhraseList()
     f = tmp_path / "python_code.py"
     f.write_text(
-        '# detect escalation\n'
-        'if word in ["escalate", "manager"'
-        ', "supervisor"]:'
+        '# detect escalation\nif word in ["escalate", "manager", "supervisor"]:'
     )
 
     results = rule.check(f, f.read_text(), context)
@@ -351,8 +348,7 @@ def test_c006_bare_except(tmp_path, context):
 
     rule = BareExcept()
     cb_dir = (
-        tmp_path / "agents" / "root"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path / "agents" / "root" / "before_model_callbacks" / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     f = cb_dir / "python_code.py"
@@ -429,15 +425,12 @@ def test_c009_wrong_type_annotation(tmp_path, context):
 
     rule = WrongCallbackSignature()
     cb_dir = (
-        tmp_path / "agents" / "root"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path / "agents" / "root" / "before_model_callbacks" / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     f = cb_dir / "python_code.py"
     f.write_text(
-        "def before_model_callback"
-        "(callback_context, llm_request):\n"
-        "    pass"
+        "def before_model_callback(callback_context, llm_request):\n    pass"
     )
 
     results = rule.check(f, f.read_text(), context)
@@ -450,8 +443,7 @@ def test_c009_correct_signature(tmp_path, context):
 
     rule = WrongCallbackSignature()
     cb_dir = (
-        tmp_path / "agents" / "root"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path / "agents" / "root" / "before_model_callbacks" / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     f = cb_dir / "python_code.py"
@@ -469,8 +461,7 @@ def test_c010_invalid_syntax(tmp_path, context):
 
     rule = InvalidPythonSyntax()
     cb_dir = (
-        tmp_path / "agents" / "root"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path / "agents" / "root" / "before_model_callbacks" / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     f = cb_dir / "python_code.py"
@@ -486,8 +477,7 @@ def test_c010_valid_syntax(tmp_path, context):
 
     rule = InvalidPythonSyntax()
     cb_dir = (
-        tmp_path / "agents" / "root"
-        / "before_model_callbacks" / "greet_01"
+        tmp_path / "agents" / "root" / "before_model_callbacks" / "greet_01"
     )
     cb_dir.mkdir(parents=True)
     f = cb_dir / "python_code.py"
@@ -498,6 +488,7 @@ def test_c010_valid_syntax(tmp_path, context):
 
 
 # ── Tool Rules ───────────────────────────────────────────────────────────
+
 
 def test_t001_missing_agent_action(tmp_path, context):
     from cxas_scrapi.utils.lint_rules.tools import MissingAgentAction  # noqa: PLC0415,I001
@@ -517,8 +508,7 @@ def test_t001_has_agent_action(tmp_path, context):
     rule = MissingAgentAction()
     f = tmp_path / "python_code.py"
     f.write_text(
-        'def get_balance(account_id):'
-        ' return {"agent_action": "error"}'
+        'def get_balance(account_id): return {"agent_action": "error"}'
     )
 
     results = rule.check(f, f.read_text(), context)
@@ -542,9 +532,7 @@ def test_t002_has_docstring(tmp_path, context):
     rule = MissingDocstring()
     f = tmp_path / "python_code.py"
     f.write_text(
-        'def get_balance(account_id):\n'
-        '    """Get account balance."""\n'
-        '    pass'
+        'def get_balance(account_id):\n    """Get account balance."""\n    pass'
     )
 
     results = rule.check(f, f.read_text(), context)
@@ -683,8 +671,7 @@ def test_t007_not_snake_case(tmp_path, context):
     f.write_text("def get_balance(): pass")
     json_path = tmp_path / "Get Balance" / "Get Balance.json"
     json_path.write_text(
-        '{"name": "Get Balance",'
-        ' "displayName": "Get Balance"}'
+        '{"name": "Get Balance", "displayName": "Get Balance"}'
     )
 
     results = rule.check(f, f.read_text(), context)
@@ -701,8 +688,7 @@ def test_t007_snake_case_ok(tmp_path, context):
     f.write_text("def get_balance(): pass")
     json_path = tmp_path / "get_balance" / "get_balance.json"
     json_path.write_text(
-        '{"name": "get_balance",'
-        ' "displayName": "get_balance"}'
+        '{"name": "get_balance", "displayName": "get_balance"}'
     )
 
     results = rule.check(f, f.read_text(), context)
@@ -822,6 +808,7 @@ def test_t011_no_none_default(tmp_path, context):
 
 
 # ── Eval Rules ───────────────────────────────────────────────────────────
+
 
 def test_e001_invalid_yaml(tmp_path, context):
     from cxas_scrapi.utils.lint_rules.evals import InvalidYaml  # noqa: PLC0415,I001
@@ -1006,11 +993,7 @@ def test_e009_sim_missing_tags(tmp_path, context):
     sim_dir = tmp_path / "simulations"
     sim_dir.mkdir()
     f = sim_dir / "test.yaml"
-    f.write_text(
-        "evals:\n"
-        "  - name: test_sim\n"
-        "    prompt: do something\n"
-    )
+    f.write_text("evals:\n  - name: test_sim\n    prompt: do something\n")
 
     results = rule.check(f, f.read_text(), context)
     assert len(results) == 1
@@ -1024,11 +1007,7 @@ def test_e009_sim_with_tags_ok(tmp_path, context):
     sim_dir = tmp_path / "simulations"
     sim_dir.mkdir()
     f = sim_dir / "test.yaml"
-    f.write_text(
-        "evals:\n"
-        "  - name: test_sim\n"
-        '    tags: ["P0"]\n'
-    )
+    f.write_text('evals:\n  - name: test_sim\n    tags: ["P0"]\n')
 
     results = rule.check(f, f.read_text(), context)
     assert len(results) == 0
@@ -1084,7 +1063,7 @@ def test_e011_invalid_match_type(tmp_path, context):
         "          - action: get_balance\n"
         "            args:\n"
         "              amount:\n"
-        '                $matchType: regex\n'
+        "                $matchType: regex\n"
         '                value: ".*"\n'
     )
 
@@ -1110,7 +1089,7 @@ def test_e011_valid_match_type(tmp_path, context):
         "          - action: get_balance\n"
         "            args:\n"
         "              amount:\n"
-        '                $matchType: semantic\n'
+        "                $matchType: semantic\n"
         '                value: "any amount"\n'
     )
 
@@ -1119,6 +1098,7 @@ def test_e011_valid_match_type(tmp_path, context):
 
 
 # ── Config Rules ─────────────────────────────────────────────────────────
+
 
 def test_a001_invalid_json(tmp_path, context):
     from cxas_scrapi.utils.lint_rules.config import InvalidJson  # noqa: PLC0415,I001
@@ -1158,6 +1138,7 @@ def test_a002_missing_required_fields(tmp_path, context):
 
 
 # ── Schema Rules ─────────────────────────────────────────────────────────
+
 
 def test_v001_app_valid(tmp_path, context):
     from cxas_scrapi.utils.linter import build_registry  # noqa: PLC0415,I001
@@ -1263,10 +1244,7 @@ def test_v006_evaluation_invalid_field(tmp_path, context):
     results = rule.check(eval_dir, "", context)
     assert len(results) == 1
     msg = results[0].message
-    assert (
-        "Proto schema" in msg
-        or "validation failed" in msg
-    )
+    assert "Proto schema" in msg or "validation failed" in msg
 
 
 def test_schema_missing_referenced_file(tmp_path, context):
@@ -1284,10 +1262,7 @@ def test_schema_missing_referenced_file(tmp_path, context):
     results = rule.check(agent_dir, "", context)
     assert len(results) == 1
     msg = results[0].message
-    assert (
-        "Missing referenced file" in msg
-        or "not found" in msg
-    )
+    assert "Missing referenced file" in msg or "not found" in msg
 
 
 def test_schema_missing_required_field(tmp_path, context):
@@ -1307,13 +1282,11 @@ def test_schema_missing_required_field(tmp_path, context):
         results = rule.check(app_dir, "", context)
         assert len(results) == 1
         msg = results[0].message
-        assert (
-            "Missing required fields" in msg
-            or "display_name" in msg
-        )
+        assert "Missing required fields" in msg or "display_name" in msg
 
 
 # ── Structure Rules ──────────────────────────────────────────────────────
+
 
 def test_s002_tool_ref_not_in_agent(tmp_path, context):
     from cxas_scrapi.utils.lint_rules.structure import AgentToolReferences  # noqa: PLC0415,I001

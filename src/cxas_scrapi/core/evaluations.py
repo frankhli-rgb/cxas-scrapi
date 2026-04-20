@@ -14,24 +14,23 @@
 
 """Core Evaluations class for CXAS Scrapi."""
 
-from typing import Dict, Any, Optional, List, Union
-import uuid
-import json
 import hashlib
+import json
 import os
-import requests
 from enum import Enum
-from google.protobuf import field_mask_pb2
-from google.protobuf import json_format
+from typing import Any, Dict, List, Optional, Union
+
+import yaml
 from google.cloud.ces_v1beta import (
-    EvaluationServiceClient,
     AgentServiceClient,
+    EvaluationServiceClient,
     types,
 )
-import yaml
+from google.protobuf import field_mask_pb2, json_format
+
+from cxas_scrapi.core.agents import Agents
 from cxas_scrapi.core.common import Common
 from cxas_scrapi.core.tools import Tools
-from cxas_scrapi.core.agents import Agents
 
 
 class ExportFormat(Enum):
@@ -44,7 +43,8 @@ class Evaluations(Common):
         """Initializes the Evaluations client.
 
         Args:
-            app_name: CXAS App ID (projects/{project}/locations/{location}/apps/{app}).
+            app_name: CXAS App ID
+                (projects/{project}/locations/{location}/apps/{app}).
             env: Environment override (default: PROD).
         """
         # Pass app_name to Common for client_options determination
@@ -68,7 +68,8 @@ class Evaluations(Common):
 
     @staticmethod
     def parse_eval_to_yaml(filepath):
-        """Parses a CXAS Evaluation textproto file into the target FDE YAML format."""
+        """Parses a CXAS Evaluation textproto file into the target FDE
+        YAML format."""
         with open(filepath, "r") as f:
             text = f.read()
 
@@ -77,7 +78,8 @@ class Evaluations(Common):
 
     @property
     def tools_map(self) -> Dict[str, str]:
-        """Lazily fetches and caches the tools map for resolving empty tool display names."""
+        """Lazily fetches and caches the tools map for resolving empty
+        tool display names."""
         if getattr(self, "_tools_map", None) is None:
             try:
                 self._tools_map = Tools(self.app_name).get_tools_map()
@@ -90,7 +92,8 @@ class Evaluations(Common):
     def eval_dict_to_yaml(
         eval_dict, tools_map: Optional[Dict[str, str]] = None
     ):
-        """Parses a CXAS Evaluation dictionary into the target FDE YAML format."""
+        """Parses a CXAS Evaluation dictionary into the target FDE YAML
+        format."""
         golden = eval_dict.get("golden", {})
         turns = golden.get("turns", [])
         if not isinstance(turns, list):
@@ -124,7 +127,8 @@ class Evaluations(Common):
                         session_params.update(ui["variables"])
 
                     if "text" in ui:
-                        # Whenever we see userInput[text], it's the start of a new turn
+                        # Whenever we see userInput[text], it's the start
+                        # of a new turn
                         if current_turn:
                             conversation_entry["turns"].append(current_turn)
                             current_turn = {}
@@ -148,12 +152,16 @@ class Evaluations(Common):
                         text = " ".join(
                             [c.get("text", "") for c in chunks if "text" in c]
                         )
-                        # If we already have an agent response, convert to list or append
+                        # If we already have an agent response, convert to
+                        # list or append
                         if "agent" in current_turn:
                             if isinstance(current_turn["agent"], list):
                                 current_turn["agent"].append(text)
                             else:
-                                current_turn["agent"] = [current_turn["agent"], text]
+                                current_turn["agent"] = [
+                                    current_turn["agent"],
+                                    text,
+                                ]
                         else:
                             current_turn["agent"] = text
 
@@ -250,17 +258,21 @@ class Evaluations(Common):
             bytes: The app content bytes if successful, None otherwise.
         """
         try:
-            # Check if it has .result(), otherwise assume it's the response or operation
+            # Check if it has .result(), otherwise assume it's the
+            # response or operation
             if hasattr(export_op, "result"):
                 export_response = export_op.result()
             else:
                 export_response = export_op
         except Exception as e:
-            # logger is not defined in this class scope usually, but we can import it or just pass
-            # We'll use a local logger or just print if absolutely needed, but user asked to remove prints.
+            # logger is not defined in this class scope usually, but we
+            # can import it or just pass
+            # We'll use a local logger or just print if absolutely needed,
+            # but user asked to remove prints.
             # Ideally we log via a module logger.
             print(
-                f"Export operation result() failed or not an LRO: {e}. Checking if it returned response directly."
+                f"Export operation result() failed or not an LRO: "
+                f"{e}. Checking if it returned response directly."
             )
             export_response = export_op
 
@@ -269,10 +281,8 @@ class Evaluations(Common):
             app_content_bytes = export_response.app_content
             # Removed print statements as requested
 
-            import io
-            import zipfile
-
-            # Optional: We could still log what we found if we had a logger, but strictly removing prints.
+            # Optional: We could still log what we found if we had a logger,
+            # but strictly removing prints.
             # verify it's a valid zip by opening it?
 
             return app_content_bytes
@@ -301,13 +311,15 @@ class Evaluations(Common):
         """Fetches all evaluation results for a specific evaluation.
 
         Args:
-            evaluation_display_name: Full resource name or display name of the evaluation
+            evaluation_display_name: Full resource name or display name of
+                                     the evaluation
         """
         evaluation_name = evaluation_display_name
         if "/evaluations/" not in evaluation_name:
             if not getattr(self, "app_name", None):
                 raise ValueError(
-                    "app_name must be set to look up evaluations by display name."
+                    "app_name must be set to look up evaluations by "
+                    "display name."
                 )
             evals_map = self._get_or_load_evals_map(self.app_name)
 
@@ -317,7 +329,8 @@ class Evaluations(Common):
                 evaluation_name = evals_map["scenarios"][evaluation_name]
             else:
                 raise ValueError(
-                    f"No evaluation found with display name: '{evaluation_name}'"
+                    f"No evaluation found with display name: "
+                    f"'{evaluation_name}'"
                 )
 
         request = types.ListEvaluationResultsRequest(parent=evaluation_name)
@@ -332,7 +345,8 @@ class Evaluations(Common):
         return self.client.get_evaluation_result(request=request)
 
     def get_evaluation_run(self, evaluation_run_id: str) -> types.EvaluationRun:
-        """Gets details of the specified evaluation run by its full resource name.
+        """Gets details of the specified evaluation run by its full
+        resource name.
 
         Args:
             evaluation_run_id: Full resource name of the evaluation run.
@@ -343,7 +357,8 @@ class Evaluations(Common):
     def list_evaluation_results_by_run(
         self, evaluation_run_id: str
     ) -> List[types.EvaluationResult]:
-        """Fetches all evaluation results associated with a specific evaluation run.
+        """Fetches all evaluation results associated with a specific
+        evaluation run.
 
         Args:
             evaluation_run_id: Full resource name of the evaluation run.
@@ -380,7 +395,8 @@ class Evaluations(Common):
         for eval_obj in evaluations:
             # Convert to dictionary and then to JSON string
             eval_dict = type(eval_obj).to_dict(eval_obj)
-            # Dump to string and convert to lowercase for case-insensitive searching
+            # Dump to string and convert to lowercase for case-insensitive
+            # searching
             self._eval_search_index[eval_obj.display_name] = json.dumps(
                 eval_dict
             ).lower()
@@ -393,7 +409,8 @@ class Evaluations(Common):
         agents: Optional[List[str]] = None,
         rebuild_index: bool = False,
     ) -> List[str]:
-        """Searches querying evaluations and filters by connected tools, variables, or agents.
+        """Searches querying evaluations and filters by connected tools,
+        variables, or agents.
 
         Args:
             app_name: Parent App ID.
@@ -433,7 +450,8 @@ class Evaluations(Common):
 
         if not search_terms:
             raise ValueError(
-                "Must provide at least one search term (tools, variables, or agents)."
+                "Must provide at least one search term (tools, variables, "
+                "or agents)."
             )
 
         self.build_search_index(app_name, force=rebuild_index)
@@ -449,10 +467,11 @@ class Evaluations(Common):
     def get_evaluations_map(
         self, app_name: Optional[str] = None, reverse: bool = False
     ) -> Dict[str, Dict[str, str]]:
-        """Creates a map of Evaluation full names to display names, grouped by type.
+        """Creates a map of Evaluation full names to display names,
+        grouped by type.
 
-        Returns a dictionary with 'goldens' and 'scenarios' keys, each containing
-        a sub-dictionary of the mappings.
+        Returns a dictionary with 'goldens' and 'scenarios' keys, each
+        containing a sub-dictionary of the mappings.
 
         Args:
             app_name: Parent App ID. Defaults to self.app_name.
@@ -472,7 +491,8 @@ class Evaluations(Common):
 
             if display_name and name:
                 target_dict = None
-                # Check the oneof field or structure property to determine the type
+                # Check the oneof field or structure property to determine
+                # the type
                 if getattr(evaluation, "golden", None):
                     target_dict = evaluations_dict["goldens"]
                 elif getattr(evaluation, "scenario", None):
@@ -489,7 +509,8 @@ class Evaluations(Common):
     def _get_or_load_evals_map(
         self, app_name: Optional[str] = None
     ) -> Dict[str, Dict[str, str]]:
-        """Gets a map of reverse evaluations from cache or loads it if missing."""
+        """Gets a map of reverse evaluations from cache or loads it if
+        missing."""
         if not self.evals_map:
             self.evals_map = self.get_evaluations_map(app_name, reverse=True)
         return self.evals_map
@@ -512,7 +533,8 @@ class Evaluations(Common):
             evaluation_id: Full resource name of the evaluation.
             output_format: Output format. Defaults to ExportFormat.YAML.
             output_path: Optional local path to write the exported evaluation.
-                If provided, evaluation expectations are sideloaded as JSON files.
+                If provided, evaluation expectations are sideloaded as JSON
+                files.
 
         Returns:
             A string containing the formatted output.
@@ -522,7 +544,8 @@ class Evaluations(Common):
                 output_format = ExportFormat(output_format.lower())
             except ValueError:
                 print(
-                    f"Warning: Invalid output_format '{output_format}'. Using YAML."
+                    f"Warning: Invalid output_format '{output_format}'. "
+                    f"Using YAML."
                 )
                 output_format = ExportFormat.YAML
 
@@ -532,7 +555,8 @@ class Evaluations(Common):
 
         out_dict = self.eval_dict_to_yaml(eval_dict, tools_map=self.tools_map)
 
-        # Resolve expectation resource names to LLM prompts and optionally sideload
+        # Resolve expectation resource names to LLM prompts and optionally
+        # sideload
         for conv in out_dict.get("conversations", []):
             if "expectations" not in conv:
                 continue
@@ -587,7 +611,8 @@ class Evaluations(Common):
                     except Exception as e:
                         # Fallback to resource name if resolution fails
                         print(
-                            f"Failed to fetch evaluation expectation '{exp_ref}': {e}"
+                            f"Failed to fetch evaluation expectation "
+                            f"'{exp_ref}': {e}"
                         )
                         resolved_prompts.append(exp_ref)
                 else:
@@ -624,7 +649,8 @@ class Evaluations(Common):
             raise ValueError("app_name is required.")
 
         if isinstance(evaluation, dict):
-            # Use json_format to parse dict to message to handle camelCase/snake_case
+            # Use json_format to parse dict to message to handle
+            # camelCase/snake_case
             eval_message = types.Evaluation()
             # Parse into the underlying protobuf message
             json_format.ParseDict(
@@ -654,7 +680,8 @@ class Evaluations(Common):
 
         # Convert dict to types.Evaluation if needed
         if isinstance(evaluation, dict):
-            # Use json_format to parse dict to message to handle camelCase/snake_case
+            # Use json_format to parse dict to message to handle
+            # camelCase/snake_case
             eval_message = types.Evaluation()
             # Parse into the underlying protobuf message
             json_format.ParseDict(
@@ -673,7 +700,8 @@ class Evaluations(Common):
         # If still no name, it's a new evaluation, call create instead
         if not evaluation.name:
             print(
-                f"Evaluation '{evaluation.display_name}' not found. Creating it instead."
+                f"Evaluation '{evaluation.display_name}' not found. "
+                f"Creating it instead."
             )
             return self.create_evaluation(
                 evaluation=evaluation, app_name=app_name
@@ -704,12 +732,14 @@ class Evaluations(Common):
         """Runs an evaluation on the specified app.
 
         Args:
-            evaluations: A single display name or a list of display names to run.
+            evaluations: A single display name or a list of display names
+                to run.
             eval_type: Run a specific type of evaluation. Must be one of:
                       'goldens', 'scenarios', or 'all'.
             app_name: Parent App ID. Defaults to self.app_name.
             modality: "text" (default) or "audio".
-            run_count: Number of times to run the evaluation. Default is 1 per golden, 5 per scenario.
+            run_count: Number of times to run the evaluation. Default is 1
+                per golden, 5 per scenario.
         """
         app_name = app_name or self.app_name
         if not app_name:
@@ -717,7 +747,8 @@ class Evaluations(Common):
 
         if not evaluations and not eval_type:
             raise ValueError(
-                "Must provide either 'evaluations' (display names) or 'eval_type' ('goldens'/'scenarios'/'all')."
+                "Must provide either 'evaluations' (display names) or "
+                "'eval_type' ('goldens'/'scenarios'/'all')."
             )
 
         resolved_names = set()
@@ -758,7 +789,8 @@ class Evaluations(Common):
                 resolved_names.update(evals_map.get("scenarios", {}).values())
             else:
                 raise ValueError(
-                    f"Invalid eval_type: '{eval_type}'. Must be 'goldens', 'scenarios', or 'all'."
+                    f"Invalid eval_type: '{eval_type}'. Must be 'goldens', "
+                    f"'scenarios', or 'all'."
                 )
 
         if not resolved_names:
@@ -795,7 +827,8 @@ class Evaluations(Common):
             gcs_uri: The GCS URI to import from (gs://...).
             csv_content: Raw bytes representing the csv file.
             conversations: A list of conversation resource names.
-            conflict_strategy: See types.ImportEvaluationsRequest.ImportOptions.ConflictResolutionStrategy
+            conflict_strategy: See
+                types.ImportEvaluationsRequest.ImportOptions.ConflictResolutionStrategy
                                (0=UNSPECIFIED, 1=OVERWRITE, 2=SKIP, 3=DUPLICATE)
         """
         app_name = app_name or self.app_name
@@ -865,7 +898,8 @@ class Evaluations(Common):
         """Creates an evaluation expectation.
 
         Args:
-            evaluation_expectation: The EvaluationExpectation object or dict to create.
+            evaluation_expectation: The EvaluationExpectation object or
+                dict to create.
             app_name: Parent App ID. Defaults to self.app_name.
         """
         app_name = app_name or self.app_name
@@ -978,7 +1012,8 @@ class Evaluations(Common):
 
         Args:
             app_name: Parent App ID. Defaults to self.app_name.
-            print_console: If True, prints a formatted summary of the settings to the console.
+            print_console: If True, prints a formatted summary of the
+                           settings to the console.
 
         Returns:
             A dictionary containing the evaluation metrics thresholds,
@@ -1008,14 +1043,16 @@ class Evaluations(Common):
 
         if print_console:
             print("===== GLOBAL Settings =====")
-            print(
-                f"Hallucinations: {thresholds.get('hallucination_metric_behavior', 'UNSPECIFIED')}"
+            hallucination_behavior = thresholds.get(
+                "hallucination_metric_behavior", "UNSPECIFIED"
             )
+            print(f"Hallucinations: {hallucination_behavior}")
 
             print("\n===== GOLDEN Settings =====")
-            print(
-                f"Hallucinations: {thresholds.get('golden_hallucination_metric_behavior', 'UNSPECIFIED')}"
+            golden_hallucination_behavior = thresholds.get(
+                "golden_hallucination_metric_behavior", "UNSPECIFIED"
             )
+            print(f"Hallucinations: {golden_hallucination_behavior}")
 
             golden = thresholds.get("golden_evaluation_metrics_thresholds", {})
             turn_level = golden.get("turn_level_metrics_thresholds", {})
@@ -1041,9 +1078,10 @@ class Evaluations(Common):
                     print(f"- {k}: {v}{suffix}")
 
             print("\n===== SCENARIO Settings =====")
-            print(
-                f"Hallucinations: {thresholds.get('scenario_hallucination_metric_behavior', 'UNSPECIFIED')}"
+            scenario_hallucination_behavior = thresholds.get(
+                "scenario_hallucination_metric_behavior", "UNSPECIFIED"
             )
+            print(f"Hallucinations: {scenario_hallucination_behavior}")
             print("\n")
 
         return thresholds

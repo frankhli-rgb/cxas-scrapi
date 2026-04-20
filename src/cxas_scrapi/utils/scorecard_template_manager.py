@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Collection, Iterable
 import json
 import os
+from collections.abc import Collection, Iterable
 from typing import Any, TypeAlias
 
 import json5

@@ -38,14 +38,16 @@ from cxas_scrapi.utils.eval_utils import (
 
 logger = logging.getLogger(__name__)
 
+
 class HistoricalContextConfig(BaseModel):
     """Configuration for historical context, either a raw session ID, a test
     name, or explicit utterances."""
+
     session_id: Optional[str] = None
     test_name: Optional[str] = None
     utterances: Optional[List[Dict[str, Any]]] = None
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def check_mutually_exclusive(self):
         fields = [self.session_id, self.test_name, self.utterances]
         non_none = [f for f in fields if f is not None]
@@ -606,7 +608,6 @@ class TurnEvals:
     def _topological_sort(
         self, cases: List[TurnTestCase]
     ) -> List[TurnTestCase]:
-
         """Sorts test cases topologically based on their dependencies.
 
         Args:
@@ -876,9 +877,7 @@ class TurnEvals:
                         event=case.event,
                         variables=case.variables,
                         historical_contexts=(
-                            resolved_history
-                            if resolved_history
-                            else None
+                            resolved_history if resolved_history else None
                         ),
                         turn_count=(
                             case.turn_count

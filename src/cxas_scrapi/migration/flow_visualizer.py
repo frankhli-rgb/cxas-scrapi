@@ -14,7 +14,7 @@
 
 """Flow-level visualizers: dependency resolution and Rich tree rendering."""
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 from rich.markup import escape
 from rich.tree import Tree
@@ -119,8 +119,9 @@ class FlowDependencyResolver:
             webhook_id = self._get_resource_id(fulfillment["webhook"])
             if webhook_id in self.webhooks:
                 dependencies["webhooks"][webhook_id] = self.webhooks[webhook_id]
-        if "function" in fulfillment and "webhookFulfillmentId" in (
-            fulfillment["function"]
+        if (
+            "function" in fulfillment
+            and "webhookFulfillmentId" in (fulfillment["function"])
         ):
             webhook_id = self._get_resource_id(
                 fulfillment["function"]["webhookFulfillmentId"]
@@ -271,7 +272,9 @@ class FlowTreeVisualizer:
                 ]
 
     def _get_id(self, resource_name: str) -> str:
-        return resource_name.split("/")[-1] if resource_name else ""
+        return (
+            resource_name.rsplit("/", maxsplit=1)[-1] if resource_name else ""
+        )
 
     def _get_intent_display(self, intent_ref: str) -> str:
         intent_id = self._get_id(intent_ref)
@@ -293,8 +296,7 @@ class FlowTreeVisualizer:
         if target_page:
             page_id = target_page.split("/")[-1]
             return (
-                f"[cyan]GOTO Page: "
-                f"{self.page_names.get(page_id, page_id)}[/]"
+                f"[cyan]GOTO Page: {self.page_names.get(page_id, page_id)}[/]"
             )
 
         target_flow = handler.get("targetFlowId") or handler.get("targetFlow")
@@ -403,8 +405,7 @@ class FlowTreeVisualizer:
             intent_ref = route.get("intent") or route.get("triggerIntentId")
             if intent_ref:
                 trigger = (
-                    f"Intent: [yellow]"
-                    f"{self._get_intent_display(intent_ref)}[/]"
+                    f"Intent: [yellow]{self._get_intent_display(intent_ref)}[/]"
                 )
             elif "condition" in route:
                 cond_str = route.get("conditionString", str(route["condition"]))
@@ -426,8 +427,7 @@ class FlowTreeVisualizer:
             return
         for handler in handlers:
             evt_node = parent_node.add(
-                f"⚡ [bold red]{label}: "
-                f"{handler.get('event', 'Unknown')}[/]"
+                f"⚡ [bold red]{label}: {handler.get('event', 'Unknown')}[/]"
             )
             self._render_fulfillment(
                 evt_node,

@@ -21,16 +21,19 @@ import logging
 import re
 import traceback
 import zipfile
-from typing import Any, Dict, List, Optional, Union
-
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
 from google.api_core import exceptions as api_exceptions
 from google.cloud.dialogflowcx_v3beta1 import services as cx_services
 from google.cloud.dialogflowcx_v3beta1 import types as cx_types
-from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict
 
-from cxas_scrapi.migration.data_models import DFCXAgentIR, DFCXFlowModel, DFCXPageModel
+from cxas_scrapi.migration.data_models import (
+    DFCXAgentIR,
+    DFCXFlowModel,
+    DFCXPageModel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +42,8 @@ class BaseDFCXClient:
     """Base class for Dialogflow CX API clients to handle common logic."""
 
     def _get_client_options(self, resource_id: str) -> Optional[Dict[str, str]]:
-        """Extracts region and returns client options with the regional endpoint."""
+        """Extracts region and returns client options with the regional
+        endpoint."""
         if not isinstance(resource_id, str):
             return None
         match = re.search(r"projects/[^/]+/locations/([^/]+)/", resource_id)
@@ -81,7 +85,9 @@ class DFCXAgentExporter(BaseDFCXClient):
     """Client for exporting Dialogflow CX Agents."""
 
     @staticmethod
-    def _get_full_name(agent_id: str, resource_type: str, resource_id: str) -> str:
+    def _get_full_name(
+        agent_id: str, resource_type: str, resource_id: str
+    ) -> str:
         """Constructs the full resource name."""
         return f"{agent_id}/{resource_type}/{resource_id}"
 
@@ -89,12 +95,15 @@ class DFCXAgentExporter(BaseDFCXClient):
     def _process_flat_resource(
         ctx: "_ResourceProcessingContext", path_parts: List[str], filename: str
     ):
-        """Processes flat resources like webhooks and agentTransitionRouteGroups."""
+        """Processes flat resources like webhooks and
+        agentTransitionRouteGroups."""
         res_type = path_parts[0]
         with ctx.zip_file.open(filename) as f:
             content = json.load(f)
         res_id = content.get("name") or path_parts[1].replace(".json", "")
-        full_name = DFCXAgentExporter._get_full_name(ctx.agent_id, res_type, res_id)
+        full_name = DFCXAgentExporter._get_full_name(
+            ctx.agent_id, res_type, res_id
+        )
         content["name"] = full_name
         if res_type == "webhooks":
             ctx.webhook_map[full_name] = content
@@ -117,7 +126,9 @@ class DFCXAgentExporter(BaseDFCXClient):
         res_id = content.get("name") or content.get("flowId")
         if not res_id:
             res_id = path_parts[-2]
-        full_name = DFCXAgentExporter._get_full_name(ctx.agent_id, res_type, res_id)
+        full_name = DFCXAgentExporter._get_full_name(
+            ctx.agent_id, res_type, res_id
+        )
         content["name"] = full_name
         if res_type == "intents":
             ctx.intent_map[full_name] = content
@@ -147,13 +158,15 @@ class DFCXAgentExporter(BaseDFCXClient):
         generative_settings: Dict[str, Any],
     ) -> None:
         """Processes a generative settings file from the zip."""
-        lang = filename.split("/")[-1].replace(".json", "")
+        lang = filename.rsplit("/", maxsplit=1)[-1].replace(".json", "")
         with zip_file.open(filename) as f:
             generative_settings[lang] = json.load(f)
 
     @staticmethod
     def _process_test_cases(
-        zip_file: zipfile.ZipFile, filename: str, test_cases_list: List[Dict[str, Any]]
+        zip_file: zipfile.ZipFile,
+        filename: str,
+        test_cases_list: List[Dict[str, Any]],
     ) -> None:
         """Processes a test case file from the zip."""
         with zip_file.open(filename) as f:
@@ -215,12 +228,12 @@ class DFCXAgentExporter(BaseDFCXClient):
             with zip_file.open(filename) as f:
                 ex_content = json.load(f)
             if "name" in ex_content:
-                ex_content[
-                    "name"
-                ] = f"{full_resource_name}/examples/{ex_content['name']}"
-            playbook_map[full_resource_name].setdefault(
-                "examples", []
-            ).append(ex_content)
+                ex_content["name"] = (
+                    f"{full_resource_name}/examples/{ex_content['name']}"
+                )
+            playbook_map[full_resource_name].setdefault("examples", []).append(
+                ex_content
+            )
 
     @staticmethod
     def _process_tool_schema(
@@ -244,7 +257,7 @@ class DFCXAgentExporter(BaseDFCXClient):
         full_resource_name: str,
     ) -> None:
         """Processes generator phrases from the zip."""
-        lang = filename.split("/")[-1].replace(".json", "")
+        lang = filename.rsplit("/", maxsplit=1)[-1].replace(".json", "")
         with zip_file.open(filename) as f:
             phrase_content = json.load(f)
         generator_map.setdefault(full_resource_name, {}).setdefault(
@@ -283,7 +296,6 @@ class DFCXAgentExporter(BaseDFCXClient):
 
                 agent_id = agent_data["name"]
 
-
                 # Initialize processing context
                 ctx = _ResourceProcessingContext(
                     zip_file=zip_file,
@@ -311,15 +323,17 @@ class DFCXAgentExporter(BaseDFCXClient):
                         "webhooks",
                         "agentTransitionRouteGroups",
                     ]:
-                        DFCXAgentExporter._process_flat_resource(ctx, path_parts, filename)
+                        DFCXAgentExporter._process_flat_resource(
+                            ctx, path_parts, filename
+                        )
 
                     # Standard resources: type/name/name.json
-                    elif (
-                        len(path_parts) >= 2
-                        and path_parts[-2]
-                        == path_parts[-1].replace(".json", "")
-                    ):
-                        DFCXAgentExporter._process_standard_resource(ctx, path_parts, filename)
+                    elif len(path_parts) >= 2 and path_parts[-2] == path_parts[
+                        -1
+                    ].replace(".json", ""):
+                        DFCXAgentExporter._process_standard_resource(
+                            ctx, path_parts, filename
+                        )
 
                 # Second pass: Merge sub-components and handle special folders
                 for filename in sorted(namelist):
@@ -331,13 +345,17 @@ class DFCXAgentExporter(BaseDFCXClient):
                     # Generative Settings
                     if rel_path.startswith("generativeSettings/"):
                         if rel_path.endswith(".json"):
-                            DFCXAgentExporter._process_generative_settings(zip_file, filename, generative_settings)
+                            DFCXAgentExporter._process_generative_settings(
+                                zip_file, filename, generative_settings
+                            )
                         continue
 
                     # Test Cases
                     if rel_path.startswith("testCases/"):
                         if rel_path.endswith(".json"):
-                            DFCXAgentExporter._process_test_cases(zip_file, filename, test_cases_list)
+                            DFCXAgentExporter._process_test_cases(
+                                zip_file, filename, test_cases_list
+                            )
                         continue
 
                     path_parts = rel_path.split("/")
@@ -346,7 +364,9 @@ class DFCXAgentExporter(BaseDFCXClient):
 
                     res_type = path_parts[0]
                     resource_dir_name = path_parts[1]
-                    full_resource_name = ctx.dir_name_to_full_name.get(res_type, {}).get(resource_dir_name)
+                    full_resource_name = ctx.dir_name_to_full_name.get(
+                        res_type, {}
+                    ).get(resource_dir_name)
                     if not full_resource_name:
                         continue
 
@@ -356,7 +376,12 @@ class DFCXAgentExporter(BaseDFCXClient):
                         and path_parts[-2] == "trainingPhrases"
                         and rel_path.endswith(".json")
                     ):
-                        DFCXAgentExporter._process_intent_training_phrases(zip_file, filename, ctx.intent_map, full_resource_name)
+                        DFCXAgentExporter._process_intent_training_phrases(
+                            zip_file,
+                            filename,
+                            ctx.intent_map,
+                            full_resource_name,
+                        )
 
                     # EntityTypes -> entities
                     elif (
@@ -364,7 +389,12 @@ class DFCXAgentExporter(BaseDFCXClient):
                         and path_parts[-2] == "entities"
                         and rel_path.endswith(".json")
                     ):
-                        DFCXAgentExporter._process_entity_type_entities(zip_file, filename, ctx.entity_map, full_resource_name)
+                        DFCXAgentExporter._process_entity_type_entities(
+                            zip_file,
+                            filename,
+                            ctx.entity_map,
+                            full_resource_name,
+                        )
 
                     # Flows -> pages
                     elif (
@@ -372,7 +402,9 @@ class DFCXAgentExporter(BaseDFCXClient):
                         and path_parts[-2] == "pages"
                         and rel_path.endswith(".json")
                     ):
-                        DFCXAgentExporter._process_flow_pages(zip_file, filename, ctx.flow_map, full_resource_name)
+                        DFCXAgentExporter._process_flow_pages(
+                            zip_file, filename, ctx.flow_map, full_resource_name
+                        )
 
                     # Playbooks -> examples
                     elif (
@@ -380,11 +412,20 @@ class DFCXAgentExporter(BaseDFCXClient):
                         and path_parts[-2] == "examples"
                         and rel_path.endswith(".json")
                     ):
-                        DFCXAgentExporter._process_playbook_examples(zip_file, filename, ctx.playbook_map, full_resource_name)
+                        DFCXAgentExporter._process_playbook_examples(
+                            zip_file,
+                            filename,
+                            ctx.playbook_map,
+                            full_resource_name,
+                        )
 
                     # Tools -> schema.yaml
-                    elif res_type == "tools" and path_parts[-1] == "schema.yaml":
-                        DFCXAgentExporter._process_tool_schema(zip_file, filename, ctx.tool_map, full_resource_name)
+                    elif (
+                        res_type == "tools" and path_parts[-1] == "schema.yaml"
+                    ):
+                        DFCXAgentExporter._process_tool_schema(
+                            zip_file, filename, ctx.tool_map, full_resource_name
+                        )
 
                     # Generators -> phrases
                     elif (
@@ -392,21 +433,32 @@ class DFCXAgentExporter(BaseDFCXClient):
                         and path_parts[-2] == "phrases"
                         and rel_path.endswith(".json")
                     ):
-                        DFCXAgentExporter._process_generator_phrases(zip_file, filename, ctx.generator_map, full_resource_name)
+                        DFCXAgentExporter._process_generator_phrases(
+                            zip_file,
+                            filename,
+                            ctx.generator_map,
+                            full_resource_name,
+                        )
 
                 # Resolve Playbook references
                 processed_playbooks = []
-                for pb_name, pb_data in ctx.playbook_map.items():
+                for _pb_name, pb_data in ctx.playbook_map.items():
                     if "referencedPlaybooks" in pb_data:
                         resolved_refs = [
-                            DFCXAgentExporter._get_full_name(agent_id, "playbooks", ctx.display_name_to_id[dn])
+                            DFCXAgentExporter._get_full_name(
+                                agent_id,
+                                "playbooks",
+                                ctx.display_name_to_id[dn],
+                            )
                             for dn in pb_data["referencedPlaybooks"]
                             if dn in ctx.display_name_to_id
                         ]
                         pb_data["referencedPlaybooks"] = resolved_refs
                     if "referencedTools" in pb_data:
                         resolved_refs = [
-                            DFCXAgentExporter._get_full_name(agent_id, "tools", ctx.display_name_to_id[dn])
+                            DFCXAgentExporter._get_full_name(
+                                agent_id, "tools", ctx.display_name_to_id[dn]
+                            )
                             for dn in pb_data["referencedTools"]
                             if dn in ctx.display_name_to_id
                         ]
@@ -420,7 +472,9 @@ class DFCXAgentExporter(BaseDFCXClient):
                     and start_pb_display_name in ctx.display_name_to_id
                 ):
                     start_playbook_full_name = DFCXAgentExporter._get_full_name(
-                        agent_id, "playbooks", ctx.display_name_to_id[start_pb_display_name]
+                        agent_id,
+                        "playbooks",
+                        ctx.display_name_to_id[start_pb_display_name],
                     )
                     try:
                         start_pb_index = next(
@@ -437,9 +491,7 @@ class DFCXAgentExporter(BaseDFCXClient):
                 flows_list = []
                 for flow_full_name, flow_stuff in ctx.flow_map.items():
                     pages_list = [
-                        DFCXPageModel(
-                            page_id=p["key"], page_data=p["value"]
-                        )
+                        DFCXPageModel(page_id=p["key"], page_data=p["value"])
                         for p in flow_stuff["pages"]
                     ]
                     flows_list.append(
@@ -468,8 +520,7 @@ class DFCXAgentExporter(BaseDFCXClient):
                             agent_data.get("startFlow"), ""
                         ),
                     )
-                    if agent_data.get("startFlow")
-                    in ctx.display_name_to_id
+                    if agent_data.get("startFlow") in ctx.display_name_to_id
                     else agent_data.get("startFlow"),
                     start_playbook=DFCXAgentExporter._get_full_name(
                         agent_id,
@@ -478,8 +529,7 @@ class DFCXAgentExporter(BaseDFCXClient):
                             agent_data.get("startPlaybook"), ""
                         ),
                     )
-                    if agent_data.get("startPlaybook")
-                    in ctx.display_name_to_id
+                    if agent_data.get("startPlaybook") in ctx.display_name_to_id
                     else agent_data.get("startPlaybook"),
                     intents=list(ctx.intent_map.values()),
                     tools=list(ctx.tool_map.values()),
@@ -503,7 +553,8 @@ class DFCXAgentExporter(BaseDFCXClient):
             return None
 
     def export_agent_to_json(self, agent_id: str) -> Optional[DFCXAgentIR]:
-        """Exports the agent and returns its contents as a DFCXAgentIR object."""
+        """Exports the agent and returns its contents as a DFCXAgentIR
+        object."""
         client_options = self._get_client_options(agent_id)
         if not client_options:
             return None
@@ -523,7 +574,8 @@ class DFCXAgentExporter(BaseDFCXClient):
             raise Exception("Agent export returned empty content.")
 
         logger.info(
-            f"Agent export completed. Size: {len(response.agent_content)} bytes."
+            f"Agent export completed. Size: {len(response.agent_content)} "
+            f"bytes."
         )
 
         # Delegate to the shared processing method
@@ -612,7 +664,8 @@ class DFCXGenerativeSettings(BaseDFCXClient):
             return MessageToDict(response._pb)
         except api_exceptions.NotFound:
             logger.info(
-                "No custom generative settings found for this agent. Using defaults."
+                "No custom generative settings found for this agent. "
+                "Using defaults."
             )
             return None
         except Exception as e:
@@ -635,7 +688,8 @@ class ConversationalAgentsAPI:
     def fetch_full_agent_details(
         self, agent_id: str, use_export: bool = True
     ) -> Optional[DFCXAgentIR]:
-        """Fetches the complete agent configuration, including all nested resources.
+        """Fetches the complete agent configuration, including all nested
+        resources.
 
         Uses either parallel API calls or the ExportAgent method.
         """
@@ -646,8 +700,10 @@ class ConversationalAgentsAPI:
             return self.export_agent.export_agent_to_json(agent_id)
 
         logger.info(f"Starting import for agent via API calls: {agent_id}...")
-        # TODO: If using use_export=False, this method currently does not include Flows and Pages.
-        # This is a work in progress. Use use_export=True for full agent extraction.
+        # TODO: If using use_export=False, this method currently does not
+        # include Flows and Pages.
+        # This is a work in progress. Use use_export=True for full agent
+        # extraction.
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_agent = executor.submit(self.agents.get_agent, agent_id)
             future_tools = executor.submit(self.tools.list_tools, agent_id)
@@ -698,7 +754,9 @@ class ConversationalAgentsAPI:
                 agent_transition_route_groups=[],
             )
 
-            logger.info("Successfully imported available agent components via API.")
+            logger.info(
+                "Successfully imported available agent components via API."
+            )
             return agent_ir
 
     def process_local_agent_zip(

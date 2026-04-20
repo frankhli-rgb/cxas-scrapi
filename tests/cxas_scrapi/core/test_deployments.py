@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from cxas_scrapi.core.deployments import Deployments
 
 
@@ -79,7 +79,7 @@ def test_create_deployment(mock_client_cls, mock_req_cls):
     mock_req_cls.side_effect = side_effect
 
     deps = Deployments("projects/p/locations/l/apps/A")
-    res = deps.create_deployment("dep_id", "my_dep", "v1")
+    deps.create_deployment("dep_id", "my_dep", "v1")
     mock_client.create_deployment.assert_called_once()
     args = mock_client.create_deployment.call_args[1]["request"]
     assert args.parent == "projects/p/locations/l/apps/A"
@@ -103,10 +103,13 @@ def test_update_deployment(mock_client_cls, mock_req_cls, mock_dep_cls):
     mock_dep_cls.side_effect = side_effect
 
     deps = Deployments("projects/p/locations/l/apps/A")
-    res = deps.update_deployment("dep_id", display_name="new_name")
+    deps.update_deployment("dep_id", display_name="new_name")
     mock_client.update_deployment.assert_called_once()
     args = mock_client.update_deployment.call_args[1]["request"]
-    assert args.deployment.name == "projects/p/locations/l/apps/A/deployments/dep_id"
+    assert (
+        args.deployment.name
+        == "projects/p/locations/l/apps/A/deployments/dep_id"
+    )
     assert args.deployment.display_name == "new_name"
 
 

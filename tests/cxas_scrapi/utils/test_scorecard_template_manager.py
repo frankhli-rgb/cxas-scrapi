@@ -13,17 +13,15 @@
 # limitations under the License.
 
 import json
-import os
 
+import json5
 import pytest
 import yaml
-import json5
 
 from cxas_scrapi.utils import scorecard_template_manager
 
 
 class TestScorecardTemplateManager:
-
     def test_save_and_load_template(self, tmp_path):
         template_path = tmp_path / "my_scorecard.json"
 

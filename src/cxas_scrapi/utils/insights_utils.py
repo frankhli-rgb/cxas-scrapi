@@ -16,9 +16,11 @@
 
 import logging
 import uuid
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
-from typing import Any, Dict, List, Sequence, Optional
-from cxas_scrapi.core.scorecards import Scorecards, QaQuestion, QaScorecard
+
+from cxas_scrapi.core.scorecards import Scorecards
 
 
 class InsightsUtils:
@@ -98,7 +100,8 @@ class InsightsUtils:
         questions: List[Dict[str, Any]],
         target_scorecard_id: Optional[str] = None,
     ) -> str:
-        """High level abstraction to import or update a scorecard and its questions from dictionaries."""
+        """High level abstraction to import or update a scorecard and its
+        questions from dictionaries."""
         scorecard_id = target_scorecard_id or f"sc-{uuid.uuid4()}"
         full_scorecard_name = (
             f"{self.scorecards_client.parent}/qaScorecards/{scorecard_id}"
@@ -139,8 +142,8 @@ class InsightsUtils:
         scorecard_name: str,
         export_to_bq: bool = False,
     ) -> pd.DataFrame:
-        """
-        Abstracts away setting up the analysis rules and triggering batch evaluation.
+        """Abstracts away setting up the analysis rules and triggering
+        batch evaluation.
         (Conceptual placeholder for full workflow returning DataFrames).
         """
         logging.info(
@@ -150,6 +153,8 @@ class InsightsUtils:
         )
 
         raise NotImplementedError(
-            "Batch evaluation using Scorecards via the Insights API has not been implemented yet. "
-            "Need to wire up analysis rule creation and job polling in core/insights.py."
+            "Batch evaluation using Scorecards via the Insights API has not "
+            "been implemented yet. "
+            "Need to wire up analysis rule creation and job polling in "
+            "core/insights.py."
         )
