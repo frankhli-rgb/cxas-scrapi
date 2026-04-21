@@ -70,6 +70,7 @@ class ConversationHistory(Common):
     def conversation_dict_to_yaml(conv_dict):
         """Parses a direct CXAS Conversation History dictionary into the
         target FDE YAML format."""
+
         turns = conv_dict.get("turns", [])
         if not isinstance(turns, list):
             turns = [turns]
@@ -81,51 +82,30 @@ class ConversationHistory(Common):
             "mocks": [],
         }
 
-        id_to_tool = {}
-
         for turn in turns:
-            if "user_utterance" in turn:
-                ui = turn["user_utterance"]
-                if "text" in ui:
-                    out_yaml["turns"].append({"user": ui["text"]})
-                elif "event" in ui:
-                    out_yaml["turns"].append({"user_event": str(ui["event"])})
-
-            if "agent_utterance" in turn:
-                au = turn["agent_utterance"]
-                chunks = au.get("messages", [])
-                if not isinstance(chunks, list):
-                    chunks = [chunks]
-                text = " ".join(
-                    [c.get("text", "") for c in chunks if "text" in c]
-                )
+            messages = turn.get("messages", [])
+            for message in messages:
+                role = message.get("role", "")
+                chunks = message.get("chunks", [])
+                text = " ".join([c.get("text", "") for c in chunks if "text" in c])
                 if text:
-                    out_yaml["turns"].append({"agent": text})
+                    out_yaml["turns"].append({role: text})  # role = "agent name" for agent responses and tool calls
 
-            tool_calls = turn.get("tool_calls", [])
-            if not isinstance(tool_calls, list):
-                tool_calls = [tool_calls]
-            for tc in tool_calls:
-                args = tc.get("args", {})
-                unwrapped = Common.unwrap_struct(args)
-                name = tc.get(
-                    "display_name", tc.get("name", tc.get("tool", ""))
-                )
-                out_yaml["turns"].append(
-                    {"tool_call": {"tool": name, "args": unwrapped}}
-                )
-                id_to_tool[tc.get("id", "")] = name
+                for chunk in chunks:
+                    if "tool_call" in chunk:
+                        tool_call = chunk["tool_call"]
+                        tool_name = tool_call.get("display_name", tool_call.get("name", tool_call.get("tool","")))
+                        tool_args = Common.unwrap_struct(tool_call.get("args", {}))
+                        out_yaml["turns"].append({"tool_call": {"tool": tool_name, "args": tool_args}})
+                    elif "tool_response" in chunk:
+                        tool_response = chunk["tool_response"]
+                        tool_name = tool_response.get("display_name", tool_response.get("name", tool_response.get("tool","")))
+                        tool_response = Common.unwrap_struct(tool_response.get("response", {}))
+                        out_yaml["mocks"].append({"tool_response": {"tool": tool_name, "response": tool_response}})
 
-            tool_responses = turn.get("tool_responses", [])
-            if not isinstance(tool_responses, list):
-                tool_responses = [tool_responses]
-            for tr in tool_responses:
-                res = tr.get("response", {})
-                unwrapped = Common.unwrap_struct(res)
-                name = id_to_tool.get(tr.get("id", ""), tr.get("tool", ""))
-                out_yaml["mocks"].append({"tool": name, "response": unwrapped})
 
         return out_yaml
+
 
     def list_conversations(
         self,
@@ -263,5 +243,5 @@ class ConversationHistory(Common):
         conv_obj = self.get_conversation(conversation_id=conversation_id)
         # Convert to dictionary
         conv_dict = type(conv_obj).to_dict(conv_obj)
-        out_yaml_dict = self.conversation_dict_to_yaml(conv_dict)
+        out_yaml_dict = ConversationHistory.conversation_dict_to_yaml(conv_dict)
         return yaml.dump(out_yaml_dict, sort_keys=False, allow_unicode=True)
