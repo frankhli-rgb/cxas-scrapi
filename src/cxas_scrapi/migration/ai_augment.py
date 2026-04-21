@@ -1,7 +1,21 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import json
 import logging
-import re
 from typing import Any, Dict, Optional
+
 from cxas_scrapi.utils.gemini import GeminiGenerate
 
 logger = logging.getLogger(__name__)
@@ -19,7 +33,7 @@ class AIAugment:
         self.gemini_client = gemini_client
         logger.info("AIAugment service initialized.")
 
-    def generate_agent_description(
+    async def generate_agent_description(
         self, playbook_data: Dict[str, Any]
     ) -> Optional[str]:
         """Generates a concise, one-sentence description for a Polysynth agent
@@ -58,7 +72,7 @@ class AIAugment:
         {instruction_str}
         """
 
-        description = self.gemini_client.generate(
+        description = await self.gemini_client.generate_async(
             prompt=prompt, system_prompt=system_prompt
         )
         logger.info(f"***Generated agent description***: {description}")
@@ -69,7 +83,7 @@ class AIAugment:
 
         return None
 
-    def generate_eval_set(
+    async def generate_eval_set(
         self, agent_data: Dict[str, Any]
     ) -> Optional[list]:
         """Generates a structured evaluation set, instructing the LLM to
@@ -157,7 +171,7 @@ class AIAugment:
         """
 
         logger.info("Requesting dynamically sized eval set from the model...")
-        response_str = self.gemini_client.generate(
+        response_str = await self.gemini_client.generate_async(
             prompt=prompt, system_prompt=system_prompt
         )
         logger.debug(f"***Generated the eval set***: {response_str}")
@@ -211,7 +225,7 @@ class AIAugment:
             logger.debug(f"Raw response: {response_str}")
             return None
 
-    def evaluate_conversations(
+    async def evaluate_conversations(
         self, eval_results: list, eval_set: list
     ) -> Optional[dict]:
         """Uses an LLM to evaluate conversation results against the original
@@ -279,7 +293,7 @@ class AIAugment:
         logger.info(
             "\n🤖 Submitting evaluation results to Gemini for analysis..."
         )
-        summary = self.gemini_client.generate(
+        summary = await self.gemini_client.generate_async(
             prompt=prompt, system_prompt=system_prompt
         )
         return summary

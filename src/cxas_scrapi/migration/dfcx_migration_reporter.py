@@ -1,10 +1,22 @@
-import os
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Any, Optional
-import json
+from typing import Any, Dict, List
 
-from cxas_scrapi.core.agents import Agents
 from cxas_scrapi.utils.gemini import GeminiGenerate
 
 logger = logging.getLogger(__name__)
@@ -22,7 +34,7 @@ class DFCXMigrationReporter:
             gemini_client: An instance of GeminiGenerate for AI augmentation.
         """
         self.gemini_client = gemini_client
-        
+
         # Dialogflow migration logs (retained from previous snippet)
         self.app_info: Dict[str, str] = {}
         self.variables: List[Dict[str, str]] = []
@@ -33,7 +45,7 @@ class DFCXMigrationReporter:
         self.actions: List[Dict[str, str]] = []
         self.transformations: List[Dict[str, str]] = []
         self.skipped: List[Dict[str, str]] = []
-        
+
         # Augmented details
         self.generated_features: str = ""
         self.generated_description: str = ""
@@ -75,7 +87,7 @@ class DFCXMigrationReporter:
     def log_skipped(self, category: str, name: str, reason: str):
         self.skipped.append({"category": category, "name": name, "reason": reason})
 
-    def generate_cxas_augmented_details(self, agent_config: Dict[str, Any]):
+    async def generate_cxas_augmented_details(self, agent_config: Dict[str, Any]):
         """Uses Gemini to generate user journeys and analyze instructions, tools, and callbacks
         based on the provided CXAS agent configuration.
 
@@ -85,41 +97,43 @@ class DFCXMigrationReporter:
         """
         try:
             logger.info("Generating augmented details and user journeys using Gemini.")
-            
+
             # 1. Generate User Journeys and Analysis
             prompt = f"""
             Analyze the following CXAS Agent configuration which represents the app being created.
-            
+
             Agent Config:
             {json.dumps(agent_config, indent=2)}
-            
+
             Please perform the following tasks:
             1. Create a detailed list of customer user journeys covered in this CXAS agent.
             2. Analyze how instructions, tool calls, and callbacks are utilized in each journey.
-            
+
             Return the results in clear Markdown format.
             """
-            
-            self.generated_features = self.gemini_client.generate(
+
+            features_raw = await self.gemini_client.generate_async(
                 prompt=prompt,
                 system_prompt="You are an expert conversational AI architect and documentation assistant."
-            ).strip()
-            
+            )
+            self.generated_features = features_raw.strip() if features_raw else ""
+
             # 2. Generate Description (still useful to have a short summary)
             desc_prompt = f"""
             Analyze the following CXAS Agent configuration and generate a detailed description of its purpose and capabilities.
-            
+
             Agent Config:
             {json.dumps(agent_config, indent=2)}
-            
+
             Return ONLY the detailed description.
             """
-            
-            self.generated_description = self.gemini_client.generate(
-                prompt=desc_prompt, 
+
+            desc_raw = await self.gemini_client.generate_async(
+                prompt=desc_prompt,
                 system_prompt="You are an expert documentation assistant."
-            ).strip()
-            
+            )
+            self.generated_description = desc_raw.strip() if desc_raw else ""
+
             logger.info("Successfully generated augmented details and user journeys using Gemini.")
 
         except Exception as e:
@@ -130,7 +144,7 @@ class DFCXMigrationReporter:
     def generate_markdown(self) -> str:
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
         md = [
-            f"# Polysynth Migration Audit Report",
+            "# Polysynth Migration Audit Report",
             f"**Generated:** `{timestamp}`\n",
             "## 📦 App Details",
             f"- **Source DFCX Agent:** `{self.app_info.get('source', 'N/A')}`",
@@ -208,7 +222,7 @@ class DFCXMigrationReporter:
             md.append(f"| `{t['category']}` | `{t['original']}` | `{t['migrated']}` | {t['notes']} |")
         if not self.transformations:
             md.append("| - | - | - | No notable transformations. |")
-            
+
         md.extend([
             "\n## ⚙️ System Actions & Linking",
             "| Category | Description |",
