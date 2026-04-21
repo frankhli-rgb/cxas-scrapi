@@ -269,7 +269,7 @@ class GoldenWithoutMocks(Rule):
 class GoldenAgentFieldNotString(Rule):
     id = "E007"
     name = "eval-agent-not-string"
-    description = "Golden agent response must be a plain string, not a dict"
+    description = "Golden agent response must be a string or list of strings, not a dict"
     default_severity = Severity.ERROR
 
     def check(
@@ -282,22 +282,31 @@ class GoldenAgentFieldNotString(Rule):
             return []
 
         rel = str(file_path.relative_to(context.project_root))
-        return [
-            self.make_result(
-                file=rel,
-                message=f"Conv '{conv}' turn {i}: 'agent' field is a "
-                f"{type(turn['agent']).__name__}, must be a plain string",
-                fix=(
-                    "Replace the dict with a"
-                    " plain string containing"
-                    " the expected agent"
-                    " response text"
-                ),
+        results = []
+        for conv, i, turn in _iter_golden_turns(data):
+            agent = turn.get("agent")
+            if agent is None:
+                continue
+            if isinstance(agent, str):
+                continue
+            if isinstance(agent, list) and all(
+                isinstance(item, str) for item in agent
+            ):
+                continue
+            results.append(
+                self.make_result(
+                    file=rel,
+                    message=f"Conv '{conv}' turn {i}: 'agent' field is a "
+                    f"{type(agent).__name__}, must be a plain string"
+                    " or a list of strings",
+                    fix=(
+                        "Replace with a plain string or a list"
+                        " of strings containing the expected"
+                        " agent response text"
+                    ),
+                )
             )
-            for conv, i, turn in _iter_golden_turns(data)
-            if turn.get("agent") is not None
-            and not isinstance(turn["agent"], str)
-        ]
+        return results
 
 
 @rule("evals")
