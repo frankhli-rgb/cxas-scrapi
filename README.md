@@ -1,59 +1,38 @@
-<div align="center">
-  <h3 align="center">CX Agent Studio Scripting API (CXAS SCRAPI)</h3>
-  <p align="center">
-    A high-level scripting API for AI agent builders, developers, and maintainers.<br>
-  </p>
-</div>
+# CX Agent Studio Scripting API (CXAS SCRAPI)
 
-<!-- TABLE OF CONTENTS -->
-<details open="open">
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#introduction">Introduction</a>
-      <ul>
-        <li><a href="#what-can-i-do-with-cxas-scrapi">What Can I Do with SCRAPI?</a></li>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#environment-setup">Environment Setup</a></li>
-        <li><a href="#authentication">Authentication</a></li>
-      </ul>
-    </li>
-    <li><a href="#usage">Usage</a>
-    <li>
-      <a href="#library-composition">Library Composition</a>
-      <ul>
-        <li><a href="#core">Core</a></li>
-        <li><a href="#utils">Utils</a></li>
-      </ul>
-    </li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgements">Acknowledgements</a></li>
-  </ol>
-</details>
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE.txt)
+[![PyPI](https://img.shields.io/pypi/v/cxas-scrapi)](https://pypi.org/project/cxas-scrapi/)
+[![Python Unit Tests](https://github.com/google/cxas-scrapi/actions/workflows/python-unit-tests.yml/badge.svg)](https://github.com/google/cxas-scrapi/actions/workflows/python-unit-tests.yml)
 
-<!-- INTRODUCTION -->
-# Introduction
+<html>
+    <h2 align="center">
+      <!-- Replace with actual image path once uploaded -->
+      <img src="assets/cxas-scrapi-logo.png" width="256" alt="CXAS SCRAPI Logo"/>
+    </h2>
+    <h3 align="center">
+      A powerful Python API, CLI, and set of Agent Skills for CX Agent Studio to automate, evaluate, and scale your agents with ease.
+    </h3>
+    <h3 align="center">
+      Important Links:
+      <a href="docs/">Docs</a>,
+      <a href="examples/">Examples</a>,
+      <a href=".agents/skills/">Agent Skills</a>,
+      <a href="src/cxas_scrapi/core/">Core SDK</a>
+    </h3>
+</html>
 
-The CX Agent Studio Scripting API (CXAS SCRAPI) is a high-level API that extends the official Google [Python Client for CX Agent Studio](https://docs.cloud.google.com/customer-engagement-ai/conversational-agents/ps). CXAS SCRAPI makes using CX Agent Studio easier, more friendly, and more pythonic for bot builders, developers, and maintainers.
+CX Agent Studio Scripting API (CXAS SCRAPI) is an open-source Python scripting
+API, CLI, and set of Agent Skills for CX Agent Studio. It is designed to
+simplify building, deploying, and orchestrating agent workflows, from simple
+tasks to complex systems. It integrates seamlessly with Agentic IDEs like
+Gemini CLI, Claude Code, and Antigravity, exposing advanced tooling for deep
+evaluations, real-time latency metrics, offline linting, and conversation
+history.
 
-## What Can I Do With CXAS SCRAPI?
-With CXAS SCRAPI you can perform many agent building and maintenance actions at scale including, but not limited to:
-- Create, Update, Delete, Get, and List for all CXAS resources types (i.e. Apps, Agents, Tools, Guardrails, Deployments, Sessions, etc.)
-- Run Evaluations and analyze Conversation History directly through code
-- Convert robust Agent responses and configurations into unified, easy-to-read Python dictionaries and dataframes
-- Orchestrate and test complex multi-agent setups locally
-- Manage App-level Variables and configurations programmatically
-- ...and much, much more!
+---
 
 ## Built With
-* Python 3.10+
+* Python 3.11+
 
 
 <!-- AUTHENTICATION -->
@@ -94,9 +73,9 @@ Once you are setup with the above, your function code can be used easily like th
 ```py
 from cxas_scrapi import Agents
 
-app_id = '<YOUR_APP_ID>'
+app_name = '<YOUR_APP_NAME>'
 a = Agents(project_id='<YOUR_GCP_PROJECT_ID>', location='global')
-agents_map = a.get_agents_map(app_id)
+agents_map = a.get_agents_map(app_name)
 ```
 
 ---
@@ -121,7 +100,7 @@ from cxas_scrapi import Tools
 creds_path = '<PATH_TO_YOUR_SERVICE_ACCOUNT_JSON_FILE>'
 
 t = Tools(project_id='<YOUR_GCP_PROJECT_ID>', location='global', creds_path=creds_path)
-tools_map = t.get_tools_map('<YOUR_APP_ID>')
+tools_map = t.get_tools_map('<YOUR_APP_NAME>')
 ```
 
 <!-- GETTING STARTED -->
@@ -159,13 +138,20 @@ for app in apps:
 # Library Composition
 Here is a brief overview of the CXAS SCRAPI library's structure and the motivation behind that structure.
 
-## Core  
-The `src/cxas_scrapi/core` folder is synonymous with the core Resource types in the CXAS environment (apps, agents, tools, deployments, guardrails, evaluations, etc.)
-* This folder contains the high level building blocks of CXAS SCRAPI
-* These classes and methods can be used to build higher level methods or custom tools and applications
+## [Core](src/cxas_scrapi/core)
+The `src/cxas_scrapi/core` directory contains the high level building blocks of CXAS SCRAPI, mapped to core resource types in the CXAS environment (Apps, Agents, Tools, Guardrails, Deployments, Sessions, etc.)
 
-## Utils
-The `src/cxas_scrapi/utils` folder contains various helper functions and logic that perform complex background tasks, such as creating Secret Manager Secrets, pagination, response flattening, and proto conversions.
+## [Utils](src/cxas_scrapi/utils)
+The `src/cxas_scrapi/utils` directory contains helper functions and background logic for pagination, response flattening, proto conversions, and external integrations like Google Sheets.
+
+## [Evals](src/cxas_scrapi/evals)
+The `src/cxas_scrapi/evals` directory provides tools for executing and analyzing agent performance evaluations, including Golden tests and simulation runs, and extracting metrics like latency.
+
+## [CLI](src/cxas_scrapi/cli)
+The `src/cxas_scrapi/cli` directory implements the command line interface for SCRAPI, offering tools like `cxas lint` to automate development and validation workflows.
+
+## [Migration](src/cxas_scrapi/migration)
+The `src/cxas_scrapi/migration` directory contains tools to facilitate transitioning legacy Dialogflow CX agents to CXAS, including agent generation from flows and artifact building.
 
 <!-- CONTRIBUTING -->
 # Contributing
