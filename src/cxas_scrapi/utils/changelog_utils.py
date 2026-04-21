@@ -15,9 +15,10 @@
 import datetime
 import functools
 import json
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 from cxas_scrapi.utils.gemini import GeminiGenerate
+
 
 class ChangelogUtils:
     @staticmethod
@@ -345,7 +346,8 @@ class ChangelogUtils:
                 )
                 response_text = cl.generate(prompt=prompt)
 
-            # Basic post-processing to clean up potential numbering/extra whitespace
+            # Basic post-processing to clean up potential numbering/extra
+            # whitespace
             lines = response_text.strip().split("\n") if response_text else []
             cleaned_lines = [
                 line.strip() for line in lines if line.strip().startswith("-")

@@ -183,6 +183,11 @@ def test_rule_decorator_deduplication():
     after_second = sum(len(v) for v in _RULE_REGISTRY.values())
     assert after_second == after_first, "Duplicate rule ID was registered twice"
 
+    # Cleanup
+    from cxas_scrapi.utils.linter import _REGISTERED_IDS  # noqa: PLC0415
+    _RULE_REGISTRY["test_dedup"] = []
+    _REGISTERED_IDS.discard("XDUP001")
+
 
 def test_reset_registry():
     """reset_registry() clears all registered rules."""

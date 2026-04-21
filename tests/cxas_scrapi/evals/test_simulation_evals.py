@@ -44,17 +44,15 @@ def test_llm_user_conversation():
         goal="Book a flight", success_criteria="Successfully booked a flight"
     )
 
-    mock_gemini_client.generate.return_value = (
-        LLMUserConversation.Output(
-            next_user_utterance=user_utterance_1,
-            step_progresses=[
-                StepProgress(
-                    step=step_1,
-                    status=StepStatus.COMPLETED,
-                    justification="User booked a flight.",
-                )
-            ],
-        )
+    mock_gemini_client.generate.return_value = LLMUserConversation.Output(
+        next_user_utterance=user_utterance_1,
+        step_progresses=[
+            StepProgress(
+                step=step_1,
+                status=StepStatus.COMPLETED,
+                justification="User booked a flight.",
+            )
+        ],
     )
 
     test_case = {

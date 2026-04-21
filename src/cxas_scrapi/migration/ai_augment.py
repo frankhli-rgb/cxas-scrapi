@@ -16,6 +16,7 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
+from cxas_scrapi.migration.prompts import Prompts
 from cxas_scrapi.utils.gemini import GeminiGenerate
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,8 @@ class AIAugment:
         based on its source DFCX Playbook's goal and instructions.
 
         Args:
-            playbook_data: The source Dialogflow CX Playbook data as a dictionary.
+            playbook_data: The source Dialogflow CX Playbook data as a
+                dictionary.
 
         Returns:
             A generated one-sentence description string, or None on failure.
@@ -55,22 +57,13 @@ class AIAugment:
             playbook_data.get("instruction", {}), indent=2
         )
 
-        system_prompt = """You are an expert AI agent architect.
-        Your task is to create a concise, one-sentence description for a Polysynth agent based on its detailed instructions and goal.
-        The generated description will be used by either a parent 'router' agent to decide when to transfer a user to this specialist agent, or by other LLM agents to determine if they should route a task to this agent. The description must be clear, accurate, and focus on the agent's primary capability.
-        Do not use conversational language. Output only the single sentence description."""
+        system_prompt = Prompts.AGENT_DESCRIPTION["system"]
 
-        prompt = f"""
-        Generate a one-sentence description for an agent with the following characteristics:
-
-        Agent Name: {display_name}
-
-        Agent Goal:
-        {goal}
-
-        Agent Instructions (JSON format):
-        {instruction_str}
-        """
+        prompt = Prompts.AGENT_DESCRIPTION["template"].format(
+            display_name=display_name,
+            goal=goal,
+            instruction_str=instruction_str,
+        )
 
         description = await self.gemini_client.generate_async(
             prompt=prompt, system_prompt=system_prompt
@@ -78,7 +71,8 @@ class AIAugment:
         logger.info(f"***Generated agent description***: {description}")
 
         if description:
-            # Clean up the response, removing potential quotes or extra whitespace
+            # Clean up the response, removing potential quotes or extra
+            # whitespace
             return description.strip().strip('"')
 
         return None
@@ -97,78 +91,11 @@ class AIAugment:
             A list of dictionaries representing the eval set, or None on
             failure.
         """
-        # The logic for sizing is now moved into the system prompt.
-        system_prompt = """You are a world-class Senior Quality Assurance (QA) Engineer specializing in conversational AI. Your goal is to create a high-quality, comprehensive evaluation set in a structured JSON format to rigorously test a new agent against its source specification.
+        system_prompt = Prompts.EVAL_GENERATION["system"]
 
-        **Phase 1: Comprehensive Analysis and Test Strategy Formulation**
-        First, deeply understand the agent by meticulously analyzing the provided agent JSON configuration.
-        1.  **Agent Identity and Purpose:** Analyze the agent's `displayName`, goals, and tools to infer its domain (e.g., "E-commerce Retail," "Airline Bookings") and primary business objectives.
-        2.  **Core Capabilities and User Journeys:** Examine each playbook's `goal` and `instruction` to synthesize "critical user journeys." A journey might involve multiple playbooks and tools. Use the provided `examples` to understand the expected conversational flow.
-        3.  **Tool Integration:** Analyze each tool's `description` or `openApiSpec`. Identify what function each tool performs, what inputs it needs, and which user intents should trigger it.
-
-        **Phase 2: Evaluation Set Generation and Strict Formatting**
-        Based on your analysis, generate the evaluation set. Your final output MUST be a single JSON list of turn objects. Each object in the list represents one turn in a conversation.
-
-        Each **turn object** must have the following keys:
-        - `conversation_id`: (Integer) A unique ID for the conversation flow, starting from 1. All turns within the same conversation share the same ID.
-        - `action_id`: (Integer) A sequential ID for the action within a single conversation, starting from 1 for each new conversation.
-        - `scenario`: (String) A brief, one-sentence description of what this conversation is testing. This should be present on the first turn (`action_id: 1`) of each conversation and can be `null` for subsequent turns.
-        - `user_utterance`: (String or `null`) The text spoken by the user for this turn.
-        - `agent_utterance`: (String or `null`) The expected text response from the agent for this turn.
-        - `action_input_parameters`: (JSON Object or `null`) If the agent is expected to call a tool, this object contains the exact parameters for that tool call for this turn.
-        - `action_type`: (String) Must be one of 3 values: `"User Utterance"` (for user queries), `"Agent Response"` (for text outputs) or `"Tool Invocation"` (for tool calls).
-        - `notes`: (String or `null`) Optional notes about the test case, such as what edge case it's testing or a potential point of failure.
-
-        **Generation Guidelines:**
-        - **Determine Test Size:** Use your expert QA judgment to decide the number of conversations needed to cover the critical journeys. A simple agent may need 2-3 conversations; a complex one may need 5-7.
-        - **Create Test Cases:** Generate multi-turn conversations that test happy paths, tool-triggering scenarios, handoffs, and edge cases.
-
-        **CRITICAL RULE: Each turn object represents exactly ONE action. A user speaking is one action. An agent responding with text is another action. An agent calling a tool is a third type of action. Do NOT combine a user utterance and an agent response in the same turn object.**
-
-        **Example of a Correct Multi-Turn Sequence:**
-        ```json
-        [
-          {
-            "conversation_id": 1,
-            "action_id": 1,
-            "scenario": "User asks for a flight, agent calls a tool, then agent responds with text.",
-            "user_utterance": "I need a flight from SFO to JFK tomorrow.",
-            "agent_utterance": null,
-            "action_input_parameters": null,
-            "action_type": "User Utterance",
-            "notes": null
-          },
-          {
-            "conversation_id": 1,
-            "action_id": 2,
-            "scenario": null,
-            "user_utterance": null,
-            "agent_utterance": null,
-            "action_input_parameters": { "origin": "SFO", "destination": "JFK", "departure_date": "2024-07-19" },
-            "action_type": "Tool Invocation",
-            "notes": "Agent should gather all necessary info and call the tool."
-          },
-          {
-            "conversation_id": 1,
-            "action_id": 3,
-            "scenario": null,
-            "user_utterance": null,
-            "agent_utterance": "I found a flight for you on United for $350. Would you like to book it?",
-            "action_input_parameters": null,
-            "action_type": "Agent Response",
-            "notes": "Agent should summarize the tool's findings."
-          }
-        ]
-
-        Your response MUST begin directly with the opening bracket `[` of the JSON list. Do not include any introductory text, analysis, or markdown fences.
-        """
-
-        prompt = f"""
-        Please act as a Senior QA Engineer. Analyze the following agent configuration and generate an appropriately sized, high-quality evaluation set in the required JSON format.
-
-        Agent Configuration:
-        {json.dumps(agent_data, indent=2)}
-        """
+        prompt = Prompts.EVAL_GENERATION["template"].format(
+            agent_data_json=json.dumps(agent_data, indent=2)
+        )
 
         logger.info("Requesting dynamically sized eval set from the model...")
         response_str = await self.gemini_client.generate_async(
@@ -209,18 +136,21 @@ class AIAugment:
             eval_set = json.loads(json_str)
             if isinstance(eval_set, list):
                 logger.info(
-                    f"-> Successfully extracted and parsed an eval set with {len(eval_set)} turns."
+                    "-> Successfully extracted and parsed an eval set with "
+                    f"{len(eval_set)} turns."
                 )
                 return eval_set
             else:
                 logger.error(
-                    f"Eval set generation failed: Parsed JSON is not a list. Got: {type(eval_set)}"
+                    "Eval set generation failed: Parsed JSON is not a list. "
+                    f"Got: {type(eval_set)}"
                 )
                 return None
 
         except json.JSONDecodeError as e:
             logger.error(
-                f"Eval set generation failed: Could not decode JSON from model response. Error: {e}"
+                "Eval set generation failed: Could not decode JSON from "
+                f"model response. Error: {e}"
             )
             logger.debug(f"Raw response: {response_str}")
             return None
@@ -240,30 +170,7 @@ class AIAugment:
             A dictionary containing the LLM's evaluation summary, or None on
             failure.
         """
-        system_prompt = """You are a meticulous Senior Quality Assurance Analyst specializing in conversational AI. Your task is to analyze a JSON dataset containing the results of a side-by-side agent evaluation and produce a concise, insightful summary report in Markdown format.
-
-        The input JSON contains two top-level keys:
-        1.  `golden_set`: The ground-truth test script, detailing scenarios and the expected agent actions (text or tool calls) for each turn.
-        2.  `conversation_results`: The actual turn-by-turn logs from running the `golden_set` against two agents: a source 'DFCX' agent and a target 'Polysynth' agent.
-
-        Your report MUST have two sections:
-
-        **1. Per-Scenario Analysis:**
-        Iterate through each conversation scenario. For each one:
-        - Announce the scenario's goal (e.g., `### Scenario 1: Full happy path...`).
-        - For EACH agent (DFCX and Polysynth), provide a sub-section with the following evaluations based on the metrics library:
-            - **Conversation Correctness (Score 1-5):** Did the agent follow the expected conversational flow and achieve the scenario's goal? (1=Completely failed, 5=Perfectly achieved).
-            - **Agent Response Agreement (Score 1-5):** How semantically similar were the agent's text responses to the golden responses? (1=Totally different, 5=Identical meaning).
-            - **Conversation Fluency (Score 1-5):** Was the conversation natural, coherent, and not repetitive? (1=Confusing/robotic, 5=Very natural).
-        - Provide a brief, bulleted justification for your scores for each agent.
-
-        **2. Overall Summary & Recommendations:**
-        - **High-Level Summary:** Write a paragraph comparing the two agents' overall performance based on the qualitative metrics you just scored.
-        - **Key Findings:** Provide a bulleted list of the most important observations (e.g., "Polysynth struggled with multi-turn context," or "DFCX was less fluent").
-        - **Final Recommendation:** Conclude with a clear recommendation. Is the Polysynth agent ready, ready with conditions, or does it need significant work?
-
-        Generate ONLY the Markdown report. Do not include any other text or conversational filler.
-        """
+        system_prompt = Prompts.EVALUATION["system"]
 
         # Group golden set by conversation_id for easier lookup in the prompt
         golden_set_by_convo = {}
@@ -281,14 +188,9 @@ class AIAugment:
             "conversation_results": eval_results,
         }
 
-        prompt = f"""
-        Please analyze the following agent evaluation results and generate the summary report.
-
-        **Evaluation Data JSON:**
-        ```json
-        {json.dumps(prompt_data, indent=2)}
-        ```
-        """
+        prompt = Prompts.EVALUATION["template"].format(
+            eval_data_json=json.dumps(prompt_data, indent=2)
+        )
 
         logger.info(
             "\n🤖 Submitting evaluation results to Gemini for analysis..."

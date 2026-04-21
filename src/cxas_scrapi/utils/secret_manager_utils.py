@@ -14,11 +14,12 @@
 
 """Utility class for managing Google Cloud Secret Manager Secrets."""
 
-from google.cloud import secretmanager
-from google.api_core import exceptions as api_exceptions
-import re
 import logging
+import re
 from typing import Optional
+
+from google.api_core import exceptions as api_exceptions
+from google.cloud import secretmanager
 
 logger = logging.getLogger(__name__)
 
@@ -83,20 +84,27 @@ class SecretManagerUtils:
 
         return f"{created_secret.name}/versions/latest"
 
-    def create_secret_with_version(self, secret_id: str, secret_payload: str) -> Optional[str]:
+    def create_secret_with_version(
+        self, secret_id: str, secret_payload: str
+    ) -> Optional[str]:
         """Creates a secret if it doesn't exist, adds a new version with the
         provided payload, and returns the resource name of the new version.
         """
         parent = f"projects/{self.project_id}"
         # Sanitize secret_id to meet GCP requirements
-        safe_secret_id = re.sub(r'[^a-zA-Z0-9_-]', '_', secret_id)
+        safe_secret_id = re.sub(r"[^a-zA-Z0-9_-]", "_", secret_id)
         secret_name = f"{parent}/secrets/{safe_secret_id}"
 
         try:
             self.client.get_secret(request={"name": secret_name})
-            logger.info(f"Secret '{safe_secret_id}' already exists. Adding a new version.")
+            logger.info(
+                f"Secret '{safe_secret_id}' already exists. "
+                "Adding a new version."
+            )
         except api_exceptions.NotFound:
-            logger.info(f"Secret '{safe_secret_id}' not found. Creating it now...")
+            logger.info(
+                f"Secret '{safe_secret_id}' not found. Creating it now..."
+            )
             try:
                 self.client.create_secret(
                     request={
@@ -106,7 +114,10 @@ class SecretManagerUtils:
                     }
                 )
             except api_exceptions.AlreadyExists:
-                logger.info(f"Secret '{safe_secret_id}' was created by another process. Continuing.")
+                logger.info(
+                    f"Secret '{safe_secret_id}' was created by another "
+                    "process. Continuing."
+                )
             except Exception as e:
                 logger.error(f"Failed to create secret '{safe_secret_id}': {e}")
                 return None
@@ -114,10 +125,18 @@ class SecretManagerUtils:
         try:
             payload_bytes = secret_payload.encode("UTF-8")
             add_version_response = self.client.add_secret_version(
-                request={"parent": secret_name, "payload": {"data": payload_bytes}}
+                request={
+                    "parent": secret_name,
+                    "payload": {"data": payload_bytes},
+                }
             )
-            logger.info(f"-> Success! Created new secret version: {add_version_response.name.split('/')[-1]}")
+            logger.info(
+                "-> Success! Created new secret version: "
+                f"{add_version_response.name.split('/')[-1]}"
+            )
             return add_version_response.name
         except Exception as e:
-            logger.error(f"Failed to add version to secret '{safe_secret_id}': {e}")
+            logger.error(
+                f"Failed to add version to secret '{safe_secret_id}': {e}"
+            )
             return None

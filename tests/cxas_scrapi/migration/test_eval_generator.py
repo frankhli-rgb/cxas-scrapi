@@ -27,7 +27,10 @@ def sample_ir():
     agent = IRAgent(
         type="PLAYBOOK",
         display_name="Test Agent",
-        instruction="Sample instruction with {@TOOL: test_tool} and {@AGENT: other_agent}",
+        instruction=(
+            "Sample instruction with {@TOOL: test_tool} and "
+            "{@AGENT: other_agent}"
+        ),
     )
     return MigrationIR(metadata=metadata, agents={"Test Agent": agent})
 

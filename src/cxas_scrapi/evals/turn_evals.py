@@ -24,7 +24,6 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import yaml
-from cxas_scrapi.utils.gemini import GeminiGenerate
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
@@ -35,6 +34,7 @@ from cxas_scrapi.utils.eval_utils import (
     ExpectationStatus,
     evaluate_expectations,
 )
+from cxas_scrapi.utils.gemini import GeminiGenerate
 
 logger = logging.getLogger(__name__)
 

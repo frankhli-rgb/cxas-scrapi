@@ -53,7 +53,7 @@ class DeterministicEvalGenerator:
         )
 
     def generate_tests_for_agent(self, agent_name: str) -> List[TurnTestCase]:
-        """Parses the compiled IR to build an isolated test suite for the given agent."""
+        """Parse the IR to build an isolated test suite for the given agent."""
         agent_data = self.ir.agents.get(agent_name)
         if not agent_data:
             logger.warning(

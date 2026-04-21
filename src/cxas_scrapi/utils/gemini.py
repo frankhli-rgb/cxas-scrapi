@@ -21,6 +21,7 @@ from google import genai
 
 logger = logging.getLogger(__name__)
 
+
 class GeminiGenerate:
     """A wrapper for the Gemini client to generate content."""
 

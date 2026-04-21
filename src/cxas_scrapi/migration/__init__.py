@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from cxas_scrapi.migration.ai_augment import AIAugment
 from cxas_scrapi.migration.dfcx_exporter import (
     BaseDFCXClient,
     ConversationalAgentsAPI,
@@ -23,6 +24,7 @@ from cxas_scrapi.migration.dfcx_exporter import (
     DFCXPlaybooks,
     DFCXTools,
 )
+from cxas_scrapi.migration.dfcx_migration_reporter import DFCXMigrationReporter
 from cxas_scrapi.migration.flow_visualizer import (
     FlowDependencyResolver,
     FlowTreeVisualizer,
@@ -30,8 +32,6 @@ from cxas_scrapi.migration.flow_visualizer import (
 from cxas_scrapi.migration.graph_visualizer import HighLevelGraphVisualizer
 from cxas_scrapi.migration.main_visualizer import MainVisualizer
 from cxas_scrapi.migration.playbook_visualizer import PlaybookTreeVisualizer
-from cxas_scrapi.migration.ai_augment import AIAugment
-from cxas_scrapi.migration.dfcx_migration_reporter import DFCXMigrationReporter
 
 __all__ = [
     "BaseDFCXClient",

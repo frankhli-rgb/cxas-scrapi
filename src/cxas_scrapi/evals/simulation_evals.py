@@ -24,7 +24,6 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import pydantic
-from cxas_scrapi.utils.gemini import GeminiGenerate
 
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.sessions import Sessions
@@ -35,6 +34,7 @@ from cxas_scrapi.utils.eval_utils import (
     ExpectationStatus,
     evaluate_expectations,
 )
+from cxas_scrapi.utils.gemini import GeminiGenerate
 
 _FIRST_UTTERANCE = "event: welcome"
 _MAX_TURNS = 30
