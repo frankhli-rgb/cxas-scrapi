@@ -1,3 +1,4 @@
+# yamllint disable rule:truthy
 # Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,25 +13,68 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This file demonstrates the native Golden Evaluation format exported from the CXAS platform.
-# It defines turn-by-turn user inputs and high-level LLM-based evaluation criteria.
-displayName: Basic Product Search Simplified
-golden:
+# This file demonstrates a compressed or simplified format for defining Golden evaluations.
+# It allows for a concise representation of turns, tool calls, and expectations, offering
+# a more readable alternative to the native platform export format.
+common_session_parameters:
+  account_id: "9820598207"
+  customer_id: "4444444"
+
+conversations:
+- conversation: Unlock_Intent1
+  tags: [direct, p0]
+  session_parameters: {}
   turns:
-  - steps:
-    - userInput:
-        event:
-          event: WelcomeEvent
-  - steps:
-    - userInput:
-        text: balloons
-  - steps:
-    - userInput:
-        text: cups
-  - steps:
-    - userInput:
-        text: sandwiches
-  evaluationExpectations:
-    - displayName: Simple tool expectation 1
-      llmCriteria:
-        prompt: Did the agent call get_themes and filter_themes tool sequentially? get_themes should always come before filter_themes
+  - user:  # implicit greeting
+    agent: In a sentence or two, what are you calling about today?
+  - user: unlock a phone
+    agent:  # silent transfer
+    tool_calls:
+    -
+      {
+        "action": "retrieve_intent_matches"
+      }
+    -
+      {
+        "action": "transfer_to_cx",
+        "args": {
+          "intent": "Unlock"
+        }
+      }
+  expectations:
+  - There must be a transfer_to_cx tool call with the intent parameter set to Unlock
+- conversation: Unlock.Intent2
+  tags: [direct]
+  turns:
+  - user:  # implicit greeting
+    agent: In a sentence or two, what are you calling about today?
+  - user: I'm locked out of my account
+    agent:  # silent transfer
+    tool_calls:
+    -
+      {
+        "action": "retrieve_intent_matches"
+      }
+    -
+      {
+        "action": "transfer_to_cx",
+        "args": {
+          "intent": "Unlock"
+        }
+      }
+  expectations:
+  - There must be a transfer_to_cx tool call with the intent parameter set to Unlock
+- conversation: Datastore_Intent1
+  tags: [direct]
+  turns:
+  - user:  # implicit greeting
+    agent: In a sentence or two, what are you calling about today?
+  - user: block a number
+    agent:  # silent transfer
+    tool_calls:
+    -
+      {
+        "action": "website_datastore"
+      }
+  expectations:
+  - The agent must invoke the website_datastore tool.
