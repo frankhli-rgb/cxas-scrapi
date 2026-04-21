@@ -83,6 +83,19 @@ AGENT_INSTRUCTION_TEMPLATE = """
 </examples>
 """
 
+OPENAPI_SCHEMA_TEMPLATE = """
+openapi: 3.0.0
+info:
+  title: 
+  description:
+  version: 1.0.0
+servers:
+  - url: 
+    description: 
+paths:
+
+"""
+
 
 class CreateUtils:
     """Utility for creating local templates for CXAS components."""
@@ -155,27 +168,58 @@ class CreateUtils:
 
         safe_name = self._get_safe_display_name(display_name)
 
-        target_dir = app_path / "tools" / safe_name
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        tool_json_file = target_dir / f"{safe_name}.json"
-        tool_obj = types.Tool(display_name=display_name)
-
         if tool_type and tool_type.upper() == "PYTHON":
+            target_dir = app_path / "tools" / safe_name
+            tool_obj = types.Tool(display_name=display_name)
             code_dir = app_path / "tools" / safe_name / "python_function"
             code_dir.mkdir(parents=True, exist_ok=True)
             code_file = code_dir / "python_code.py"
             tool_obj.python_function.name = safe_name
-            tool_obj.python_function.description = (
-                f"Description for {display_name}"
-            )
+            tool_obj.python_function.description = f"Description for {display_name}"
             tool_obj.python_function.python_code = (
                 f"tools/{safe_name}/python_function/python_code.py"
             )
 
             with open(code_file, "w") as f:
                 f.write(f"def {safe_name}() -> dict:\n    return {{}}")
+        elif tool_type and tool_type.upper() == "OPENAPI":
+            if add_to_agent:
+                raise ValueError(
+                    "Open API tool cannot be added to an agent without processing Open API schema first."
+                )
+            target_dir = app_path / "toolsets" / safe_name
+            tool_obj = types.Toolset(display_name=display_name)
+            schema_dir = app_path / "toolsets" / safe_name / "open_api_toolset"
+            schema_dir.mkdir(parents=True, exist_ok=True)
+            schema_file = schema_dir / "open_api_schema.yaml"
+            tool_obj.display_name = safe_name
+            tool_obj.description = f"Description for {display_name}"
+            tool_obj.open_api_toolset.open_api_schema = (
+                f"toolsets/{safe_name}/open_api_toolset/open_api_schema.yaml"
+            )
+            with open(schema_file, "w") as f:
+                f.write(OPENAPI_SCHEMA_TEMPLATE)
 
+        elif tool_type and tool_type.upper() == "GOOGLE_SEARCH":
+            target_dir = app_path / "tools" / safe_name
+            tool_obj = types.Tool(display_name=display_name)
+            tool_obj.google_search_tool = types.GoogleSearchTool()
+            tool_obj.google_search_tool.name = safe_name
+            tool_obj.google_search_tool.description = f"Description for {display_name}"
+        elif tool_type and tool_type.upper() == "DATASTORE":
+            target_dir = app_path / "tools" / safe_name
+            tool_obj = types.Tool(display_name=display_name)
+            tool_obj.data_store_tool = types.DataStoreTool()
+            tool_obj.data_store_tool.name = safe_name
+            tool_obj.data_store_tool.description = f"Description for {display_name}"
+            tool_obj.data_store_tool.data_store_source = (
+                types.DataStoreTool.DataStoreSource()
+            )
+        else:
+            raise ValueError(f"Unsupported tool type: {tool_type}")
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+        tool_json_file = target_dir / f"{safe_name}.json"
         tool_template = json_format.MessageToDict(tool_obj._pb)
 
         with open(tool_json_file, "w") as f:
@@ -184,16 +228,11 @@ class CreateUtils:
         if add_to_agent_obj:
             agent_safe_name = self._get_safe_display_name(add_to_agent)
             agent_json_file = (
-                app_path
-                / "agents"
-                / agent_safe_name
-                / f"{agent_safe_name}.json"
+                app_path / "agents" / agent_safe_name / f"{agent_safe_name}.json"
             )
             add_to_agent_obj.tools.append(display_name)
             with open(agent_json_file, "w") as f:
-                json.dump(
-                    json_format.MessageToDict(add_to_agent_obj._pb), f, indent=2
-                )
+                json.dump(json_format.MessageToDict(add_to_agent_obj._pb), f, indent=2)
 
         return str(target_dir)
 
@@ -213,7 +252,10 @@ class CreateUtils:
             )
         with open(json_file, "r") as f:
             agent_data = json.load(f)
-        return types.Agent(**agent_data)
+
+        agent = types.Agent()
+        json_format.ParseDict(agent_data, agent._pb)
+        return agent
 
     def _get_safe_display_name(self, display_name: str) -> str:
         """Gets the directory safe display name."""
