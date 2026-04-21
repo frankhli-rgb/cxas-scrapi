@@ -280,7 +280,8 @@ class SchemaValid(Rule):
             except FileNotFoundError as e:
                 return [self.make_result(rel, f"Missing referenced file: {e}")]
 
-        # Pop custom tools field from app_config to avoid proto validation failure
+        # Pop custom tools field from app_config to avoid proto validation
+        # failure
         if self.target == "app_config" and "tools" in data:
             data.pop("tools")
 

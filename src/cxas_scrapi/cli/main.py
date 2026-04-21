@@ -718,7 +718,6 @@ def local_test(args: argparse.Namespace) -> None:
     sys.exit(subprocess.call(docker_cmd))
 
 
-
 def get_parser() -> argparse.ArgumentParser:
     """Sets up the argument parser."""
     parser = argparse.ArgumentParser(

@@ -245,7 +245,10 @@ class AppMissingTools(Rule):
             results.append(
                 self.make_result(
                     file=rel,
-                    message=f"Local tool '{tool}' is not listed in the app.json tools array",
+                    message=(
+                        f"Local tool '{tool}' is not listed in the"
+                        " app.json tools array"
+                    ),
                     fix=f"Add '{tool}' to the tools array in app.json",
                 )
             )

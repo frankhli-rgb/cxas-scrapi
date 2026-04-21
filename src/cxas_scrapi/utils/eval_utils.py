@@ -137,7 +137,11 @@ class EvalUtils(Evaluations):
         In audio mode, taskCompleted is broken (always False).
         Use goalScore AND allExpectationsSatisfied instead.
         """
-        res_dict = type(result).to_dict(result) if not isinstance(result, dict) else result
+        res_dict = (
+            type(result).to_dict(result)
+            if not isinstance(result, dict)
+            else result
+        )
         sr = res_dict.get("scenario_result", {})
         goal = sr.get("user_goal_satisfaction_result", {}).get("score", 0)
         all_exp = sr.get("all_expectations_satisfied", False)

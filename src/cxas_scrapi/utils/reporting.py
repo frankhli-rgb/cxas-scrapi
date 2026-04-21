@@ -239,7 +239,7 @@ def _get_summary_block(
   <div>{passed}/{total} passed | {errors} errors |
     {modality} | model: {model}</div>
   <div class="meta">Generated {ts}
-    {f' | Runtime: {_fmt_duration(wall_clock_s)}' if wall_clock_s else ''}</div>
+    {f" | Runtime: {_fmt_duration(wall_clock_s)}" if wall_clock_s else ""}</div>
 </div>
 """
 
@@ -258,17 +258,15 @@ def _get_results_table(eval_stats):
         cls = "pass" if s["pass"] == s["total"] else "fail"
         dots = ""
         for i, r in enumerate(s["runs"]):
-            dot_cls = (
-                "p" if r.get("passed") else ("e" if "error" in r else "f")
-            )
+            dot_cls = "p" if r.get("passed") else ("e" if "error" in r else "f")
             safe_name = name.replace("'", "\\'")
             dots += (
                 f'<span class="run-dot {dot_cls}" title="Run {r["run"]}" '
-                f'onclick="jumpToRun(\'{safe_name}\', {i})"></span>'
+                f"onclick=\"jumpToRun('{safe_name}', {i})\"></span>"
             )
         html += (
             f'  <tr><td class="{cls}"><b>{score}</b></td>'
-            f'<td>{_escape(name)}</td><td>{dots}</td></tr>\n'
+            f"<td>{_escape(name)}</td><td>{dots}</td></tr>\n"
         )
     html += "</table>\n"
     return html
@@ -280,8 +278,7 @@ def _render_session_link(session_id, ces_base):
         return ""
     if ces_base:
         session_url = (
-            f"{ces_base}?panel=conversation_list"
-            f"&id={session_id}&source=EVAL"
+            f"{ces_base}?panel=conversation_list&id={session_id}&source=EVAL"
         )
         return (
             f'<div class="session-link">Session: '
@@ -289,8 +286,7 @@ def _render_session_link(session_id, ces_base):
             f"<code>{session_id}</code></a></div>\n"
         )
     return (
-        f'<div class="session-link">Session: '
-        f"<code>{session_id}</code></div>\n"
+        f'<div class="session-link">Session: <code>{session_id}</code></div>\n'
     )
 
 
@@ -323,13 +319,10 @@ def _render_step_details(step_details):
         badge_cls = step_cls.replace("pass", "met").replace("fail", "not-met")
         html += (
             f'<b>Status:</b> <span class="badge {badge_cls}">'
-            f'{_escape(step["status"])}</span><br>'
+            f"{_escape(step['status'])}</span><br>"
         )
         if step.get("justification"):
-            html += (
-                f'<b>Justification:</b> '
-                f'{_escape(step["justification"])}'
-            )
+            html += f"<b>Justification:</b> {_escape(step['justification'])}"
         html += "</div>\n"
     return html
 
@@ -341,18 +334,11 @@ def _render_expectation_details(expectation_details):
     html = ""
     for exp in expectation_details:
         exp_cls = "met" if exp["status"] == "Met" else "not-met"
-        html += (
-            f'<div class="expectation">'
-            f'<span class="badge {exp_cls}">'
-        )
-        html += (
-            f'{_escape(exp["status"])}</span> '
-            f'{_escape(exp["expectation"])}'
-        )
+        html += f'<div class="expectation"><span class="badge {exp_cls}">'
+        html += f"{_escape(exp['status'])}</span> {_escape(exp['expectation'])}"
         if exp.get("justification"):
             html += (
-                f'<br><span class="meta">'
-                f'{_escape(exp["justification"])}</span>'
+                f'<br><span class="meta">{_escape(exp["justification"])}</span>'
             )
         html += "</div>\n"
     return html
@@ -403,14 +389,10 @@ def _render_merged_items(merged):
     for item in merged:
         kind = item[0]
         if kind == "user":
-            html += (
-                f'<div class="user"><b>User:</b> '
-                f"{_escape(item[1])}</div>\n"
-            )
+            html += f'<div class="user"><b>User:</b> {_escape(item[1])}</div>\n'
         elif kind == "agent":
             html += (
-                f'<div class="agent"><b>Agent:</b> '
-                f"{_escape(item[1])}</div>\n"
+                f'<div class="agent"><b>Agent:</b> {_escape(item[1])}</div>\n'
             )
         elif kind in ("tool_call", "tool_pair"):
             call_text = item[1]
@@ -444,12 +426,10 @@ def _render_merged_items(merged):
                 f"&#128228; <b>{_escape(lbl)}</b> response</summary>"
             )
             if result:
-                html += (
-                    f'<pre class="tool-data">' f"{_escape(result)}</pre>"
-                )
+                html += f'<pre class="tool-data">{_escape(result)}</pre>'
             html += "</details>\n"
         else:
-            html += f'<div class="system">' f"{_escape(item[1])}</div>\n"
+            html += f'<div class="system">{_escape(item[1])}</div>\n'
     return html
 
 
@@ -458,7 +438,7 @@ def _render_trace(trace, tools_map, turns):
     if not trace:
         return ""
     html = (
-        f'<details open><summary>Conversation Trace '
+        f"<details open><summary>Conversation Trace "
         f"({turns} turns)</summary>\n"
         f'<div class="transcript">\n'
     )
@@ -478,19 +458,16 @@ def _get_run_detail(r, ces_base, tools_map):
     html = ""
     run_cls = "pass" if r.get("passed") else "fail"
     session_id = r.get("session_id", "")
+    html += f'<details class="run-detail"{"" if not r.get("passed") else ""}>\n'
     html += (
-        f'<details class="run-detail"'
-        f'{"" if not r.get("passed") else ""}>\n'
-    )
-    html += (
-        f'<summary>Run {r["run"]} — '
+        f"<summary>Run {r['run']} — "
         f'<span class="{run_cls}">'
-        f'{"PASS" if r.get("passed") else "FAIL"}</span>'
+        f"{'PASS' if r.get('passed') else 'FAIL'}</span>"
     )
     html += (
-        f' | goals: {r.get("goals", "?")} | '
-        f'expectations: {r.get("expectations", "?")} | '
-        f'turns: {r.get("turns", "?")}</summary>\n'
+        f" | goals: {r.get('goals', '?')} | "
+        f"expectations: {r.get('expectations', '?')} | "
+        f"turns: {r.get('turns', '?')}</summary>\n"
     )
 
     html += _render_session_link(session_id, ces_base)
@@ -501,7 +478,7 @@ def _get_run_detail(r, ces_base, tools_map):
     if "error" in r:
         html += (
             f'<div class="expectation"><b>Error:</b> '
-            f'{_escape(r["error"])}</div>\n'
+            f"{_escape(r['error'])}</div>\n"
         )
     else:
         html += _render_step_details(r.get("step_details", []))
@@ -580,7 +557,7 @@ def generate_html_report(
         html += f'<div class="eval-card" id="eval-{name}">\n'
         html += (
             f'<div class="eval-header {cls}">{_escape(name)} '
-            f'<span>{score}</span></div>\n'
+            f"<span>{score}</span></div>\n"
         )
         html += '<div class="eval-body">\n'
 

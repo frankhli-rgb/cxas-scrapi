@@ -307,7 +307,6 @@ class SimulationEvals(Apps):
         self.sessions_client = Sessions(app_name, **kwargs)
         self.tools_map = Tools(app_name=app_name).get_tools_map()
 
-
         # Vertex AI requires a specific region (e.g. global), whereas CXAS
         # Apps use 'us' or 'eu'
         vertex_location = "global"
@@ -481,9 +480,7 @@ class SimulationEvals(Apps):
                 time.sleep(self.retry_delay_base**attempt)
         return response
 
-    def _print_completion_status(
-        self, eval_conv: LLMUserConversation
-    ) -> None:
+    def _print_completion_status(self, eval_conv: LLMUserConversation) -> None:
         """Prints the final step progress of the conversation."""
         print("\n--- Conversation Complete ---")
         print("Final Step Progress:")
@@ -625,7 +622,7 @@ class SimulationEvals(Apps):
                 )
                 total_exp = len(conv.expectation_results)
 
-                passed = (goals_completed == total_goals)
+                passed = goals_completed == total_goals
                 if total_exp > 0:
                     passed = passed and (expectations_met == total_exp)
 
