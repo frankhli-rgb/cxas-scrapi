@@ -167,6 +167,31 @@ The `src/cxas_scrapi/core` folder is synonymous with the core Resource types in 
 ## Utils
 The `src/cxas_scrapi/utils` folder contains various helper functions and logic that perform complex background tasks, such as creating Secret Manager Secrets, pagination, response flattening, and proto conversions.
 
+<!-- DOCUMENTATION -->
+# Documentation
+
+The full documentation site is built with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/). To run it locally:
+
+```sh
+# Install docs dependencies (inside your virtualenv)
+pip install -r requirements-docs.txt
+
+# Install the package so API reference pages can render
+pip install -e .
+
+# Start the local dev server
+mkdocs serve
+```
+
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser. Changes to files in `docs/` will reload automatically.
+
+To build the static site without serving:
+
+```sh
+mkdocs build          # output goes to site/
+mkdocs build --strict # also fails on warnings (used in CI)
+```
+
 <!-- CONTRIBUTING -->
 # Contributing
 We welcome any contributions or feature requests you would like to submit!
