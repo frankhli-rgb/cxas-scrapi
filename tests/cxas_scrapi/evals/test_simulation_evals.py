@@ -33,7 +33,7 @@ from cxas_scrapi.utils.eval_utils import (
 
 
 def test_llm_user_conversation():
-    mock_genai_client = MagicMock()
+    mock_gemini_client = MagicMock()
 
     user_utterance_0 = "event: welcome"
     agent_response_1 = "Hi, how can I help you?"
@@ -44,7 +44,7 @@ def test_llm_user_conversation():
         goal="Book a flight", success_criteria="Successfully booked a flight"
     )
 
-    mock_genai_client.models.generate_content.return_value.parsed = (
+    mock_gemini_client.generate.return_value = (
         LLMUserConversation.Output(
             next_user_utterance=user_utterance_1,
             step_progresses=[
@@ -64,7 +64,7 @@ def test_llm_user_conversation():
     }
 
     llm_conv = LLMUserConversation(
-        genai_client=mock_genai_client,
+        genai_client=mock_gemini_client,
         genai_model="gemini-1.5-flash",
         test_case=test_case,
     )
@@ -102,11 +102,11 @@ def test_llm_user_conversation():
         ]
     )
 
-    mock_genai_client.models.generate_content.assert_called_once()
+    mock_gemini_client.generate.assert_called_once()
 
 
 def test_llm_user_conversation_max_turns():
-    mock_genai_client = MagicMock()
+    mock_gemini_client = MagicMock()
 
     user_utterance_0 = "event: welcome"
     agent_response_1 = "Hi, how can I help you?"
@@ -122,7 +122,7 @@ def test_llm_user_conversation_max_turns():
     }
 
     llm_conv = LLMUserConversation(
-        genai_client=mock_genai_client,
+        genai_client=mock_gemini_client,
         genai_model="gemini-1.5-flash",
         test_case=test_case,
         max_turns=1,
@@ -146,7 +146,7 @@ def test_llm_user_conversation_max_turns():
     )
 
     # LLM call never gets made because we reached the max turns.
-    mock_genai_client.models.generate_content.assert_not_called()
+    mock_gemini_client.generate.assert_not_called()
     assert llm_conv.steps_progress[0].status == StepStatus.NOT_STARTED
 
 
@@ -183,7 +183,7 @@ def test_user_simulator(mock_llm_conv_class, mock_sessions_class):
 
     # Initialize the SimulationEvals
     app_name = "projects/test/locations/us/apps/123-abc"
-    with patch("cxas_scrapi.evals.simulation_evals.genai.Client"):
+    with patch("cxas_scrapi.evals.simulation_evals.GeminiGenerate"):
         with patch("cxas_scrapi.core.apps.AgentServiceClient"):
             simulator = SimulationEvals(app_name=app_name)
 
@@ -252,7 +252,7 @@ def test_user_simulator_audio(mock_llm_conv_class, mock_sessions_class):
     mock_sessions.run.side_effect = [mock_response_1, mock_response_2]
 
     app_name = "projects/test/locations/us/apps/123-abc"
-    with patch("cxas_scrapi.evals.simulation_evals.genai.Client"):
+    with patch("cxas_scrapi.evals.simulation_evals.GeminiGenerate"):
         with patch("cxas_scrapi.core.apps.AgentServiceClient"):
             simulator = SimulationEvals(app_name=app_name)
 
@@ -295,7 +295,7 @@ def test_parse_agent_response_standard():
     mock_response.outputs = [mock_output]
 
     app_name = "projects/test/locations/us/apps/123-abc"
-    with patch("cxas_scrapi.evals.simulation_evals.genai.Client"):
+    with patch("cxas_scrapi.evals.simulation_evals.GeminiGenerate"):
         with patch("cxas_scrapi.core.apps.AgentServiceClient"):
             simulator = SimulationEvals(app_name=app_name)
 
@@ -330,7 +330,7 @@ def test_parse_agent_response_diagnostic():
     mock_response.outputs = [mock_output]
 
     app_name = "projects/test/locations/us/apps/123-abc"
-    with patch("cxas_scrapi.evals.simulation_evals.genai.Client"):
+    with patch("cxas_scrapi.evals.simulation_evals.GeminiGenerate"):
         with patch("cxas_scrapi.core.apps.AgentServiceClient"):
             simulator = SimulationEvals(app_name=app_name)
 
@@ -346,9 +346,9 @@ def test_parse_agent_response_diagnostic():
 def test_evaluate_expectations():
     app_name = "projects/test/locations/us/apps/123-abc"
     with patch(
-        "cxas_scrapi.evals.simulation_evals.genai.Client"
-    ) as mock_genai_client_class:
-        mock_genai_client = mock_genai_client_class.return_value
+        "cxas_scrapi.evals.simulation_evals.GeminiGenerate"
+    ) as mock_gemini_client_class:
+        mock_gemini_client = mock_gemini_client_class.return_value
         with patch("cxas_scrapi.core.apps.AgentServiceClient"):
             simulator = SimulationEvals(app_name=app_name)
 
@@ -362,7 +362,7 @@ def test_evaluate_expectations():
             justification="Just 1",
         )
     ]
-    mock_genai_client.models.generate_content.return_value.parsed = mock_output
+    mock_gemini_client.generate.return_value = mock_output
 
     eval_conv = MagicMock()
     eval_conv.expectations = ["Exp 1"]

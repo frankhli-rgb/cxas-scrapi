@@ -581,7 +581,7 @@ class TurnEvals:
             )
 
             llm_results = evaluate_expectations(
-                genai_client=self.genai_client,
+                gemini_client=self.genai_client,
                 model_name=model_name,
                 trace=trace_chunks,
                 expectations=llm_expectations,
@@ -816,7 +816,7 @@ class TurnEvals:
                             )
 
                             llm_results = evaluate_expectations(
-                                genai_client=self.genai_client,
+                                gemini_client=self.genai_client,
                                 model_name=model_name,
                                 trace=full_conversation_trace,
                                 expectations=llm_expectations,

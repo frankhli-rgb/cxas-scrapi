@@ -424,7 +424,7 @@ class SimulationEvals(Apps):
                 print("\nEvaluating Expectations...")
 
             eval_conv.expectation_results = evaluate_expectations(
-                genai_client=self.genai_client,
+                gemini_client=self.genai_client,
                 model_name=model,
                 trace=detailed_trace,
                 expectations=eval_conv.expectations,
