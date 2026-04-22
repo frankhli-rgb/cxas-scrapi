@@ -22,6 +22,8 @@ from cxas_scrapi.utils.gemini import GeminiGenerate
 
 @pytest.fixture
 def mock_gemini():
+    from unittest.mock import AsyncMock
+
     client = MagicMock(spec=GeminiGenerate)
 
     def mock_generate(prompt, system_prompt=None):
@@ -32,6 +34,7 @@ def mock_gemini():
         return "Mocked response"
 
     client.generate.side_effect = mock_generate
+    client.generate_async = AsyncMock(side_effect=mock_generate)
     return client
 
 
@@ -65,7 +68,8 @@ def test_log_variable(mock_gemini):
     }
 
 
-def test_generate_cxas_augmented_details(mock_gemini):
+@pytest.mark.asyncio
+async def test_generate_cxas_augmented_details(mock_gemini):
     reporter = DFCXMigrationReporter(gemini_client=mock_gemini)
     mock_config = {
         "display_name": "Test Agent",
@@ -73,17 +77,18 @@ def test_generate_cxas_augmented_details(mock_gemini):
         "tools": [],
         "callbacks": [],
     }
-    reporter.generate_cxas_augmented_details(agent_config=mock_config)
+    await reporter.generate_cxas_augmented_details(agent_config=mock_config)
 
     assert reporter.generated_description == "Mocked detailed description."
     assert (
         reporter.generated_features
         == "Mocked User Journeys:\n1. Journey A\n2. Journey B"
     )
-    assert mock_gemini.generate.call_count == 2
+    assert mock_gemini.generate_async.call_count == 2
 
 
-def test_generate_markdown(mock_gemini):
+@pytest.mark.asyncio
+async def test_generate_markdown(mock_gemini):
     reporter = DFCXMigrationReporter(gemini_client=mock_gemini)
     reporter.set_app_info("dfcx-123", "cxas-app", "cxas-456")
 
@@ -91,7 +96,7 @@ def test_generate_markdown(mock_gemini):
         "display_name": "Test Agent",
         "instruction": "Test Instruction",
     }
-    reporter.generate_cxas_augmented_details(agent_config=mock_config)
+    await reporter.generate_cxas_augmented_details(agent_config=mock_config)
 
     markdown = reporter.generate_markdown()
 
