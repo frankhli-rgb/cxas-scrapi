@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 
 from cxas_scrapi.migration.data_models import IRTool
 from cxas_scrapi.migration.dfcx_example_converter import DFCXExampleConverter

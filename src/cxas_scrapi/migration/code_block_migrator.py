@@ -51,17 +51,21 @@ class ToolCallTransformer(ast.NodeTransformer):
         }
 
     def _get_comment_node(self, node, prefix=""):
-        """Helper to create a string constant node representing commented code."""
+        """Helper to create a string constant node for commented code."""
         try:
             original_code = ast.unparse(node)
-            comment_text = f"# MIGRATION_TODO [System Function]: {original_code}"
+            comment_text = (
+                f"# MIGRATION_TODO [System Function]: {original_code}"
+            )
         except Exception:
             comment_text = f"# MIGRATION_TODO [System Function]: {prefix}..."
 
         return ast.Expr(value=ast.Constant(value=comment_text))
 
     def _is_system_function(self, call_node):
-        """Checks if a Call node represents a DFCX system function to be commented out."""
+        """Checks if a Call node represents a DFCX system function to be
+        commented out.
+        """
         if not isinstance(call_node, ast.Call):
             return False
 
@@ -69,7 +73,8 @@ class ToolCallTransformer(ast.NodeTransformer):
         if isinstance(call_node.func, ast.Name):
             return call_node.func.id in ["respond", "add_override"]
 
-        # Case 2: Attribute calls like playbooks.PlaybookTransfer() OR agents.agentTransfer()
+        # Case 2: Attribute calls like playbooks.PlaybookTransfer()
+        # OR agents.agentTransfer()
         if isinstance(call_node.func, ast.Attribute):
             if isinstance(call_node.func.value, ast.Name):
                 module_name = call_node.func.value.id
@@ -95,7 +100,8 @@ class ToolCallTransformer(ast.NodeTransformer):
         return self.generic_visit(node)
 
     def visit_Return(self, node):
-        # Handle returns: return respond(...) or return playbooks.PlaybookTransfer(...)
+        # Handle returns: return respond(...) or return
+        # playbooks.PlaybookTransfer(...)
         if node.value and self._is_system_function(node.value):
             return self._get_comment_node(node)
         return self.generic_visit(node)
@@ -108,7 +114,6 @@ class ToolCallTransformer(ast.NodeTransformer):
             and isinstance(node.func.value.value, ast.Name)
             and node.func.value.value.id == "tools"
         ):
-
             dfcx_tool_display_name = node.func.value.attr
             op_name = node.func.attr
 
@@ -147,7 +152,9 @@ class ToolCallTransformer(ast.NodeTransformer):
                     return new_node
             else:
                 logger.warning(
-                    f"      - WARNING: Found code reference to 'tools.{dfcx_tool_display_name}' but could not resolve it to a migrated Toolset."
+                    f"      - WARNING: Found code reference to "
+                    f"'tools.{dfcx_tool_display_name}' "
+                    f"but could not resolve it to a migrated Toolset."
                 )
 
         return self.generic_visit(node)
@@ -178,15 +185,12 @@ class ToolCallTransformer(ast.NodeTransformer):
         if should_set_dict:
             node.returns = ast.Name(id="dict", ctx=ast.Load())
 
-            # Ensure it returns a dict at the end if it didn't have a return or returned None
+            # Ensure it returns a dict at the end if it didn't have a return
+            # or returned None
             last_stmt = node.body[-1] if node.body else None
             if not isinstance(last_stmt, ast.Return):
-                node.body.append(
-                    ast.Return(value=ast.Dict(keys=[], values=[]))
-                )
-            elif (
-                isinstance(last_stmt, ast.Return) and last_stmt.value is None
-            ):
+                node.body.append(ast.Return(value=ast.Dict(keys=[], values=[])))
+            elif isinstance(last_stmt, ast.Return) and last_stmt.value is None:
                 last_stmt.value = ast.Dict(keys=[], values=[])
 
         return node
@@ -242,9 +246,7 @@ class CodeBlockMigrator:
             ):
                 for name in find_type_names(func_node.returns):
                     if name in CodeBlockMigrator.TYPING_MAP:
-                        imports_needed.add(
-                            CodeBlockMigrator.TYPING_MAP[name]
-                        )
+                        imports_needed.add(CodeBlockMigrator.TYPING_MAP[name])
 
             for arg in func_node.args.args:
                 if arg.annotation:
@@ -268,16 +270,15 @@ class CodeBlockMigrator:
             for node in tree.body:
                 if isinstance(node, (ast.Import, ast.ImportFrom)):
                     explicit_imports.add(ast.unparse(node))
-                elif isinstance(
-                    node, (ast.FunctionDef, ast.AsyncFunctionDef)
-                ):
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     func_text = ast.unparse(node)
                     if func_text:
                         extracted_functions.append((node.name, func_text))
             return explicit_imports, extracted_functions
         except SyntaxError as e:
             logger.warning(
-                f"  - WARNING: Could not parse code block due to a syntax error: {e}"
+                f"  - WARNING: Could not parse code block due to a syntax "
+                f"error: {e}"
             )
             return set(), []
 
@@ -285,15 +286,14 @@ class CodeBlockMigrator:
         self, name: str, min_len: int = 5, max_len: int = 36
     ) -> str:
         """Sanitizes a string to be a valid Polysynth resource ID."""
-        import re
         # Replace spaces and other invalid characters with underscores
-        sanitized = re.sub(r'[^a-zA-Z0-9_.-]', '_', name)
+        sanitized = re.sub(r"[^a-zA-Z0-9_.-]", "_", name)
 
         # Ensure it starts with a letter (strip leading underscores/hyphens)
-        sanitized = sanitized.lstrip('_-')
+        sanitized = sanitized.lstrip("_-")
 
-                    # If it's empty or doesn't start with a letter, prepend 'tool_'
-        if not sanitized or not re.match(r'^[a-zA-Z]', sanitized):
+        # If it's empty or doesn't start with a letter, prepend 'tool_'
+        if not sanitized or not re.match(r"^[a-zA-Z]", sanitized):
             sanitized = "tool_" + sanitized
 
         # Truncate to max length
@@ -312,7 +312,7 @@ class CodeBlockMigrator:
         function_name_to_tool_map: Dict[str, str],
         tool_map: Dict[str, Any],
         tool_display_name_map: Dict[str, str],
-        target_app_resource_name: str
+        target_app_resource_name: str,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, str], Set[str]]:
         """Extracts, transforms (AST), and compiles Python functions into IR
         tool payloads.
@@ -330,8 +330,8 @@ class CodeBlockMigrator:
             "customize_response",
         }
 
-        shared_imports, extracted_functions = (
-            self._parse_code_block_with_ast(code)
+        shared_imports, extracted_functions = self._parse_code_block_with_ast(
+            code
         )
 
         if not extracted_functions:
@@ -339,11 +339,12 @@ class CodeBlockMigrator:
 
         for original_func_name, function_code in extracted_functions:
             target_func_name = original_func_name
-            clean_name = original_func_name.lstrip('_-')
+            clean_name = original_func_name.lstrip("_-")
             if clean_name in RESERVED_NAMES:
                 target_func_name = f"usr_{clean_name}"
                 logger.debug(
-                    f"    - Renaming reserved function '{original_func_name}' -> '{target_func_name}'"
+                    f"    - Renaming reserved function '{original_func_name}' "
+                    f"-> '{target_func_name}'"
                 )
 
             # --- AST Transformation ---
@@ -358,7 +359,7 @@ class CodeBlockMigrator:
                 transformed_tree = transformer.visit(func_tree)
                 ast.fix_missing_locations(transformed_tree)
 
-                if hasattr(ast, 'unparse'):
+                if hasattr(ast, "unparse"):
                     final_code = ast.unparse(transformed_tree)
                 else:
                     final_code = function_code
@@ -366,7 +367,8 @@ class CodeBlockMigrator:
                 referenced_toolsets.update(transformer.dependencies)
             except Exception as e:
                 logger.warning(
-                    f"    - Warning: Failed to transform tool calls in '{original_func_name}': {e}"
+                    f"    - Warning: Failed to transform tool calls in "
+                    f"'{original_func_name}': {e}"
                 )
 
             # Check if already migrated
@@ -375,9 +377,7 @@ class CodeBlockMigrator:
                 action_to_tool_map[original_func_name] = existing_tool_id
                 continue
 
-            typing_imports = self._get_typing_imports_for_function(
-                final_code
-            )
+            typing_imports = self._get_typing_imports_for_function(final_code)
             final_imports = shared_imports.union(typing_imports)
             imports_header = "\n".join(sorted(list(final_imports)))
 
@@ -386,7 +386,7 @@ class CodeBlockMigrator:
             suffix_counter = 2
             while final_tool_id in existing_tool_ids:
                 suffix = f"_{suffix_counter}"
-                truncated_base = base_tool_id[:36 - len(suffix)]
+                truncated_base = base_tool_id[: 36 - len(suffix)]
                 final_tool_id = f"{truncated_base}{suffix}"
                 suffix_counter += 1
 
@@ -404,16 +404,18 @@ class CodeBlockMigrator:
                 "displayName": target_func_name,
                 "pythonFunction": {
                     "name": target_func_name,
-                    "python_code": final_function_code
-                }
+                    "python_code": final_function_code,
+                },
             }
 
-            extracted_tools.append({
-                "type": "PYTHON",
-                "id": final_tool_id,
-                "name": f"{target_app_resource_name}/tools/{final_tool_id}",
-                "payload": ps_tool_payload
-            })
+            extracted_tools.append(
+                {
+                    "type": "PYTHON",
+                    "id": final_tool_id,
+                    "name": f"{target_app_resource_name}/tools/{final_tool_id}",
+                    "payload": ps_tool_payload,
+                }
+            )
 
             action_to_tool_map[original_func_name] = final_tool_id
             migrated_function_names.add(original_func_name)

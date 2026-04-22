@@ -77,9 +77,9 @@ class DFCXParameterExtractor:
                 unified_parameters[sanitized_name]["schema"] = schema
                 unified_parameters[sanitized_name]["_confidence"] = new_conf
                 if description:
-                    unified_parameters[sanitized_name][
-                        "description"
-                    ] = description
+                    unified_parameters[sanitized_name]["description"] = (
+                        description
+                    )
 
     @staticmethod
     def deep_scan_for_variables(
@@ -88,6 +88,7 @@ class DFCXParameterExtractor:
         unified_parameters,
         parameter_name_map,
     ):
+        Ext = DFCXParameterExtractor
         if isinstance(obj, dict):
             if "setParameterActions" in obj:
                 actions = obj["setParameterActions"]
@@ -97,12 +98,8 @@ class DFCXParameterExtractor:
                             param_name = action.get("parameter")
                             value = action.get("value")
                             if param_name:
-                                schema = (
-                                    DFCXParameterExtractor.infer_schema_from_value(
-                                        value
-                                    )
-                                )
-                                DFCXParameterExtractor.register_param(
+                                schema = Ext.infer_schema_from_value(value)
+                                Ext.register_param(
                                     param_name,
                                     schema,
                                     "",
@@ -121,11 +118,7 @@ class DFCXParameterExtractor:
                     for item in mapping_data:
                         if isinstance(item, dict):
                             targets.extend(
-                                [
-                                    v
-                                    for v in item.values()
-                                    if isinstance(v, str)
-                                ]
+                                [v for v in item.values() if isinstance(v, str)]
                             )
                         elif isinstance(item, str):
                             targets.append(item)
@@ -136,8 +129,8 @@ class DFCXParameterExtractor:
                         or "page.params." in target_param
                         or target_param.startswith("$")
                     ):
-                        clean_target = (
-                            target_param.split(".")[-1].replace("$", "")
+                        clean_target = target_param.split(".")[-1].replace(
+                            "$", ""
                         )
                         if clean_target:
                             DFCXParameterExtractor.register_param(
@@ -149,7 +142,7 @@ class DFCXParameterExtractor:
                                 parameter_name_map,
                             )
 
-            for key, value in obj.items():
+            for _, value in obj.items():
                 DFCXParameterExtractor.deep_scan_for_variables(
                     value,
                     var_pattern,
@@ -190,7 +183,8 @@ class DFCXParameterExtractor:
     ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
         """Aggregates all unique parameters across the agent data."""
         logger.info(
-            "  -> Running deep traversal to extract and unify global parameters..."
+            "  -> Running deep traversal to extract and unify global "
+            "parameters..."
         )
 
         unified_parameters: Dict[str, Dict[str, Any]] = {}
@@ -208,10 +202,9 @@ class DFCXParameterExtractor:
                 original_name = param.get("name")
                 schema = param.get("typeSchema", {}).get("inlineSchema", {})
 
-                if (
-                    schema.get("type") == "ARRAY"
-                    and "inlineSchema" in schema.get("items", {})
-                ):
+                if schema.get(
+                    "type"
+                ) == "ARRAY" and "inlineSchema" in schema.get("items", {}):
                     schema["items"] = schema["items"]["inlineSchema"]
 
                 DFCXParameterExtractor.register_param(
@@ -226,9 +219,11 @@ class DFCXParameterExtractor:
         for flow_wrapper in source_agent_data.get("flows", []):
             for page_wrapper in flow_wrapper.get("pages", []):
                 page = page_wrapper.get("value", page_wrapper)
-                for param in page.get("form", {}).get("parameters", []) + page.get("slots", []):
-                    original_name = (
-                        param.get("displayName") or param.get("name")
+                for param in page.get("form", {}).get(
+                    "parameters", []
+                ) + page.get("slots", []):
+                    original_name = param.get("displayName") or param.get(
+                        "name"
                     )
                     entity_type = param.get("entityType", "").split("/")[-1]
                     schema_type = "STRING"
@@ -272,6 +267,7 @@ class DFCXParameterExtractor:
             )
 
         logger.info(
-            f"  -> Successfully unified {len(final_declarations)} unique parameters into the global variable space."
+            f"  -> Successfully unified {len(final_declarations)} unique "
+            f"parameters into the global variable space."
         )
         return final_declarations, parameter_name_map

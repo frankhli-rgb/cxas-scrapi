@@ -15,8 +15,6 @@
 import re
 from unittest.mock import MagicMock
 
-import pytest
-
 from cxas_scrapi.migration.data_models import IRTool
 from cxas_scrapi.migration.dfcx_playbook_converter import (
     DFCXPlaybookConverter,
@@ -32,9 +30,7 @@ def test_sanitize_display_name():
         DFCXPlaybookConverter.sanitize_display_name("Invalid@Name")
         == "InvalidName"
     )
-    assert (
-        DFCXPlaybookConverter.sanitize_display_name("a" * 100) == "a" * 85
-    )
+    assert DFCXPlaybookConverter.sanitize_display_name("a" * 100) == "a" * 85
 
 
 def test_recursively_extract_instructions():

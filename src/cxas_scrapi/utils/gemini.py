@@ -174,9 +174,9 @@ class GeminiGenerate:
                     return None
 
             # EXPONENTIAL BACKOFF WITH JITTER
-            sleep_time = (
-                base_delay_seconds * (1.5**attempt)
-            ) + random.uniform(0, 3)
+            sleep_time = (base_delay_seconds * (1.5**attempt)) + random.uniform(
+                0, 3
+            )
             logger.info(
                 f"    ⏳ Sleeping for {sleep_time:.1f}s before retry..."
             )

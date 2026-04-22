@@ -14,8 +14,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from cxas_scrapi.migration.dfcx_tool_converter import DFCXToolConverter
 
 
@@ -34,7 +32,16 @@ def test_convert_cx_tool_to_ps_resource_openapi():
     cx_tool = {
         "displayName": "Test Tool",
         "openApiSpec": {
-            "textSchema": "openapi: 3.0.0\ninfo:\n  title: Test\n  version: 1.0.0\npaths:\n  /test:\n    get:\n      operationId: getTest"
+            "textSchema": (
+                "openapi: 3.0.0\n"
+                "info:\n"
+                "  title: Test\n"
+                "  version: 1.0.0\n"
+                "paths:\n"
+                "  /test:\n"
+                "    get:\n"
+                "      operationId: getTest"
+            )
         },
     }
 
@@ -56,7 +63,10 @@ def test_convert_cx_tool_to_ps_resource_datastore():
         "dataStoreSpec": {
             "dataStoreConnections": [
                 {
-                    "dataStore": "projects/123/locations/global/collections/default_collection/dataStores/ds-id"
+                    "dataStore": (
+                        "projects/123/locations/global/collections/"
+                        "default_collection/dataStores/ds-id"
+                    )
                 }
             ]
         },

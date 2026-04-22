@@ -15,8 +15,6 @@
 import re
 from unittest.mock import MagicMock
 
-import pytest
-
 from cxas_scrapi.migration.dfcx_parameter_extractor import (
     DFCXParameterExtractor,
 )
@@ -111,7 +109,10 @@ def test_migrate_parameters():
             {
                 "displayName": "Playbook1",
                 "inputParameterDefinitions": [
-                    {"name": "var1", "typeSchema": {"inlineSchema": {"type": "STRING"}}}
+                    {
+                        "name": "var1",
+                        "typeSchema": {"inlineSchema": {"type": "STRING"}},
+                    }
                 ],
             }
         ],
@@ -123,7 +124,10 @@ def test_migrate_parameters():
                             "displayName": "Page1",
                             "form": {
                                 "parameters": [
-                                    {"displayName": "var2", "entityType": "sys.number"}
+                                    {
+                                        "displayName": "var2",
+                                        "entityType": "sys.number",
+                                    }
                                 ]
                             },
                         }

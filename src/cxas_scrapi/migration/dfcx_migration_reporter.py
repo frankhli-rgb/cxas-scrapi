@@ -126,7 +126,9 @@ migration process,
             {"category": category, "name": name, "reason": reason}
         )
 
-    async def generate_cxas_augmented_details(self, agent_config: Dict[str, Any]):
+    async def generate_cxas_augmented_details(
+        self, agent_config: Dict[str, Any]
+    ):
         """Uses Gemini to generate user journeys and analyze instructions,
         tools, and callbacks based on the provided CXAS agent configuration.
 

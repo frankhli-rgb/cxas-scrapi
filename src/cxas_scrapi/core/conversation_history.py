@@ -87,25 +87,52 @@ class ConversationHistory(Common):
             for message in messages:
                 role = message.get("role", "")
                 chunks = message.get("chunks", [])
-                text = " ".join([c.get("text", "") for c in chunks if "text" in c])
+                text = " ".join(
+                    [c.get("text", "") for c in chunks if "text" in c]
+                )
                 if text:
-                    out_yaml["turns"].append({role: text})  # role = "agent name" for agent responses and tool calls
+                    # role = "agent name" for agent responses and tool calls
+                    out_yaml["turns"].append({role: text})
 
                 for chunk in chunks:
                     if "tool_call" in chunk:
                         tool_call = chunk["tool_call"]
-                        tool_name = tool_call.get("display_name", tool_call.get("name", tool_call.get("tool","")))
-                        tool_args = Common.unwrap_struct(tool_call.get("args", {}))
-                        out_yaml["turns"].append({"tool_call": {"tool": tool_name, "args": tool_args}})
+                        tool_name = tool_call.get(
+                            "display_name",
+                            tool_call.get("name", tool_call.get("tool", "")),
+                        )
+                        tool_args = Common.unwrap_struct(
+                            tool_call.get("args", {})
+                        )
+                        out_yaml["turns"].append(
+                            {
+                                "tool_call": {
+                                    "tool": tool_name,
+                                    "args": tool_args,
+                                }
+                            }
+                        )
                     elif "tool_response" in chunk:
                         tool_response = chunk["tool_response"]
-                        tool_name = tool_response.get("display_name", tool_response.get("name", tool_response.get("tool","")))
-                        tool_response = Common.unwrap_struct(tool_response.get("response", {}))
-                        out_yaml["mocks"].append({"tool_response": {"tool": tool_name, "response": tool_response}})
-
+                        tool_name = tool_response.get(
+                            "display_name",
+                            tool_response.get(
+                                "name", tool_response.get("tool", "")
+                            ),
+                        )
+                        tool_response = Common.unwrap_struct(
+                            tool_response.get("response", {})
+                        )
+                        out_yaml["mocks"].append(
+                            {
+                                "tool_response": {
+                                    "tool": tool_name,
+                                    "response": tool_response,
+                                }
+                            }
+                        )
 
         return out_yaml
-
 
     def list_conversations(
         self,

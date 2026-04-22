@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from cxas_scrapi.migration.dfcx_playbook_converter import DFCXPlaybookConverter
 
@@ -46,7 +46,9 @@ class DFCXExampleConverter:
                     messages.append(
                         {
                             "role": "user",
-                            "chunks": [{"text": action["userUtterance"]["text"]}],
+                            "chunks": [
+                                {"text": action["userUtterance"]["text"]}
+                            ],
                         }
                     )
                 elif (
@@ -78,7 +80,9 @@ class DFCXExampleConverter:
                             tool_response_payload["tool"] = new_ps_tool_resource
                         else:
                             logger.warning(
-                                f"  Warning: Skipping inline-action call in example. Could not map action '{original_action_name}'."
+                                f"  Warning: Skipping inline-action call in "
+                                f"example. Could not map action "
+                                f"'{original_action_name}'."
                             )
                             continue
 
@@ -91,7 +95,9 @@ class DFCXExampleConverter:
                             original_tool_id and original_tool_id in tool_map
                         ):
                             logger.warning(
-                                f"  Warning: Skipping tool_call in example. Could not find original tool '{original_tool_display_name}' in map."
+                                f"  Warning: Skipping tool_call in example. "
+                                f"Could not find original tool "
+                                f"'{original_tool_display_name}' in map."
                             )
                             continue
 
@@ -112,7 +118,9 @@ class DFCXExampleConverter:
 
                     if not tool_call_payload:
                         logger.warning(
-                            f"  Warning: Skipping tool_call in example. Could not resolve ID for '{original_tool_display_name}'."
+                            f"  Warning: Skipping tool_call in example. "
+                            f"Could not resolve ID for "
+                            f"'{original_tool_display_name}'."
                         )
                         continue
 
@@ -184,12 +192,14 @@ class DFCXExampleConverter:
                             )
                         else:
                             logger.warning(
-                                f"  Warning: Skipping agent_transfer. Target '{target_playbook_display_name}' not found."
+                                f"  Warning: Skipping agent_transfer. Target "
+                                f"'{target_playbook_display_name}' not found."
                             )
 
         return {
             "display_name": DFCXPlaybookConverter.sanitize_display_name(
-                f"[{ps_agent_display_name}] {cx_example.get('displayName', 'Unnamed Example')}"
+                f"[{ps_agent_display_name}] "
+                f"{cx_example.get('displayName', 'Unnamed Example')}"
             ),
             "description": cx_example.get("description", ""),
             "entry_agent": ps_agent_id,

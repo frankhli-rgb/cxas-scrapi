@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from cxas_scrapi.migration.data_models import IRAgent, MigrationIR
 from cxas_scrapi.migration.service import MigrationService
 
 
@@ -63,6 +61,9 @@ async def test_run_migration_success():
 
     # Mock topology linker
     service.topology_linker = MagicMock()
+
+    # Mock reporter to avoid creating report file during test
+    service.reporter = MagicMock()
 
     with patch(
         "cxas_scrapi.migration.service.DFCXParameterExtractor.migrate_parameters"

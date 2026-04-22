@@ -905,7 +905,8 @@ class MigrationService:
                     logger.error(f"[{flow_name}] ❌ Failed to deploy agent.")
             except Exception as e:
                 logger.error(
-                    f"[{flow_name}] ❌ API Exception during agent deployment: {e}"
+                    f"[{flow_name}] ❌ API Exception during agent "
+                    f"deployment: {e}"
                 )
         else:
             logger.error(f"[{flow_name}] Failed to generate blueprint.")

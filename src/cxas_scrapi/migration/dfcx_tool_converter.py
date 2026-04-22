@@ -16,7 +16,9 @@ import base64
 import logging
 import re
 import urllib.parse
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ class DFCXToolConverter:
     def convert_cx_tool_to_ps_resource(
         self, cx_tool: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
-        """Converts a Dialogflow CX tool structure to a CXAS resource payload."""
+        """Converts a DFCX tool structure to a CXAS resource payload."""
         display_name = cx_tool.get("displayName", "unnamed_tool")
         description = cx_tool.get("description", "")
         sanitized_id = DFCXToolConverter.sanitize_resource_id(
@@ -57,18 +59,21 @@ class DFCXToolConverter:
             "textSchema"
         ):
             logger.info(
-                f"  -> Detected OpenAPI tool '{display_name}'. Migrating as OpenApiToolset."
+                f"  -> Detected OpenAPI tool '{display_name}'. "
+                f"Migrating as OpenApiToolset."
             )
             open_api_schema_text = cx_tool["openApiSpec"]["textSchema"]
 
             if "@dialogflow/sessionId" in open_api_schema_text:
                 logger.info(
-                    "    - Replacing '@dialogflow/sessionId' with 'x-ces-session-context: $context.session_id'."
+                    "    - Replacing '@dialogflow/sessionId' with "
+                    "'x-ces-session-context: $context.session_id'."
                 )
 
                 open_api_schema_text = re.sub(
                     r"^(\s*)schema:\s*\n\s*\$ref:\s*['\"]?@dialogflow/sessionId['\"]?",
-                    r"\1schema:\n\1  type: string\n\1x-ces-session-context: $context.session_id",
+                    r"\1schema:\n\1  type: string\n"
+                    r"\1x-ces-session-context: $context.session_id",
                     open_api_schema_text,
                     flags=re.MULTILINE,
                 )
@@ -82,8 +87,6 @@ class DFCXToolConverter:
 
             operation_ids = []
             try:
-                import yaml
-
                 spec = yaml.safe_load(open_api_schema_text)
                 paths = spec.get("paths", {})
                 for path, methods in paths.items():
@@ -99,7 +102,9 @@ class DFCXToolConverter:
                         operation_ids.append(op_id)
             except Exception as e:
                 logger.warning(
-                    f"  Warning: Could not parse YAML for tool '{display_name}' to extract operation IDs: {e}"
+                    f"  Warning: Could not parse YAML for tool "
+                    f"'{display_name}' "
+                    f"to extract operation IDs: {e}"
                 )
 
             ps_api_authentication = {}
@@ -111,7 +116,8 @@ class DFCXToolConverter:
                     secret_version = cx_api_key.get("apiKeySecretVersion")
                     if not secret_version and "apiKey" in cx_api_key:
                         logger.info(
-                            f"  Found raw API key for tool '{display_name}'. Creating secret..."
+                            f"  Found raw API key for tool '{display_name}'. "
+                            f"Creating secret..."
                         )
                         secret_id = f"{sanitized_id}-api-key"
                         secret_version = (
@@ -142,7 +148,8 @@ class DFCXToolConverter:
                     )
                     if not secret_version and "clientSecret" in cx_oauth:
                         logger.info(
-                            f"  Found raw OAuth client secret for tool '{display_name}'. Creating secret..."
+                            f"  Found raw OAuth client secret for tool "
+                            f"'{display_name}'. Creating secret..."
                         )
                         secret_id = f"{sanitized_id}-oauth-secret"
                         secret_version = (
@@ -170,7 +177,9 @@ class DFCXToolConverter:
                     secret_version = cx_bearer.get("bearerTokenSecretVersion")
                     if not secret_version and "token" in cx_bearer:
                         logger.info(
-                            f"  Found raw Bearer token for tool '{display_name}'. Creating secret..."
+                            f"  Found raw Bearer token for tool "
+                            f"'{display_name}'. "
+                            f"Creating secret..."
                         )
                         secret_id = f"{sanitized_id}-bearer-token"
                         secret_payload = f"Bearer {cx_bearer['token']}"
@@ -194,30 +203,36 @@ class DFCXToolConverter:
                     ).get("serviceAccount")
                     if service_account_email:
                         logger.info(
-                            f"  -> Migrating Service Account authentication for tool '{display_name}'."
+                            f"  -> Migrating Service Account "
+                            f"authentication for tool '{display_name}'."
                         )
-                        ps_api_authentication[
-                            "service_account_auth_config"
-                        ] = {"service_account": service_account_email}
+                        ps_api_authentication["service_account_auth_config"] = {
+                            "service_account": service_account_email
+                        }
                     else:
                         logger.warning(
-                            f"  Warning: Found 'serviceAccountAuthConfig' for tool '{display_name}' but no service account email was provided. Skipping auth migration."
+                            f"  Warning: Found 'serviceAccountAuthConfig' for "
+                            f"tool '{display_name}' but no service account "
+                            f"email was provided. Skipping auth migration."
                         )
 
                 elif "serviceAgentAuthConfig" in cx_auth:
-                    auth_type = cx_auth.get(
-                        "serviceAgentAuthConfig", {}
-                    ).get("serviceAgentAuth")
+                    auth_type = cx_auth.get("serviceAgentAuthConfig", {}).get(
+                        "serviceAgentAuth"
+                    )
                     if auth_type == "ID_TOKEN":
                         logger.info(
-                            f"  -> Migrating Service Agent ID Token authentication for tool '{display_name}'."
+                            f"  -> Migrating Service Agent ID Token "
+                            f"authentication for tool '{display_name}'."
                         )
                         ps_api_authentication[
                             "service_agent_id_token_auth_config"
                         ] = {}
                     else:
                         logger.warning(
-                            f"  Warning: Found 'serviceAgentAuthConfig' for tool '{display_name}' but the type was not 'ID_TOKEN'. Skipping auth migration."
+                            f"  Warning: Found 'serviceAgentAuthConfig' for "
+                            f"tool '{display_name}' but the type was not "
+                            f"'ID_TOKEN'. Skipping auth migration."
                         )
 
             toolset_payload = {
@@ -227,9 +242,9 @@ class DFCXToolConverter:
             }
 
             if ps_api_authentication:
-                toolset_payload["open_api_toolset"][
-                    "api_authentication"
-                ] = ps_api_authentication
+                toolset_payload["open_api_toolset"]["api_authentication"] = (
+                    ps_api_authentication
+                )
 
             return {
                 "type": "TOOLSET",
@@ -245,13 +260,12 @@ class DFCXToolConverter:
             data_store_spec = cx_tool.get("dataStoreSpec") or cx_tool.get(
                 "dataStoreTool", {}
             )
-            data_store_connections = data_store_spec.get(
-                "dataStoreConnections"
-            )
+            data_store_connections = data_store_spec.get("dataStoreConnections")
 
             if data_store_connections:
                 logger.info(
-                    f"  -> Migrating fully configured Data Store tool '{display_name}'."
+                    f"  -> Migrating fully configured Data Store tool "
+                    f"'{display_name}'."
                 )
                 data_store_path = data_store_connections[0]["dataStore"]
                 tool_payload["data_store_tool"] = {
@@ -269,7 +283,8 @@ class DFCXToolConverter:
                 }
             else:
                 logger.warning(
-                    f"  -> SKIPPING MIGRATION for Data Store tool '{display_name}'."
+                    f"  -> SKIPPING MIGRATION for Data Store tool "
+                    f"'{display_name}'."
                 )
                 logger.warning(
                     "     Reason: No datastore is selected in the source agent."
@@ -283,7 +298,8 @@ class DFCXToolConverter:
 
         elif "connectorSpec" in cx_tool:
             logger.warning(
-                f"Warning: Conversion for 'connectorSpec' tool '{display_name}' is not fully implemented."
+                f"Warning: Conversion for 'connectorSpec' tool "
+                f"'{display_name}' is not fully implemented."
             )
             self.reporter.log_skipped(
                 "Connector Tool",
@@ -294,14 +310,17 @@ class DFCXToolConverter:
 
         else:
             logger.warning(
-                f"Warning: Skipping tool '{display_name}' as its type is not supported for conversion."
+                f"Warning: Skipping tool '{display_name}' as its type is "
+                f"not supported for conversion."
             )
             return None
 
     def convert_webhook_to_openapi_toolset(
         self, cx_webhook: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
-        """Converts a DFCX Webhook into a generalized Polysynth OpenAPI Toolset payload."""
+        """Converts a DFCX Webhook into a generalized Polysynth OpenAPI
+        Toolset payload.
+        """
         display_name = cx_webhook.get("displayName", "unnamed_webhook")
         sanitized_id = DFCXToolConverter.sanitize_resource_id(
             f"webhook_{display_name}", min_len=5, max_len=36
@@ -349,7 +368,13 @@ paths:
         if path_params:
             openapi_schema += "      parameters:\n"
             for p in path_params:
-                openapi_schema += f"        - name: {p}\n          in: path\n          required: true\n          schema:\n            type: string\n"
+                openapi_schema += (
+                    f"        - name: {p}\n"
+                    f"          in: path\n"
+                    f"          required: true\n"
+                    f"          schema:\n"
+                    f"            type: string\n"
+                )
 
         if method in ["post", "put", "patch"]:
             openapi_schema += """      requestBody:
@@ -378,7 +403,8 @@ paths:
 
         if "username" in gws and "password" in gws:
             logger.info(
-                f"  -> Found Basic Auth for webhook '{display_name}'. Creating secret..."
+                f"  -> Found Basic Auth for webhook '{display_name}'. "
+                f"Creating secret..."
             )
             auth_str = f"{gws['username']}:{gws['password']}"
             b64_auth = base64.b64encode(auth_str.encode("utf-8")).decode(
@@ -395,7 +421,8 @@ paths:
                 }
         elif gws.get("serviceAgentAuth") == "ID_TOKEN":
             logger.info(
-                f"  -> Found Service Agent ID Token auth for webhook '{display_name}'."
+                f"  -> Found Service Agent ID Token auth for webhook "
+                f"'{display_name}'."
             )
             ps_api_authentication["service_agent_id_token_auth_config"] = {}
         elif "requestHeaders" in gws:
@@ -421,7 +448,8 @@ paths:
                     or "x-api-key" in k.lower()
                 ):
                     logger.info(
-                        f"  -> Found raw auth header for webhook '{display_name}'. Creating secret..."
+                        f"  -> Found raw auth header for webhook "
+                        f"'{display_name}'. Creating secret..."
                     )
                     secret_version = (
                         self.secret_manager.create_secret_with_version(
@@ -437,9 +465,9 @@ paths:
                     break
 
         if ps_api_authentication:
-            toolset_payload["open_api_toolset"][
-                "api_authentication"
-            ] = ps_api_authentication
+            toolset_payload["open_api_toolset"]["api_authentication"] = (
+                ps_api_authentication
+            )
 
         webhook_meta = {
             "webhook_type": webhook_type,

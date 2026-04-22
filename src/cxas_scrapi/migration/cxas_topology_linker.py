@@ -14,7 +14,7 @@
 
 import logging
 import re
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, Set
 
 from cxas_scrapi.migration.data_models import MigrationIR, MigrationStatus
 
@@ -26,7 +26,9 @@ class CXASTopologyLinker:
     circular reference protection.
     """
 
-    def __init__(self, ps_agents_client: Any, ps_apps_client: Any, reporter: Any):
+    def __init__(
+        self, ps_agents_client: Any, ps_apps_client: Any, reporter: Any
+    ):
         self.ps_agents = ps_agents_client
         self.ps_apps = ps_apps_client
         self.reporter = reporter
@@ -63,9 +65,7 @@ class CXASTopologyLinker:
             )
 
             for child_dfcx_id in refs:
-                child_display_name = dfcx_id_to_display_name.get(
-                    child_dfcx_id
-                )
+                child_display_name = dfcx_id_to_display_name.get(child_dfcx_id)
 
                 if not child_display_name:
                     child_uuid = child_dfcx_id.split("/")[-1]
@@ -79,9 +79,7 @@ class CXASTopologyLinker:
                     flow_obj = next(
                         (
                             f
-                            for f in source_agent_data.get(
-                                "flows", []
-                            )
+                            for f in source_agent_data.get("flows", [])
                             if f.get("flow", f)
                             .get("name", "")
                             .endswith(child_uuid)
@@ -89,19 +87,21 @@ class CXASTopologyLinker:
                         None,
                     )
                     if flow_obj:
-                        child_display_name = flow_obj.get(
-                            "flow", flow_obj
-                        ).get("displayName")
+                        child_display_name = flow_obj.get("flow", flow_obj).get(
+                            "displayName"
+                        )
 
                 if not child_display_name:
                     logger.warning(
-                        f"  ⚠️ Warning: Could not resolve display name for child reference ID: {child_dfcx_id}"
+                        f"  ⚠️ Warning: Could not resolve display name for "
+                        f"child reference ID: {child_dfcx_id}"
                     )
                     continue
 
                 if child_display_name in current_path_ancestors:
                     logger.info(
-                        f"  INFO: Skipping circular reference from '{ir_key}' back to ancestor '{child_display_name}'."
+                        f"  INFO: Skipping circular reference from '{ir_key}' "
+                        f"back to ancestor '{child_display_name}'."
                     )
                     continue
 
@@ -112,7 +112,8 @@ class CXASTopologyLinker:
                     children_to_recurse.add(child_display_name)
                 else:
                     logger.warning(
-                        f"  ⚠️ Warning: Explicit child '{child_display_name}' was not deployed."
+                        f"  ⚠️ Warning: Explicit child '{child_display_name}' "
+                        f"was not deployed."
                     )
 
         # --- 2. RESOLVE GENERATIVE DEPENDENCIES ---
@@ -133,38 +134,39 @@ class CXASTopologyLinker:
                     k
                     for k, agent in ir.agents.items()
                     if normalize_name(k) == normalized_child
-                    or normalize_name(agent.display_name)
-                    == normalized_child
+                    or normalize_name(agent.display_name) == normalized_child
                 ),
                 None,
             )
 
             if not matched_ir_key:
                 logger.warning(
-                    f"  ⚠️ Warning: '{ir_key}' references '{child_clean}', but it couldn't be resolved in IR."
+                    f"  ⚠️ Warning: '{ir_key}' references '{child_clean}', "
+                    f"but it couldn't be resolved in IR."
                 )
                 continue
 
             if matched_ir_key in current_path_ancestors:
                 logger.info(
-                    f"  INFO: Skipping circular reference from '{ir_key}' back to ancestor '{matched_ir_key}'."
+                    f"  INFO: Skipping circular reference from '{ir_key}' "
+                    f"back to ancestor '{matched_ir_key}'."
                 )
                 continue
 
             if matched_ir_key in deployed_agent_map:
-                child_resources_to_add.add(
-                    deployed_agent_map[matched_ir_key]
-                )
+                child_resources_to_add.add(deployed_agent_map[matched_ir_key])
                 children_to_recurse.add(matched_ir_key)
             else:
                 logger.warning(
-                    f"  ⚠️ Warning: '{ir_key}' references '{child_clean}' (mapped to '{matched_ir_key}'), but it wasn't deployed."
+                    f"  ⚠️ Warning: '{ir_key}' references '{child_clean}' "
+                    f"(mapped to '{matched_ir_key}'), but it wasn't deployed."
                 )
 
         # --- EXECUTE LINKING ---
         if child_resources_to_add:
             logger.info(
-                f"  Updating agent '{ir_key}' with {len(child_resources_to_add)} child(ren)..."
+                f"  Updating agent '{ir_key}' with "
+                f"{len(child_resources_to_add)} child(ren)..."
             )
             ps_agents.update_agent(
                 agent_id=parent_resource,
@@ -190,7 +192,9 @@ class CXASTopologyLinker:
                 reporter,
             )
 
-    def link_and_finalize_topology(self, ir: MigrationIR, source_agent_data: Dict[str, Any]):
+    def link_and_finalize_topology(
+        self, ir: MigrationIR, source_agent_data: Dict[str, Any]
+    ):
         """Extracts routing dependencies and sets parent/child links with
         circular reference protection.
         """
@@ -250,9 +254,7 @@ class CXASTopologyLinker:
                 (
                     f
                     for f in source_agent_data.get("flows", [])
-                    if f.get("flow", f)
-                    .get("name", "")
-                    .split("/")[-1]
+                    if f.get("flow", f).get("name", "").split("/")[-1]
                     == start_uuid
                 ),
                 None,
@@ -283,5 +285,6 @@ class CXASTopologyLinker:
             )
         else:
             logger.warning(
-                "⚠️ Could not determine Root Agent. You will need to set this manually in the CXAS console."
+                "⚠️ Could not determine Root Agent. You will need to set "
+                "this manually in the CXAS console."
             )

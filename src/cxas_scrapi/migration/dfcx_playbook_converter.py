@@ -196,9 +196,8 @@ class DFCXPlaybookConverter:
                 }
                 clean_func_name = func_name.lstrip("_-")
 
-                if (
-                    clean_func_name in reserved_ids
-                    and tool_id.startswith("usr_")
+                if clean_func_name in reserved_ids and tool_id.startswith(
+                    "usr_"
                 ):
                     replacement_name = tool_id
                 else:

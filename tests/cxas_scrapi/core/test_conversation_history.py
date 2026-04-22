@@ -55,20 +55,10 @@ def test_conversation_dict_to_yaml():
     """Test static method conversation_dict_to_yaml."""
     conv_dict = {
         "turns": [
+            {"messages": [{"role": "user", "chunks": [{"text": "hi"}]}]},
             {
                 "messages": [
-                    {
-                        "role": "user",
-                        "chunks": [{"text": "hi"}]
-                    }
-                ]
-            },
-            {
-                "messages": [
-                    {
-                        "role": r"root_agent",
-                        "chunks": [{"text": "hello"}]
-                    }
+                    {"role": r"root_agent", "chunks": [{"text": "hello"}]}
                 ]
             },
             {
@@ -79,10 +69,10 @@ def test_conversation_dict_to_yaml():
                             {
                                 "tool_call": {
                                     "display_name": "my_tool",
-                                    "args": {"param1": "val1"}
+                                    "args": {"param1": "val1"},
                                 }
                             }
-                        ]
+                        ],
                     }
                 ]
             },
@@ -94,13 +84,13 @@ def test_conversation_dict_to_yaml():
                             {
                                 "tool_response": {
                                     "display_name": "my_tool",
-                                    "response": {"result": "success"}
+                                    "response": {"result": "success"},
                                 }
                             }
-                        ]
+                        ],
                     }
                 ]
-            }
+            },
         ]
     }
 
@@ -109,9 +99,13 @@ def test_conversation_dict_to_yaml():
     assert len(res["turns"]) == 3
     assert res["turns"][0] == {"user": "hi"}
     assert res["turns"][1] == {"root_agent": "hello"}
-    assert res["turns"][2] == {"tool_call": {"tool": "my_tool", "args": {"param1": "val1"}}}
+    assert res["turns"][2] == {
+        "tool_call": {"tool": "my_tool", "args": {"param1": "val1"}}
+    }
     assert len(res["mocks"]) == 1
-    assert res["mocks"][0] == {"tool_response": {"tool": "my_tool", "response": {"result": "success"}}}
+    assert res["mocks"][0] == {
+        "tool_response": {"tool": "my_tool", "response": {"result": "success"}}
+    }
 
 
 @patch(

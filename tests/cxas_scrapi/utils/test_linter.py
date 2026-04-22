@@ -185,6 +185,7 @@ def test_rule_decorator_deduplication():
 
     # Cleanup
     from cxas_scrapi.utils.linter import _REGISTERED_IDS  # noqa: PLC0415
+
     _RULE_REGISTRY["test_dedup"] = []
     _REGISTERED_IDS.discard("XDUP001")
 

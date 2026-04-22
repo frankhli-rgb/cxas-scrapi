@@ -86,12 +86,12 @@ AGENT_INSTRUCTION_TEMPLATE = """
 OPENAPI_SCHEMA_TEMPLATE = """
 openapi: 3.0.0
 info:
-  title: 
+  title:
   description:
   version: 1.0.0
 servers:
-  - url: 
-    description: 
+  - url:
+    description:
 paths:
 
 """
@@ -175,7 +175,9 @@ class CreateUtils:
             code_dir.mkdir(parents=True, exist_ok=True)
             code_file = code_dir / "python_code.py"
             tool_obj.python_function.name = safe_name
-            tool_obj.python_function.description = f"Description for {display_name}"
+            tool_obj.python_function.description = (
+                f"Description for {display_name}"
+            )
             tool_obj.python_function.python_code = (
                 f"tools/{safe_name}/python_function/python_code.py"
             )
@@ -185,7 +187,8 @@ class CreateUtils:
         elif tool_type and tool_type.upper() == "OPENAPI":
             if add_to_agent:
                 raise ValueError(
-                    "Open API tool cannot be added to an agent without processing Open API schema first."
+                    "Open API tool cannot be added to an agent without "
+                    "processing Open API schema first."
                 )
             target_dir = app_path / "toolsets" / safe_name
             tool_obj = types.Toolset(display_name=display_name)
@@ -205,13 +208,17 @@ class CreateUtils:
             tool_obj = types.Tool(display_name=display_name)
             tool_obj.google_search_tool = types.GoogleSearchTool()
             tool_obj.google_search_tool.name = safe_name
-            tool_obj.google_search_tool.description = f"Description for {display_name}"
+            tool_obj.google_search_tool.description = (
+                f"Description for {display_name}"
+            )
         elif tool_type and tool_type.upper() == "DATASTORE":
             target_dir = app_path / "tools" / safe_name
             tool_obj = types.Tool(display_name=display_name)
             tool_obj.data_store_tool = types.DataStoreTool()
             tool_obj.data_store_tool.name = safe_name
-            tool_obj.data_store_tool.description = f"Description for {display_name}"
+            tool_obj.data_store_tool.description = (
+                f"Description for {display_name}"
+            )
             tool_obj.data_store_tool.data_store_source = (
                 types.DataStoreTool.DataStoreSource()
             )
@@ -228,11 +235,16 @@ class CreateUtils:
         if add_to_agent_obj:
             agent_safe_name = self._get_safe_display_name(add_to_agent)
             agent_json_file = (
-                app_path / "agents" / agent_safe_name / f"{agent_safe_name}.json"
+                app_path
+                / "agents"
+                / agent_safe_name
+                / f"{agent_safe_name}.json"
             )
             add_to_agent_obj.tools.append(display_name)
             with open(agent_json_file, "w") as f:
-                json.dump(json_format.MessageToDict(add_to_agent_obj._pb), f, indent=2)
+                json.dump(
+                    json_format.MessageToDict(add_to_agent_obj._pb), f, indent=2
+                )
 
         return str(target_dir)
 

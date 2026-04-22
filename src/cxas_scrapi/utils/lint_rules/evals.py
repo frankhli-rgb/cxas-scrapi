@@ -269,7 +269,9 @@ class GoldenWithoutMocks(Rule):
 class GoldenAgentFieldNotString(Rule):
     id = "E007"
     name = "eval-agent-not-string"
-    description = "Golden agent response must be a string or list of strings, not a dict"
+    description = (
+        "Golden agent response must be a string or list of strings, not a dict"
+    )
     default_severity = Severity.ERROR
 
     def check(

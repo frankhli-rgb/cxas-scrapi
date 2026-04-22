@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -22,7 +22,6 @@ from cxas_scrapi.utils.gemini import GeminiGenerate
 
 @pytest.fixture
 def mock_gemini():
-    from unittest.mock import AsyncMock
 
     client = MagicMock(spec=GeminiGenerate)
 

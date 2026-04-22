@@ -14,8 +14,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from cxas_scrapi.migration.cxas_topology_linker import CXASTopologyLinker
 from cxas_scrapi.migration.data_models import (
     IRAgent,
