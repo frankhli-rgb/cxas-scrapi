@@ -39,9 +39,11 @@ from config import load_app_name
 TIMEOUT = "TIMEOUT"
 SCORES_PASS_BUT_FAIL = "SCORES_PASS_BUT_FAIL"
 EXTRA_TURNS = "EXTRA_TURNS"
+HALLUCINATION = "HALLUCINATION"
 TOOL_MISSING = "TOOL_MISSING"
 TEXT_MISMATCH = "TEXT_MISMATCH"
 EXPECTATION_FAIL = "EXPECTATION_FAIL"
+EVAL_ERROR = "EVAL_ERROR"
 UNKNOWN = "UNKNOWN"
 
 
@@ -168,11 +170,16 @@ def categorize_failure(result_dict: dict) -> Tuple[str, str]:
     """Categorize a single failing result. Returns (category, detail_string)."""
     golden = result_dict.get("golden_result", {}) or {}
 
-    # Check for timeout via error_info
+    # Check for errors (timeout, invalid args, runtime errors)
     error_info = result_dict.get("error_info", {}) or {}
     error_msg = error_info.get("error_message", "") or ""
-    if "no user input" in error_msg.lower() or "timed out" in error_msg.lower() or "timeout" in error_msg.lower():
-        return (TIMEOUT, error_msg[:80])
+    error_code = error_info.get("error_code", "") or ""
+    if error_msg or error_code:
+        msg_lower = error_msg.lower()
+        if "timed out" in msg_lower or "timeout" in msg_lower or "no user input" in msg_lower:
+            return (TIMEOUT, error_msg[:80])
+        # Any other error (INVALID_ARGUMENT, runtime errors, empty inputs) -- bad golden config or platform error
+        return (EVAL_ERROR, f"{error_code}: {error_msg[:120]}")
 
     # Check custom expectation results (LLM-judged expectations from the golden YAML)
     exp_results = golden.get("evaluation_expectation_results", []) or []
@@ -335,7 +342,17 @@ def categorize_failure(result_dict: dict) -> Tuple[str, str]:
             detail = f"all expected turns pass (tools={tool_str}), but agent produced extra: {extras}"
             return (EXTRA_TURNS, detail)
 
-        # SCORES_PASS_BUT_FAIL: genuinely all scores pass, no extra turns — platform scorer bug
+        # Check hallucination results before assuming platform bug
+        for turn in turns:
+            if not isinstance(turn, dict):
+                continue
+            hall_res = turn.get("hallucination_result", turn.get("hallucinationResult", {})) or {}
+            hall_score = hall_res.get("score")
+            if hall_score == 0:  # 0 = Not Justified (hallucination detected)
+                explanation = hall_res.get("explanation", "")[:120]
+                return (HALLUCINATION, f"Hallucination detected: {explanation}")
+
+        # SCORES_PASS_BUT_FAIL: genuinely all scores pass, no hallucination, no extra turns — platform scorer bug
         tool_str = f"{pass_tool_exp}/{total_tool_exp}" if total_tool_exp else "0/0"
         detail = f'tools={tool_str}, sem={overall_sem_score} -- all scores pass but platform marked FAIL'
         return (SCORES_PASS_BUT_FAIL, detail)
@@ -435,7 +452,7 @@ def print_triage(triage: Dict[str, Any], run_short: str, time_str: str):
     print(f"\n=== Golden Triage (run {run_short}, {time_str}) ===\n")
 
     parts = [f"{passed}/{total} PASS"]
-    for cat in [TIMEOUT, SCORES_PASS_BUT_FAIL, EXTRA_TURNS, EXPECTATION_FAIL, TOOL_MISSING, TEXT_MISMATCH, UNKNOWN]:
+    for cat in [TIMEOUT, EVAL_ERROR, SCORES_PASS_BUT_FAIL, EXTRA_TURNS, HALLUCINATION, EXPECTATION_FAIL, TOOL_MISSING, TEXT_MISMATCH, UNKNOWN]:
         n = counts.get(cat, 0)
         if n:
             parts.append(f"{n} {cat}")
@@ -444,11 +461,12 @@ def print_triage(triage: Dict[str, Any], run_short: str, time_str: str):
     # Adjusted score (exclude platform issues: timeouts + scorer bugs)
     timeout_n = counts.get(TIMEOUT, 0)
     scorer_n = counts.get(SCORES_PASS_BUT_FAIL, 0)
-    adjusted_total = total - timeout_n - scorer_n
+    error_n = counts.get(EVAL_ERROR, 0)
+    adjusted_total = total - timeout_n - scorer_n - error_n
     adjusted_pass = passed
     if adjusted_total > 0:
         adj_pct = 100 * adjusted_pass / adjusted_total
-        print(f"Adjusted (excl platform issues): {adjusted_pass}/{adjusted_total} ({adj_pct:.1f}%)")
+        print(f"Adjusted (excl platform/config issues): {adjusted_pass}/{adjusted_total} ({adj_pct:.1f}%)")
 
     # Per-eval breakdown
     print(f"\nPER-EVAL:")
@@ -465,7 +483,7 @@ def print_triage(triage: Dict[str, Any], run_short: str, time_str: str):
     # Failures by category
     if failures:
         print(f"\nFAILURES BY CATEGORY:")
-        for cat in [TIMEOUT, SCORES_PASS_BUT_FAIL, EXPECTATION_FAIL, TOOL_MISSING, TEXT_MISMATCH, UNKNOWN]:
+        for cat in [TIMEOUT, EVAL_ERROR, SCORES_PASS_BUT_FAIL, HALLUCINATION, EXPECTATION_FAIL, TOOL_MISSING, TEXT_MISMATCH, UNKNOWN]:
             if cat not in failures:
                 continue
             items = failures[cat]
@@ -499,7 +517,7 @@ def print_multi_run_triage(run_triages: List[Tuple[str, str, Dict[str, Any]]]):
     avg_pct = 100 * total_passed / total_total if total_total else 0
 
     parts = [f"{total_passed}/{total_total} PASS ({avg_pct:.1f}%)"]
-    for cat in [TIMEOUT, SCORES_PASS_BUT_FAIL, EXTRA_TURNS, EXPECTATION_FAIL, TOOL_MISSING, TEXT_MISMATCH, UNKNOWN]:
+    for cat in [TIMEOUT, EVAL_ERROR, SCORES_PASS_BUT_FAIL, EXTRA_TURNS, HALLUCINATION, EXPECTATION_FAIL, TOOL_MISSING, TEXT_MISMATCH, UNKNOWN]:
         c = all_category_counts.get(cat, 0)
         if c:
             parts.append(f"{c} {cat}")
@@ -508,11 +526,12 @@ def print_multi_run_triage(run_triages: List[Tuple[str, str, Dict[str, Any]]]):
     # Adjusted (exclude platform issues: timeouts + scorer bugs)
     timeout_n = all_category_counts.get(TIMEOUT, 0)
     scorer_n = all_category_counts.get(SCORES_PASS_BUT_FAIL, 0)
-    adjusted_total = total_total - timeout_n - scorer_n
+    error_n = all_category_counts.get(EVAL_ERROR, 0)
+    adjusted_total = total_total - timeout_n - scorer_n - error_n
     adjusted_pass = total_passed
     if adjusted_total > 0:
         adj_pct = 100 * adjusted_pass / adjusted_total
-        print(f"Adjusted (excl platform issues): {adjusted_pass}/{adjusted_total} ({adj_pct:.1f}%)")
+        print(f"Adjusted (excl platform/config issues): {adjusted_pass}/{adjusted_total} ({adj_pct:.1f}%)")
 
     # Per-eval averages
     print(f"\nPER-EVAL (across {n} runs):")

@@ -7,6 +7,18 @@ description: End-to-end GECX/CXAS/CES conversational agent lifecycle -- build ag
 
 End-to-end lifecycle for GECX conversational agents: build, test, debug, iterate.
 
+## 0. MANDATORY STEP TRACKING (BLOCKING)
+
+**Rules for todo.md:**
+1. You MUST FIRST route to and read the correct sub-skill file (e.g., `references/debug.md`, `references/build.md`).
+2. You MUST copy the EXACT checklist provided in that sub-skill file to initialize `todo.md`.
+3. Every task or directive requires this checklist.
+4. All items MUST start unchecked (`[ ]`).
+5. You MUST NOT execute any commands until the exact checklist is written.
+6. Only check an item (`[x]`) AFTER you have fully completed and verified it.
+7. Do not proceed to the next step until the current one is verified and checked off.
+
+
 ## Quick Reference
 
 ```bash
@@ -65,12 +77,6 @@ Read what the user wants and load the appropriate sub-skill:
 | "Tool test is failing", "callback test broke" | Debug | `references/debug.md` |
 
 If the intent is unclear, ask: "Are you looking to **build/create** evals, **run** them, or **debug** failures?"
-
-## Step Tracking
-
-**CRITICAL:** Before starting any multi-step workflow (Build, Run, or Debug), you MUST create a `todo.md` checklist in the project workspace. 
-
-As you complete each step in the workflow, update the checklist to check it off (`[ ]` to `[x]`). Do not proceed to the next step until the current one is checked off. This ensures no steps are missed during complex builds or debug sessions.
 
 ## Before Starting
 

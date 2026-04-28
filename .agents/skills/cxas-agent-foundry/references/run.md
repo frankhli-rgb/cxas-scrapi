@@ -79,7 +79,7 @@ results_df = cb.test_all_callbacks_in_app_dir(app_dir="<project>/evals/callback_
 
 ```bash
 # Single command: run evals + triage + generate iteration report
-python .agents/skills/cxas-agent-foundry/scripts/run-and-report.py --message "what changed" --auto-revert
+python .agents/skills/cxas-agent-foundry/scripts/run-and-report.py --message "Describe what changed and why" --auto-revert
 ```
 
 The script reads the channel from `gecx-config.json` automatically. It runs all eval types, triages failures, and generates an iteration report -- no need to run triage separately.

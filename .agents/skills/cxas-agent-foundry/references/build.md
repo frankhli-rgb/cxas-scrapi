@@ -8,6 +8,7 @@ Build GECX conversational agents from requirements and verify them with evals. T
 Both workflows use the `cxas-scrapi` library for API interactions and the skill's scripts for running evals. **Prerequisite:** Ensure the virtualenv is set up and activated (`source .venv/bin/activate`). The top-level SKILL.md handles this automatically via the Environment Readiness Check.
 
 ### Load additional references as needed:
+- **TDD structure and generation**: `references/tdd-guide.md`
 - **Architecture, folder structure, conventions**: `references/gecx-design-guide.md`
 - **Writing callback Python code**: `references/callback-api.md`
 - **Interview / gathering requirements**: `references/interview-guide.md`
@@ -64,9 +65,9 @@ Choose the checklist that matches your entry point and initialize `todo.md`:
 
 Gather requirements, write a Technical Design Document (TDD), then wait for user approval before building.
 
-**If the user already provided a comprehensive PRD or requirements document** (with intents, tools, CUJs, auth flows, etc.), skip the interview entirely. Read the document, then go directly to writing the TDD. The interview exists for users who don't have formal requirements -- don't make users who already did the work repeat it.
+**If the user already provided a comprehensive PRD or requirements document** (with intents, tools, CUJs, auth flows, etc.), skip the interview entirely. Read the document, then go directly to writing the TDD using `references/tdd-guide.md` -> "Generating from Requirements". The interview exists for users who don't have formal requirements -- don't make users who already did the work repeat it.
 
-**If requirements are incomplete or absent**, see `references/interview-guide.md` for the full interview process: Round 1 (big picture), Round 2 (TDD structure with eval design), golden-vs-scenario decision criteria, golden design principles, and TDD maintenance guidance.
+**If requirements are incomplete or absent**, see `references/interview-guide.md` for the full interview process: Round 1 (big picture), Round 2 (TDD structure with eval design), golden-vs-scenario decision criteria, golden design principles, and TDD maintenance guidance. For TDD section structure and content guidance, see `references/tdd-guide.md`.
 
 ---
 
@@ -257,7 +258,7 @@ The standard edit-test cycle for an agent that's already on the platform:
    ```
 5. **Run evals** to verify the change didn't cause regressions:
    ```bash
-   python .agents/skills/cxas-agent-foundry/scripts/run-and-report.py --message "what changed" --runs 5
+   python .agents/skills/cxas-agent-foundry/scripts/run-and-report.py --message "Describe what changed and why" --runs 5
    ```
 
 **Always pull before editing** if someone else may have made changes on the platform UI. Pushing without pulling first can overwrite their changes.
