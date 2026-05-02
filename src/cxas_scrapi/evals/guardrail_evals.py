@@ -21,7 +21,7 @@ import time
 from typing import Annotated, Any, Dict, List, NamedTuple, Optional
 
 import pandas as pd
-from alive_progress import alive_it
+from tqdm import tqdm
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel, BeforeValidator, Field
 
@@ -194,8 +194,8 @@ class GuardrailEvals:
             )
 
         results = []
-        for index, row in alive_it(
-            df.iterrows(), total=len(df), title="Running Guardrail Tests"
+        for index, row in tqdm(
+            df.iterrows(), total=len(df), desc="Running Guardrail Tests"
         ):
             # Replace NaNs with None for Pydantic validation
             row_dict = {

@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 import pydantic
 import yaml
-from alive_progress import alive_it
+from tqdm import tqdm
 
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.conversation_history import ConversationHistory
@@ -722,7 +722,7 @@ class SimulationEvals(Apps):
         results = []
 
         if parallel <= 1:
-            for tc, run_idx in alive_it(jobs, title="Running Simulations"):
+            for tc, run_idx in tqdm(jobs, desc="Running Simulations"):
                 results.append(
                     self._run_single_simulation_job(
                         tc, run_idx, runs, model, modality, verbose, parallel
@@ -744,10 +744,10 @@ class SimulationEvals(Apps):
                     ): (tc["name"], run_idx)
                     for tc, run_idx in jobs
                 }
-                for future in alive_it(
+                for future in tqdm(
                     as_completed(futures),
                     total=len(futures),
-                    title="Running Simulations",
+                    desc="Running Simulations",
                 ):
                     results.append(future.result())
 
