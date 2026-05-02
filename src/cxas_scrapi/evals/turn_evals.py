@@ -27,6 +27,7 @@ import yaml
 from rich.progress import track
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
+from rich.progress import track
 
 from cxas_scrapi.core.sessions import Sessions
 from cxas_scrapi.core.variables import Variables

@@ -359,18 +359,19 @@ class AgentResourceSelector:
                 )
             if incoming:
                 html = (
-                "<div style='background-color:#d1ecf1; "
-                "border:1px solid #bee5eb; padding:10px; border-radius:5px;'>"
-            )
+                    "<div style='background-color:#d1ecf1; "
+                    "border:1px solid #bee5eb; padding:10px; "
+                    "border-radius:5px;'>"
+                )
                 html += (
                     "<h4 style='color:#0c5460; margin-top:0;'>Incoming "
                     "References</h4>"
                 )
                 html += (
-                "<p style='font-size:12px'>These unselected resources "
-                "reference your selection (they might break if you migrate "
-                "only the selection):</p><ul>"
-            )
+                    "<p style='font-size:12px'>These unselected resources "
+                    "reference your selection (they might break if you migrate "
+                    "only the selection):</p><ul>"
+                )
                 for rid in incoming:
                     det = self.analyzer.get_details(rid)
                     html += f"<li><b>[{det['type']}]</b> {det['name']}</li>"
@@ -517,14 +518,10 @@ class AgentResourceSelector:
                 selected_pbs_data.append(pb_data)
         filtered_data.playbooks = selected_pbs_data
         selected_flows = [
-            cb.data_ref.flow_id
-            for cb in self.checkboxes["flows"]
-            if cb.value
+            cb.data_ref.flow_id for cb in self.checkboxes["flows"] if cb.value
         ]
         filtered_data.flows = [
-            f
-            for f in filtered_data.flows
-            if f.flow_id in selected_flows
+            f for f in filtered_data.flows if f.flow_id in selected_flows
         ]
         return filtered_data
 
@@ -671,8 +668,7 @@ def render_migration_dashboard(cx_api, migration_service):
     def on_visualize_click(b):
         filtered_data = selector_ui.get_selected_data()
         if not filtered_data or (
-            not filtered_data.playbooks
-            and not filtered_data.flows
+            not filtered_data.playbooks and not filtered_data.flows
         ):
             with output_log:
                 logger.error(
@@ -698,8 +694,7 @@ def render_migration_dashboard(cx_api, migration_service):
     def on_export_viz_click(b):
         filtered_data = selector_ui.get_selected_data()
         if not filtered_data or (
-            not filtered_data.playbooks
-            and not filtered_data.flows
+            not filtered_data.playbooks and not filtered_data.flows
         ):
             with output_log:
                 logger.error(
@@ -799,7 +794,6 @@ def render_migration_dashboard(cx_api, migration_service):
                 buf = io.StringIO()
                 traceback.print_exc(file=buf)
                 output_log.append_stderr(buf.getvalue())
-
 
     load_btn.on_click(on_load_click)
     upload_btn.observe(on_upload_change, names="value")
