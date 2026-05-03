@@ -370,14 +370,14 @@ class MigrationService:
                     full_tool_name = \
                         f"{target_app_resource_name}/tools/{tool_id}"
                     if full_tool_name not in playbook_to_code_tools_map[
-                        pb_name
+                        playbook_name
                     ]:
-                        playbook_to_code_tools_map[pb_name].append(
+                        playbook_to_code_tools_map[playbook_name].append(
                             full_tool_name
                         )
 
                 master_inline_action_map.update(action_to_tool_map)
-                playbook_to_code_dependencies_map[pb_name].update(referenced_toolsets)
+                playbook_to_code_dependencies_map[playbook_name].update(referenced_toolsets)
 
         # --- 6. Compile Playbooks into IR ---
         logger.info("Compiling Playbooks into IR payload...")
