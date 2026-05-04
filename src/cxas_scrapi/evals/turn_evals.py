@@ -19,6 +19,7 @@ import enum
 import json
 import logging
 import os
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -686,15 +687,13 @@ class TurnEvals:
                         user_input = step.user
                         event_name = step.event
 
-                        if (
-                            user_input
-                            and user_input.startswith("<event>")
-                            and user_input.endswith("</event>")
-                        ):
-                            event_name = user_input[
-                                len("<event>") : -len("</event>")
-                            ]
-                            user_input = None
+                        if user_input:
+                            match = re.match(
+                                r"^<event>(.*?)</event>$", user_input
+                            )
+                            if match:
+                                event_name = match.group(1)
+                                user_input = None
 
                         if debug:
                             input_str = (
@@ -877,15 +876,11 @@ class TurnEvals:
                     user_input = case.user
                     event_name = case.event
 
-                    if (
-                        user_input
-                        and user_input.startswith("<event>")
-                        and user_input.endswith("</event>")
-                    ):
-                        event_name = user_input[
-                            len("<event>") : -len("</event>")
-                        ]
-                        user_input = None
+                    if user_input:
+                        match = re.match(r"^<event>(.*?)</event>$", user_input)
+                        if match:
+                            event_name = match.group(1)
+                            user_input = None
 
                     if debug:
                         input_str = (
