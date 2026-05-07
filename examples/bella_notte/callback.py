@@ -420,36 +420,6 @@ def _get_config() -> dict[str, Any]:
 # ═════════════════════════════════════════════════════════════════════
 
 
-def before_agent_callback(callback_context):
-  """CES before_agent_callback entry point — runs once per user turn.
-
-  Fires before static variable substitution, so state changes here are
-  visible when the instruction template is rendered.
-  """
-  sm = callback_context.state.get("sm", {})
-
-  # ── Deferred rejection ───────────────────────────────────────────
-  # reject_pending defers clearing pending until the next user turn so
-  # that the before_model_callback's stall detection doesn't see a
-  # state change and reset counters prematurely. Process it here.
-  if "_rejection_snapshot" in sm:
-    snapshot = sm.pop("_rejection_snapshot")
-    sm.pop("_rejection_requested", None)
-    sm["_progress_turns"] = 0
-    sm.pop("_readback_stall", None)
-    if sm.get("pending") == snapshot:
-      sm["pending"] = {}
-
-  # ── system_message phase ─────────────────────────────────────────
-  # When pending values exist, the user is responding to a readback
-  # question. Clear system_message so static substitution doesn't
-  # carry a stale collection-phase directive into this turn.
-  if sm.get("pending"):
-    callback_context.state["system_message"] = ""
-
-  return None
-
-
 def before_model_callback(callback_context, llm_request):
   """CES before_model_callback entry point — thin adapter.
 
@@ -579,7 +549,7 @@ def _run_slot_filling(
     if last_pending and not pending:
       retries.pop("readback", None)
 
-    _log_progress(sm, filled, pending, last_state)
+    _log_progress(filled, pending, last_state)
 
   # ── Auto-promote: slots without readback go straight to filled ─
   # Setter tools always write to pending first. Slots that don't
@@ -605,12 +575,10 @@ def _run_slot_filling(
       if name in filled:
         filled.pop(name)
         retries.pop(f"slot:{name}", None)
-        _log_event(sm, "slot_deactivated", slot=name,
-                   source="filled")
+        _log("slot_deactivated", slot=name, source="filled")
       if name in pending:
         pending.pop(name)
-        _log_event(sm, "slot_deactivated", slot=name,
-                   source="pending")
+        _log("slot_deactivated", slot=name, source="pending")
 
   # Snapshot state AFTER auto-promote and deactivation, so next
   # invocation compares against the post-processed state.
@@ -654,7 +622,7 @@ def _run_slot_filling(
     sm.pop("_readback_stall", None)
     phase = "collection"
     fresh_pending = False
-    _log_event(sm, "auto_confirm", user_msg=last_user_text)
+    _log("auto_confirm", user_msg=last_user_text)
 
   # ── Tool visibility ───────────────────────────────────────────
   hide_tools = _compute_hidden_tools(
@@ -669,7 +637,7 @@ def _run_slot_filling(
   # its own error text.
   error_msg, _ = _handle_slot_errors(sm, slots)
   if error_msg:
-    _log_invoke(sm, inv_n, phase, filled, pending, fresh_pending, hide_tools,
+    _log_invoke(inv_n, phase, filled, pending, fresh_pending, hide_tools,
                 preempted=error_msg)
     return {
         "hide_tools": hide_tools,
@@ -704,14 +672,14 @@ def _run_slot_filling(
       sm.pop("_readback_stall", None)
       retries = sm.setdefault("_retries", {})
       retries["readback"] = retries.get("readback", 0) + 1
-      _log_event(sm, "readback_stall", retries=retries["readback"])
+      _log("readback_stall", retries=retries["readback"])
       max_rb = readback_retry.get("max_retries", 2)
       if retries["readback"] >= max_rb:
         exhaust = readback_retry.get("on_exhaust", {})
         if exhaust.get("then") == "escalate":
           sm["status"] = "escalated"
         msg = exhaust.get("say", "Please call us for help.")
-        _log_invoke(sm, inv_n, "readback_stall", filled, {}, False, hide_tools,
+        _log_invoke(inv_n, "readback_stall", filled, {}, False, hide_tools,
                     preempted=msg)
         return {
             "hide_tools": hide_tools,
@@ -731,12 +699,12 @@ def _run_slot_filling(
     progress = sm.get("_progress_turns", 0)
   max_turns = progress_stall.get("max_turns", 8)
   if progress >= max_turns:
-    _log_event(sm, "progress_stall", turns=progress)
+    _log("progress_stall", turns=progress)
     exhaust = progress_stall.get("on_exhaust", {})
     if exhaust.get("then") == "escalate":
       sm["status"] = "escalated"
     msg = exhaust.get("say", "Please call us for help.")
-    _log_invoke(sm, inv_n, "progress_stall", filled, pending, fresh_pending,
+    _log_invoke(inv_n, "progress_stall", filled, pending, fresh_pending,
                 hide_tools, preempted=msg)
     return {
         "hide_tools": hide_tools,
@@ -785,17 +753,16 @@ def _run_slot_filling(
   # ── Single compact log entry per invocation ───────────────────
   action = dag_result["action"]
   if preempt:
-    _log_invoke(sm, inv_n, phase, filled, pending, fresh_pending, hide_tools,
+    _log_invoke(inv_n, phase, filled, pending, fresh_pending, hide_tools,
                 preempted=msg, fired=dag_result.get("task_name"))
   elif action == "next_question":
-    _log_invoke(sm, inv_n, phase, filled, pending, fresh_pending, hide_tools,
+    _log_invoke(inv_n, phase, filled, pending, fresh_pending, hide_tools,
                 asking=msg or dag_result.get("system_message", ""))
   elif action == "awaiting_readback" and fresh_pending:
-    _log_invoke(sm, inv_n, phase, filled, pending, fresh_pending, hide_tools,
+    _log_invoke(inv_n, phase, filled, pending, fresh_pending, hide_tools,
                 reading_back=dag_result.get("system_message", ""))
   else:
-    # awaiting_confirmation (phase label is self-explanatory) or all_done
-    _log_invoke(sm, inv_n, phase, filled, pending, fresh_pending, hide_tools,
+    _log_invoke(inv_n, phase, filled, pending, fresh_pending, hide_tools,
                 done=(action == "all_done"))
 
   return {
@@ -891,115 +858,51 @@ def _validate_config(config):
         )
 
 
-def _log_raw(sm, entry):
-  """Append a raw dict to sm["_debug_log"]. Capped at 50 entries."""
-  log = sm.setdefault("_debug_log", [])
-  log.append(entry)
-  if len(log) > 50:
-    del log[:-50]
+def _log(tag, **data):
+  """Print a structured debug entry to stdout."""
+  parts = " ".join(f"{k}={v!r}" for k, v in data.items())
+  print(f"[slot-filling:{tag}]" + (f" {parts}" if parts else ""))
 
 
-def _log_event(sm, event, **data):
-  """Append a named event to sm["_debug_log"]."""
-  _log_raw(sm, {"event": event, **data})
-
-
-def _log_progress(sm, filled, pending, last_state):
-  """Log slot state changes caused by tool calls.
-
-  Skips session-init noise (old state = {}, new state = {f:{}, p:{}}).
-  Only emits when a setter, confirm_pending, or task actually changed something.
-
-  Args:
-    sm: slot machine state dict.
-    filled: current filled slots dict.
-    pending: current pending slots dict.
-    last_state: snapshot dict with "filled" and "pending" from prior state.
-  """
+def _log_progress(filled, pending, last_state):
+  """Print slot state changes caused by tool calls."""
   last_filled = last_state.get("filled", {})
   last_pending = last_state.get("pending", {})
-  # Items that moved from pending → filled (confirm_pending called)
   confirmed = sorted(
       k for k in set(last_pending) if k in filled and k not in last_filled
   )
-  # Items added to filled not via confirmation (task output, auto-promote)
   task_out = {
       k: filled[k]
       for k in set(filled) - set(last_filled) - set(confirmed)
   }
-  # New items in pending (setter tool called)
   new_pending = {k: pending[k] for k in set(pending) - set(last_pending)}
-  # Items removed from pending without being confirmed (reject_pending)
   rejected = sorted(
       k for k in set(last_pending) if k not in pending and k not in filled
   )
   if not (confirmed or task_out or new_pending or rejected):
     return
-  entry = {"event": "progress"}
-  if new_pending:
-    entry["pending+"] = new_pending
-  if confirmed:
-    entry["confirmed"] = confirmed
-  if task_out:
-    entry["task+"] = task_out
-  if rejected:
-    entry["rejected"] = rejected
-  _log_raw(sm, entry)
+  _log("progress",
+       **({} if not new_pending else {"pending+": new_pending}),
+       **({} if not confirmed else {"confirmed": confirmed}),
+       **({} if not task_out else {"task+": task_out}),
+       **({} if not rejected else {"rejected": rejected}))
 
 
-def _log_invoke(sm, n, phase, filled, pending, fresh_pending, hidden, *,
+def _log_invoke(n, phase, filled, pending, fresh_pending, hidden, *,
                 asking=None, reading_back=None, fired=None, done=False,
                 preempted=None):
-  """Emit one compact entry per callback invocation.
-
-  All per-invocation info — phase, slot state, tool visibility, and the
-  action taken — in a single dict. Use keyword args for the action type;
-  they are mutually exclusive.
-
-  Args:
-    sm: slot machine state dict.
-    n: monotonically increasing invocation counter.
-    phase: current orchestration phase string.
-    filled: current filled slots dict.
-    pending: current pending slots dict.
-    fresh_pending: True if pending values appeared this invocation.
-    hidden: set of tool names hidden from the model this turn.
-    asking: system_message guiding the model to ask the next question.
-    reading_back: system_message guiding the model to read back pending values.
-    fired: task name when the framework fired a DAG task.
-    done: True when all slots are filled and booking is complete.
-    preempted: exact text the framework sent to the user (bypassing model).
-  """
-  e = {"#": n, "phase": phase}
-  if filled:
-    e["filled"] = dict(filled)
-  if pending:
-    e["pending"] = dict(pending)
-  if fresh_pending:
-    e["fresh"] = True
-  if hidden:
-    e["hidden"] = sorted(hidden)
-  if asking is not None:
-    e["asking"] = asking[:120]
-  if reading_back is not None:
-    e["reading_back"] = reading_back[:120]
-  if fired is not None:
-    e["fired"] = fired
-  if done:
-    e["done"] = True
-  if preempted is not None:
-    e["preempted"] = preempted[:120]
-  # Suppress consecutive identical entries (e.g. pre-tool re-invocations
-  # with no state change — the greeting turn and turn-start look the same).
-  log = sm.setdefault("_debug_log", [])
-  last_invoke = next((x for x in reversed(log) if "#" in x), None)
-  if last_invoke:
-    if ({k: v for k, v in last_invoke.items() if k != "#"} ==
-        {k: v for k, v in e.items() if k != "#"}):
-      return
-  log.append(e)
-  if len(log) > 50:
-    del log[:-50]
+  """Print one compact entry per callback invocation."""
+  _log("invoke",
+       n=n, phase=phase,
+       **({} if not filled else {"filled": sorted(filled)}),
+       **({} if not pending else {"pending": sorted(pending)}),
+       **({} if not fresh_pending else {"fresh": True}),
+       **({} if not hidden else {"hidden": sorted(hidden)}),
+       **({} if asking is None else {"asking": asking[:80]}),
+       **({} if reading_back is None else {"rb": reading_back[:80]}),
+       **({} if fired is None else {"fired": fired}),
+       **({} if not done else {"done": True}),
+       **({} if preempted is None else {"preempted": preempted[:80]}))
 
 
 def _is_slot_active(slot_def, filled):
@@ -1215,8 +1118,8 @@ def _handle_slot_errors(sm, slots):
     max_retries = validation.get("max_retries", 3)
 
     retries[retry_key] = retries.get(retry_key, 0) + 1
-    _log_event(sm, "slot_error", slot=slot_name,
-               code=error_code, retries=retries[retry_key])
+    _log("slot_error", slot=slot_name,
+         code=error_code, retries=retries[retry_key])
 
     if retries[retry_key] >= max_retries:
       exhaust = validation.get("on_exhaust", {})
@@ -1229,7 +1132,7 @@ def _handle_slot_errors(sm, slots):
         msg = msg.format(**filled)
       except KeyError:
         pass
-      _log_event(sm, "slot_error_exhaust", slot=slot_name)
+      _log("slot_error_exhaust", slot=slot_name)
       return msg, True
 
     error_messages = validation.get("errors", {})
@@ -1272,7 +1175,7 @@ def _execute_dag_step(
     try:
       result = executor(filled)
     except Exception:  # pylint: disable=broad-except
-      _log_event(sm, "task", name=task_name, ok=False, error="exception")
+      _log("task", name=task_name, ok=False, error="exception")
       result = {success_key: False}
 
     is_success = result.get(success_key)
@@ -1282,7 +1185,7 @@ def _execute_dag_step(
       if any(k not in result for k in outputs):
         is_success = False
 
-    _log_event(sm, "task", name=task_name, ok=bool(is_success))
+    _log("task", name=task_name, ok=bool(is_success))
 
     if is_success:
       task_results[task_name] = result
@@ -1321,7 +1224,7 @@ def _execute_dag_step(
       exhaust = on_failure.get("on_exhaust", {})
       if exhaust.get("then") == "escalate":
         sm["status"] = "escalated"
-      _log_event(sm, "task_exhaust", name=task_name)
+      _log("task_exhaust", name=task_name)
       msg = exhaust.get("say", "An error occurred.")
       return msg
 
