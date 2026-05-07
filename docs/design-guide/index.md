@@ -78,3 +78,11 @@ The `tdd.md` file is the most important file that isn't code. It documents what 
 
 !!! tip "Version control your workspace"
     The entire project directory — including `tdd.md`, `evals/`, and `experiment_log.md` — should live in version control. The `eval-reports/` directory can be gitignored since reports are reproducible.
+
+---
+
+## Further reading
+
+The design practices in this section are distilled from the **GECX Agent Design Guide** — the Google document that captures lessons learned from production agent deployments. It goes deeper on many of the topics covered here:
+
+[GECX Agent Design Guide (Google Doc) →](https://docs.google.com/document/d/1ncyyYL6w-VLuj3xLzFGF5T_37b4wUzsFOfiBzxdBvpA/edit?resourcekey=0-6253kz_1pW1UFXCw8Ln_eQ&tab=t.0#heading=h.9d1mfetzj1ii)
