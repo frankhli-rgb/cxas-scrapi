@@ -50,7 +50,7 @@ def _collect_data_files(source_dirs, root_files):
 
 setup(
     name="cxas-scrapi",
-    version="1.0.0",
+    version="1.1.0",
     description="A high level scripting API for CX Agent Studio developers.",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -85,7 +85,6 @@ setup(
         "gspread-dataframe",
         "ipython",
         "PyYAML",
-        "tqdm",
         "google-genai",
         "pandas-gbq",
         "google-cloud-bigquery",
@@ -97,8 +96,8 @@ setup(
         "graphviz",
         "rich",
         "google-cloud-dialogflow-cx",
+        "google-cloud-storage",
         "nest_asyncio",
-        "alive-progress",
     ],
     entry_points={
         "console_scripts": [

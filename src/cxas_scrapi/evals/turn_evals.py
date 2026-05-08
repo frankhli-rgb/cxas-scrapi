@@ -19,14 +19,15 @@ import enum
 import json
 import logging
 import os
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import yaml
-from alive_progress import alive_it
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
+from rich.progress import track
 
 from cxas_scrapi.core.sessions import Sessions
 from cxas_scrapi.core.variables import Variables
@@ -666,7 +667,7 @@ class TurnEvals:
             print(f"Error in dependency resolution: {e}")
             raise
 
-        for case in alive_it(sorted_cases, title="Running Turn Tests"):
+        for case in track(sorted_cases, description="Running Turn Tests"):
             print(f"Running Turn Test: {case.name}")
 
             try:
@@ -683,11 +684,22 @@ class TurnEvals:
                     # Multi-turn sequence
                     full_conversation_trace = []
                     for step in case.turns:
+                        user_input = step.user
+                        event_name = step.event
+
+                        if user_input:
+                            match = re.match(
+                                r"^<event>(.*?)</event>$", user_input
+                            )
+                            if match:
+                                event_name = match.group(1)
+                                user_input = None
+
                         if debug:
                             input_str = (
-                                step.user
-                                if step.user
-                                else f"<event>{step.event}</event>"
+                                user_input
+                                if user_input is not None
+                                else f"<event>{event_name}</event>"
                             )
                             print(
                                 f"[DEBUG] Step: {step.turn} | Input: "
@@ -702,8 +714,8 @@ class TurnEvals:
 
                         turn_response = self.sessions_client.run(
                             session_id=test_session_id,
-                            text=step.user,
-                            event=step.event,
+                            text=user_input,
+                            event=event_name,
                             variables=step.variables,
                             historical_contexts=(
                                 resolved_history
@@ -861,11 +873,20 @@ class TurnEvals:
                                     print(f"  - {r.justification}")
                 else:
                     # 2. Run the single turn
+                    user_input = case.user
+                    event_name = case.event
+
+                    if user_input:
+                        match = re.match(r"^<event>(.*?)</event>$", user_input)
+                        if match:
+                            event_name = match.group(1)
+                            user_input = None
+
                     if debug:
                         input_str = (
-                            case.user
-                            if case.user
-                            else f"<event>{case.event}</event>"
+                            user_input
+                            if user_input is not None
+                            else f"<event>{event_name}</event>"
                         )
                         print(f"[DEBUG] Input: {input_str}")
                         print(f"[DEBUG] Session ID: {test_session_id}")
@@ -873,8 +894,8 @@ class TurnEvals:
 
                     turn_response = self.sessions_client.run(
                         session_id=test_session_id,
-                        text=case.user,
-                        event=case.event,
+                        text=user_input,
+                        event=event_name,
                         variables=case.variables,
                         historical_contexts=(
                             resolved_history if resolved_history else None
