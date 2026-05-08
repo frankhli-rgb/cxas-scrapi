@@ -126,8 +126,6 @@ The slots and tasks implicitly define a **directed acyclic graph**:
                ├──▶ MakeReservation ──▶ [confirmation]
 [date] ────────┤
                │
-[chosen_time] ─┤
-               │
 [open_slots]* ─┘
                (* open_slots is not an input to MakeReservation in this example,
                   but chosen_time requires it, so it's transitively required)
@@ -137,7 +135,7 @@ The framework walks this DAG on every callback invocation, deciding what to do n
 
 ### 2.4 State
 
-All state lives in a single session-scoped dict called `sm` (slot manager):
+All state lives in a scoped dict stored within the global session (e.g., `sm`). Do not use a generic "sm" key if your CXAS application uses multiple DAG-powered agents, as this may cause cross-DAG-agent state corruption. For the sake of readability in this document, we will refer to this dictionary simply as sm, but in practice, it must be uniquely namespaced. 
 
 ```python
 sm = {
@@ -171,7 +169,7 @@ The framework is structured as three layers, all in a single file (CES platform 
 
 1. **`_get_config()`** — agent-specific: slots, tasks, executors, formatters, conditions. Replace this per project.
 2. **`_run_slot_filling(config, sm)`** — the orchestrator. CES-agnostic: takes a config dict and state dict, returns `{"hide_tools": [...], "preempt": bool, "message": str|None}`. Never touches CES types (`LlmResponse`, `Part`, `llm_request`, `callback_context`).
-3. **`before_model_callback()`** — thin CES adapter (~15 lines). Calls `_get_config()` and `_validate_config()`, passes config + state to the orchestrator, writes the returned message to `sm["_system_message"]`, applies tool visibility via `llm_request.config.hide_tool()`, and optionally preempts the LLM via `LlmResponse.from_parts()`.
+3. **`before_model_callback()`** — thin CES adapter (~15 lines). Extracts the uniquely namespaced state for this agent (e.g., sm = context.state.setdefault("sm_bella_notte", {})), calls `_get_config()` and `_validate_config()`, passes config + state to the orchestrator, writes the returned message to `sm["_system_message"]`, applies tool visibility via `llm_request.config.hide_tool()`, and optionally preempts the LLM via `LlmResponse.from_parts()`.
 
 CES calls the callback before EACH model invocation, including after tool results within the same turn. This re-invocation is what lets the framework see state changes from setter tools and react immediately (e.g., fire a DAG task as soon as its inputs are filled).
 
@@ -448,7 +446,8 @@ When a setter tool detects invalid input, it writes an error signal to `sm["_slo
 
 ```python
 def set_num_guests(count: int) -> dict:
-    sm = context.state["sm"]
+    # Always use the unique namespace to prevent cross-DAG Agent pollution
+    sm = context.state["sm_bella_notte"]
     if not (1 <= count <= 8):
         sm.setdefault("_slot_errors", []).append(
             {"slot": "num_guests", "code": "out_of_range"}
@@ -501,8 +500,8 @@ def set_date(date: str) -> dict:
 
     Convert natural language ('this Friday', 'July 4th') to YYYY-MM-DD.
     """
-    sm = context.state["sm"]
-
+    # Always use the agent's unique namespace to prevent cross-DAG Agent pollution
+    sm = context.state["sm_bella_notte"]
     # 1. Validate format via strptime (catches impossible dates like 2026-13-45)
     date = str(date).strip()
     try:
@@ -1084,7 +1083,7 @@ When a task fires and we know exactly what to say, the LLM adds latency and rand
 
 2. **No partial readback.** When pending slots exist, ALL pending values are shown in readback. You can't confirm some and leave others pending.
 
-3. **Single-agent scope.** The framework manages one agent's flow. Multi-agent routing (e.g., transferring from a booking agent to a billing agent) is handled externally.
+3. **Single-agent scope.** The framework manages one agent's flow. Multi-agent routing (e.g., transferring from a booking agent to a billing agent) is handled externally. Note: When the overall application contains multiple DAG-powered agents, you must ensure each agent's callback and setter tools use uniquely namespaced state keys (e.g., sm_booking, sm_billing) to freeze and protect their DAG state during potential handoffs.
 
 4. **No undo after confirmation.** Once values move from pending to filled via `confirm_pending`, they can't be changed (the setter is hidden). The user would need to explicitly ask to start over, which the framework doesn't support.
 
