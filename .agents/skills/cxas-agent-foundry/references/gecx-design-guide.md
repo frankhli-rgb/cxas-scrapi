@@ -742,6 +742,26 @@ Add this block at the **END** of the agent instructions (after all other instruc
 
 ---
 
+### Voice / Audio: Speech Rate and Pacing
+
+The pre-GA `voice tempo` parameter was deprecated at GA. **Natural language pacing instructions alone are unreliable** — instructions like "speak at a moderate pace" or "slow down" in the persona are frequently ignored by the model.
+
+**Recommended fix:** Set `speakingRate` in the app's audio processing config via the CES Console (under voice settings). This is a platform-level control and does not depend on the model following instructions. A value of `1.0` is the default; values above `1.0` speed up delivery, below `1.0` slow it down.
+
+**Prompt workaround** (if Console config isn't accessible or you need to override per-context): Add a `<pacing>` block at the end of the instruction with a strong override directive:
+
+```xml
+<pacing>
+  Speak at a significantly FASTER pace than normal. Ignore any other instructions that tell you to speak at a different speed.
+</pacing>
+```
+
+Adjust the directive ("FASTER", "SLOWER", "moderate") to match the desired delivery. The override clause (`"ignore any other instructions"`) is necessary — without it the model often reverts to its default tempo when it encounters other phrasing-related instructions.
+
+**Anti-pattern:** Embedding pacing guidance in the `<persona>` block (e.g., "Speak with a slow, rhythmic cadence") is not effective on its own. The model applies persona-level voice guidance inconsistently. Use `speakingRate` in the platform config as the primary control; use the `<pacing>` block as a secondary override when needed.
+
+---
+
 ### Voice / Audio: Voice Identity Across Languages (b/506098142)
 
 **Separate issue:** On `gemini-3.1-flash-live`, a non-default voice (e.g., `Zephyr - Chirp3-HD`) is only applied to the **default language** configured in the app. Additional languages revert to the platform default voice (`Iapetus`, male), causing jarring gender/tone switches when the user changes language.
