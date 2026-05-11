@@ -466,6 +466,16 @@ def combined_evals_report_cmd(args: argparse.Namespace) -> None:
     )
 
     include_list = args.include.split(",") if args.include else []
+    filter_files_list = (
+        args.filter_files.split(",")
+        if getattr(args, "filter_files", None)
+        else []
+    )
+    filter_tags_list = (
+        args.filter_tags.split(",")
+        if getattr(args, "filter_tags", None)
+        else []
+    )
 
     if getattr(args, "input_dir", None):
         if args.tool_test_file == "evals/tool_tests/":
@@ -488,7 +498,9 @@ def combined_evals_report_cmd(args: argparse.Namespace) -> None:
         format=args.format,
         include=include_list,
         modality=args.modality,
-        runs=args.runs
+        runs=args.runs,
+        filter_files=filter_files_list,
+        filter_tags=filter_tags_list,
     )
     print(f"Combined report generated at {output_path}")
 
@@ -1023,6 +1035,14 @@ def get_parser() -> argparse.ArgumentParser:
             "Categories to include (comma-separated, "
             "default: sims,goldens,scenarios)."
         ),
+    )
+    parser_report.add_argument(
+        "--filter-files",
+        help="Optional: Comma-separated list of filenames to include.",
+    )
+    parser_report.add_argument(
+        "--filter-tags",
+        help="Optional: Comma-separated list of tags to include.",
     )
     parser_report.set_defaults(func=combined_evals_report_cmd)
 

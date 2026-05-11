@@ -1108,7 +1108,7 @@ def load_golden_results(run_id, app_name, include=None):
 
         expectations = []
         for ee in golden.get("evaluation_expectation_results", []):
-            result_val = ee.get("result")
+            result_val = ee.get("outcome", ee.get("result"))
             exp_text = ee.get("prompt", ee.get("evaluation_expectation", ""))
             explanation = ee.get("explanation", "")
             met = (
@@ -1281,6 +1281,8 @@ def generate_combined_report_from_dir(
     include=None,
     modality="text",
     runs=1,
+    filter_files=None,
+    filter_tags=None,
 ):
     """Load results from directory and generate combined HTML report."""
     if not os.path.isdir(output_dir):
@@ -1304,6 +1306,8 @@ def generate_combined_report_from_dir(
             output_dir=output_dir,
             modality=modality,
             runs=runs,
+            filter_files=filter_files,
+            filter_tags=filter_tags,
         )
         sim_results = run_results["simulation"] if "sims" in include else []
         # Map tool results to expected format if needed
@@ -1439,11 +1443,13 @@ def run_all_evals(
     output_dir=None,
     modality="text",
     runs=1,
+    filter_files=None,
+    filter_tags=None,
 ):
     """Runs all 4 types of evaluations and returns aggregated results."""
     results = {"callback": [], "tool": [], "golden": [], "simulation": []}
 
-    # 3. Platform goldens (Trigger async)
+    # 1. Platform goldens (Trigger async)
     evaluations_to_run = []
     run_name = None
     if not goldens_dir:
@@ -1458,10 +1464,21 @@ def run_all_evals(
         else:
             golden_files = [goldens_dir]
 
+        if filter_files:
+            golden_files = [
+                f
+                for f in golden_files
+                if os.path.basename(f) in filter_files
+            ]
+
         for gf in golden_files:
             print(f"Pushing golden file {gf}")
             evals = eval_utils.load_golden_evals_from_yaml(gf)
             for eval_dict in evals:
+                if filter_tags:
+                    tags = eval_dict.get("tags", [])
+                    if not any(t in filter_tags for t in tags):
+                        continue
                 res = eval_client.update_evaluation(
                     evaluation=eval_dict, app_name=app_name
                 )
@@ -1491,7 +1508,7 @@ def run_all_evals(
                     break
                 print(f"  Waiting... ({(i + 1) * 10}s)")
 
-    # 1. Callback tests
+    # 2. Callback tests
     if not app_dir and app_name:
         app_dir = f"cxas_app/{app_name.split('/')[-1]}"
     if app_dir and os.path.exists(app_dir):
@@ -1504,7 +1521,7 @@ def run_all_evals(
                 os.path.join(output_dir, "callback_results.csv"), index=False
             )
 
-    # 2. Tool tests
+    # 3. Tool tests
     if not tool_test_file:
         tool_test_file = "evals/tool_tests/"
     if app_name and os.path.exists(tool_test_file):
@@ -1518,10 +1535,22 @@ def run_all_evals(
         else:
             tool_files = [tool_test_file]
 
+        if filter_files:
+            tool_files = [
+                f for f in tool_files if os.path.basename(f) in filter_files
+            ]
+
         test_cases = []
         for tf in tool_files:
             print(f"Loading tool tests from {tf}")
-            test_cases.extend(tool_evals.load_tool_test_cases_from_file(tf))
+            cases = tool_evals.load_tool_test_cases_from_file(tf)
+            if filter_tags:
+                cases = [
+                    c
+                    for c in cases
+                    if any(t in filter_tags for t in c.get("tags", []))
+                ]
+            test_cases.extend(cases)
 
         if test_cases:
             print(f"Running {len(test_cases)} tool tests")
@@ -1532,7 +1561,7 @@ def run_all_evals(
                     os.path.join(output_dir, "tool_results.csv"), index=False
                 )
 
-    # 3. Platform goldens (Wait for results)
+    # 4. Platform goldens (Wait for results)
     if run_name:
         print(f"Waiting for evaluation run {run_name} to complete...")
         utils = EvalUtils(app_name=app_name)
@@ -1541,11 +1570,16 @@ def run_all_evals(
         )
         results["golden"] = load_golden_results(run_name, app_name)
 
-    # 4. Local simulations
+    # 5. Local simulations
     if not simulation_dir:
         simulation_dir = "evals/simulations/"
     if app_name and os.path.exists(simulation_dir):
         sim_files = glob.glob(os.path.join(simulation_dir, "*.yaml"))
+        if filter_files:
+            sim_files = [
+                f for f in sim_files if os.path.basename(f) in filter_files
+            ]
+
         if sim_files:
             print(f"Running {len(sim_files)} simulations")
             sim_evals = SimulationEvals(app_name=app_name)
@@ -1554,6 +1588,14 @@ def run_all_evals(
                 with open(sf) as f:
                     cases = yaml.safe_load(f)
                     if isinstance(cases, list):
+                        if filter_tags:
+                            cases = [
+                                c
+                                for c in cases
+                                if any(
+                                    t in filter_tags
+                                    for t in c.get("tags", []))
+                            ]
                         test_cases.extend(cases)
             if test_cases:
                 sim_results = sim_evals.run_simulations(

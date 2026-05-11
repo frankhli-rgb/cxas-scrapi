@@ -27,6 +27,7 @@ from cxas_scrapi.utils.reporting import (
     generate_combined_html_report,
     generate_combined_report_from_dir,
     generate_html_report,
+    run_all_evals,
 )
 
 
@@ -325,7 +326,8 @@ def test_generate_combined_report_from_dir(tmp_path):
     output_path = evals_dir / "combined_report.html"
 
     generate_combined_report_from_dir(
-        output_dir=str(evals_dir), output_path=str(output_path)
+        output_dir=str(evals_dir),
+        output_path=str(output_path)
     )
 
     assert os.path.exists(output_path)
@@ -362,7 +364,9 @@ def test_generate_combined_report_from_dir_include_all(tmp_path):
     output_path = evals_dir / "combined_report.html"
 
     generate_combined_report_from_dir(
-        output_dir=str(evals_dir), output_path=str(output_path), include=["all"]
+        output_dir=str(evals_dir),
+        output_path=str(output_path),
+        include=["all"]
     )
 
     assert os.path.exists(output_path)
@@ -370,3 +374,108 @@ def test_generate_combined_report_from_dir_include_all(tmp_path):
         content = f.read()
         assert "test_sim" in content
         assert "test_tool" in content
+
+
+@patch("cxas_scrapi.utils.reporting.Evaluations")
+@patch("cxas_scrapi.utils.reporting.ToolEvals")
+@patch("cxas_scrapi.utils.reporting.SimulationEvals")
+@patch("cxas_scrapi.utils.reporting.CallbackEvals")
+@patch("cxas_scrapi.utils.reporting.EvalUtils")
+@patch("glob.glob")
+@patch("os.path.exists")
+@patch("os.path.isdir")
+def test_run_all_evals_filtering(
+    mock_isdir,
+    mock_exists,
+    mock_glob,
+    mock_eval_utils,
+    mock_callback_evals,
+    mock_sim_evals,
+    mock_tool_evals,
+    mock_evaluations,
+):
+    mock_exists.return_value = True
+    mock_isdir.return_value = True
+    mock_glob.side_effect = [
+        ["evals/goldens/test1.yaml", "evals/goldens/test2.yaml"],
+        ["evals/tool_tests/tool1.yaml"],
+        ["evals/simulations/sim1.yaml"],
+    ]
+
+    # Mock load_golden_evals_from_yaml to return empty list
+    mock_eval_utils.return_value.load_golden_evals_from_yaml.return_value = []
+
+
+    run_all_evals(
+        app_name="projects/p",
+        filter_files=["test1.yaml"],
+        goldens_dir="evals/goldens/",
+        tool_test_file="evals/tool_tests/",
+        simulation_dir="evals/simulations/",
+    )
+
+    mock_eval_utils.return_value.load_golden_evals_from_yaml.assert_called_once_with(
+        "evals/goldens/test1.yaml"
+    )
+
+
+@patch("cxas_scrapi.utils.reporting.Evaluations")
+@patch("cxas_scrapi.utils.reporting.ToolEvals")
+@patch("cxas_scrapi.utils.reporting.SimulationEvals")
+@patch("cxas_scrapi.utils.reporting.CallbackEvals")
+@patch("cxas_scrapi.utils.reporting.EvalUtils")
+@patch("glob.glob")
+@patch("os.path.exists")
+@patch("os.path.isdir")
+@patch("cxas_scrapi.utils.reporting.RunEvaluationOperationMetadata")
+@patch("yaml.safe_load")
+@patch("builtins.open", new_callable=mock_open)
+def test_run_all_evals_tag_filtering(
+    mock_open_file,
+    mock_yaml_load,
+    mock_proto,
+    mock_isdir,
+    mock_exists,
+    mock_glob,
+    mock_eval_utils,
+    mock_callback_evals,
+    mock_sim_evals,
+    mock_tool_evals,
+    mock_evaluations,
+):
+    mock_exists.return_value = True
+    mock_isdir.return_value = True
+    mock_glob.side_effect = [
+        ["evals/goldens/test1.yaml"],
+        ["evals/tool_tests/tool1.yaml"],
+        ["evals/simulations/sim1.yaml"],
+    ]
+
+    # Mock load_golden_evals_from_yaml to return evaluations with tags
+    mock_eval_utils.return_value.load_golden_evals_from_yaml.return_value = [
+        {"name": "eval1", "tags": ["tag1"]},
+        {"name": "eval2", "tags": ["tag2"]},
+    ]
+
+    # Mock yaml.safe_load to return simulations with tags
+    mock_yaml_load.return_value = [
+        {"name": "sim1", "tags": ["tag1"]},
+        {"name": "sim2", "tags": ["tag2"]},
+    ]
+
+    mock_eval_client = mock_evaluations.return_value
+    mock_eval_client.update_evaluation.return_value.name = "mock_name"
+
+
+    run_all_evals(
+        app_name="projects/p",
+        filter_tags=["tag1"],
+        goldens_dir="evals/goldens/",
+        tool_test_file="evals/tool_tests/",
+        simulation_dir="evals/simulations/",
+    )
+
+    # Verify that only eval1 was updated/run
+    mock_eval_client.update_evaluation.assert_called_once_with(
+        evaluation={"name": "eval1", "tags": ["tag1"]}, app_name="projects/p"
+    )

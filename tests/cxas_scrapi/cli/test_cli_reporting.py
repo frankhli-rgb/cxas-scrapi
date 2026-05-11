@@ -72,7 +72,9 @@ def test_combined_evals_report_cmd(tmp_path):
             format="html",
             include=["sims", "goldens", "scenarios"],
             modality="text",
-            runs=1
+            runs=1,
+            filter_files=[],
+            filter_tags=[]
         )
 
 
@@ -118,5 +120,7 @@ def test_combined_evals_report_cmd_with_modality_and_runs(tmp_path):
             format="html",
             include=["sims", "goldens", "scenarios"],
             modality="audio",
-            runs=5
+            runs=5,
+            filter_files=[],
+            filter_tags=[]
         )
