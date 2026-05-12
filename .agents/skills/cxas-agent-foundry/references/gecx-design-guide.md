@@ -284,6 +284,20 @@ A multi-agent architecture is the preferred architecture for agents that have mu
 
 A simple test is to offload part of the agent logic (instruction + tool def) to a standalone LLM call with specialized prompt - if that yields better results, it may hint towards splitting off into a specialized agent
 
+#### Configuring childAgents (platform quirk)
+
+The parent agent declares its sub-agents in `<agent_name>.json`'s `childAgents` array. The strings MUST use underscores matching each sub-agent's directory name (its `name` field), NOT spaces matching `displayName`:
+
+```json
+{
+  "name": "root_agent",
+  "displayName": "root_agent",
+  "childAgents": ["member_benefits_agent", "claims_agent"]
+}
+```
+
+`cxas lint` may accept space-separated names matching `displayName`, but `cxas push` returns `400 Reference not found` and silently drops the sub-agents (orphaning all of their tools). When in doubt, the platform takes the directory name — use underscores.
+
 ### Using the multi-agent framework
 With the benefits of the multi-agent framework in mind, it is best to think about how to break up the business logic into individual use cases. The best way to think about this is to follow two best practices:
 - Build sub-agents that can be re-used across multiple intents (e.g., an "authentication" agent that could be used across various secure use cases for a banking agent)
@@ -572,3 +586,186 @@ See `examples/bella_notte/` for a complete working example (restaurant reservati
 - `tools/` — all setter tools
 
 To build a new agent: copy `callback.py`, replace `_get_config()` with your slots/tasks/executors, create matching setter tools.
+
+## Multilingual Agents
+
+Multi-language voice agents on `gemini-3.1-flash-live` have two documented failure modes that require specific patterns to mitigate. Both are confirmed production issues (b/484305525, b/506098142).
+
+### Failure Mode 1: Language-Polluted Context
+
+**Root cause:** When agent instructions are in Language A (e.g., English) and a datastore or tool returns content in Language B (e.g., German), the LLM receives mixed-language context. This causes the agent to spontaneously switch languages mid-response — even with explicit instructions not to. The model loses track of which language to use once it sees both languages in the same context window.
+
+**Fix:** Translate at the tool boundary. Never let tool responses in a different language pass directly into the LLM context.
+
+#### Translate-Around-Tool-Calls Pattern
+
+In any tool that queries a datastore or API whose content is in a different language than the instructions, perform explicit translation before returning:
+
+```python
+def search_knowledge_base(user_query: str) -> dict:
+    """Searches the knowledge base for answers to the user's question.
+    Internally translates the query to German for the datastore and
+    translates the result back to English before returning.
+
+    Args:
+        user_query: The user's question in English (REQUIRED).
+
+    Returns:
+        dict with 'result' (str) and 'agent_action' (str).
+    """
+    # 1. Translate query to datastore language
+    german_query = translate_to_german(user_query)
+
+    # 2. Fetch from datastore (German content)
+    raw_result = kb.search(german_query)
+
+    # 3. Translate result back to working language before returning to LLM
+    english_result = translate_to_english(raw_result)
+
+    return {
+        "result": english_result,
+        "agent_action": "Respond to the user using the information in 'result'."
+    }
+```
+
+**Key principle:** All content that enters the LLM context (tool results, system messages, instructions) must be in one language. The translation happens inside the tool, invisibly to the LLM.
+
+---
+
+### Failure Mode 2: Non-Deterministic Language Switch Detection
+
+**Root cause:** `gemini-3.1-flash-live` does not reliably auto-detect language switches. Detection is non-deterministic — it works on some utterances and silently fails on others. The model is especially likely to miss switches on: short utterances, phonetically ambiguous words (e.g., "nein" vs "nine"), and cognates (words shared between languages).
+
+**Fix:** Use a structured `<language_detection>` instruction block with conservative guardrails, plus an `update_language` tool to gate the switch deterministically.
+
+#### Explicit-Only vs Auto-Detect
+
+For MVP and production: **always use explicit-switch-only mode first.** Auto-detection has a known model-level limitation requiring a model revision to fully fix. The explicit-only path (user says "speak German") is reliable; auto-detection from utterance language alone is not.
+
+Only add auto-detection if it's a hard requirement, and stress-test it with sims before shipping (see `references/eval-templates.md` → Multilingual Eval Patterns).
+
+#### The `update_language` Tool
+
+Create this tool in the app. It gates the switch and keeps `active_language` in session state:
+
+```python
+def update_language(new_language: str) -> dict:
+    """Updates the active conversation language when the user requests a switch.
+    Call this BEFORE generating your first response in the new language.
+
+    Args:
+        new_language: Language to switch to. One of: "English", "German",
+                      "French", "Italian", "Spanish" (REQUIRED).
+
+    Returns:
+        dict with 'success' (bool), 'active_language' (str), 'agent_action' (str).
+    """
+    context["session"]["active_language"] = new_language
+    return {
+        "success": True,
+        "active_language": new_language,
+        "agent_action": f"Continue the entire conversation in {new_language}."
+    }
+```
+
+#### Language Detection Instruction Block
+
+Add this block at the **END** of the agent instructions (after all other instructions). Customize `[Language A]` and `[Language B]` for your use case:
+
+```xml
+<language_detection>
+  <goal>Determine if the primary language of the current user utterance is [Language A] or [Language B], and update the context if a switch occurs.</goal>
+
+  <evaluation_rules>
+    - **Fresh Evaluation (CRITICAL):** Re-evaluate the language for EVERY new user utterance.
+    - **Contextual Inertia (CRITICAL):** Heavily weight the ongoing conversation language. Users rarely switch for single words.
+    - **Ambiguity Rule:** If the utterance is short, ambiguous, or contains cognates, DEFAULT to the language of the PREVIOUS turn.
+    - **Length Guardrail:** Do NOT switch for utterances shorter than 3 words unless the user makes an explicit request (e.g., "German please" / "Auf Deutsch bitte").
+    - **Switching Threshold:** You may ONLY switch if the user EXPLICITLY requests it OR speaks a complete, grammatically unambiguous sentence in the new language.
+    - **Cognate Guardrail:** Words spelled identically in both languages MUST NEVER trigger a switch on their own.
+    - **Noisy Audio Guardrail:** If there is background noise, default to the language of the previous turn.
+    - **Current Language Trumps Single Words:** Isolated words or politeness markers from the other language (e.g., "danke" in an English sentence) must NOT trigger a switch.
+  </evaluation_rules>
+
+  <execution_steps>
+    <step>
+      1. State the language of the previous turn (Contextual Inertia baseline).
+      2. Analyze Grammar: Is the utterance a grammatically complete sentence in the new language, or just a fragment or noun phrase?
+      3. Check for Cognates: Are primary words shared between both languages?
+      4. Check Mistranscription: Could this be a phonetic confusion for the current language?
+      5. Lock in your language decision for this turn.
+    </step>
+    <step>
+      <trigger>User's input language is DIFFERENT from previous turn AND meets the Switching Threshold above.</trigger>
+      <action>Immediately invoke {@TOOL: update_language}. Do not provide a verbal response until the tool succeeds.</action>
+    </step>
+    <step>
+      <trigger>Locked language decision is [Language B].</trigger>
+      <action>Translate the user utterance to [Language A] for any tool parameters. Generate your final response in [Language B].</action>
+    </step>
+  </execution_steps>
+
+  <examples>
+    <example>
+      <previous_lang>[Language A]</previous_lang>
+      <user_input>[Language B] please.</user_input>
+      <analysis>Explicit language request. Meets switching threshold regardless of word count.</analysis>
+      <decision>Switch to [Language B]. Call update_language.</decision>
+    </example>
+    <example>
+      <previous_lang>English</previous_lang>
+      <user_input>Ich brauche Hilfe bei meiner Rechnung für diesen Monat.</user_input>
+      <analysis>Complete German sentence with verb and object. Audio confirms German. Meets switching threshold.</analysis>
+      <decision>Switch to German. Call update_language.</decision>
+    </example>
+    <example>
+      <previous_lang>English</previous_lang>
+      <user_input>danke</user_input>
+      <analysis>Single word, politeness marker that exists in both contexts. Length guardrail applies. Context is English.</analysis>
+      <decision>Stay in English. Do NOT call update_language.</decision>
+    </example>
+    <example>
+      <previous_lang>English</previous_lang>
+      <user_input>I want to cancel my account, danke.</user_input>
+      <analysis>Clear English sentence with a trailing German word. Current language trumps single words.</analysis>
+      <decision>Stay in English. Do NOT call update_language.</decision>
+    </example>
+    <example>
+      <previous_lang>English</previous_lang>
+      <user_input>nein</user_input>
+      <analysis>Single word, phonetically identical to English "nine". Length guardrail applies. Context is English.</analysis>
+      <decision>Stay in English. Do NOT call update_language.</decision>
+    </example>
+  </examples>
+</language_detection>
+```
+
+---
+
+### Voice / Audio: Speech Rate and Pacing
+
+The pre-GA `voice tempo` parameter was deprecated at GA. **Natural language pacing instructions alone are unreliable** — instructions like "speak at a moderate pace" or "slow down" in the persona are frequently ignored by the model.
+
+**Recommended fix:** Set `speakingRate` in the app's audio processing config via the CES Console (under voice settings). This is a platform-level control and does not depend on the model following instructions. A value of `1.0` is the default; values above `1.0` speed up delivery, below `1.0` slow it down.
+
+**Prompt workaround** (if Console config isn't accessible or you need to override per-context): Add a `<pacing>` block at the end of the instruction with a strong override directive:
+
+```xml
+<pacing>
+  Speak at a significantly FASTER pace than normal. Ignore any other instructions that tell you to speak at a different speed.
+</pacing>
+```
+
+Adjust the directive ("FASTER", "SLOWER", "moderate") to match the desired delivery. The override clause (`"ignore any other instructions"`) is necessary — without it the model often reverts to its default tempo when it encounters other phrasing-related instructions.
+
+**Anti-pattern:** Embedding pacing guidance in the `<persona>` block (e.g., "Speak with a slow, rhythmic cadence") is not effective on its own. The model applies persona-level voice guidance inconsistently. Use `speakingRate` in the platform config as the primary control; use the `<pacing>` block as a secondary override when needed.
+
+---
+
+### Voice / Audio: Voice Identity Across Languages (b/506098142)
+
+**Separate issue:** On `gemini-3.1-flash-live`, a non-default voice (e.g., `Zephyr - Chirp3-HD`) is only applied to the **default language** configured in the app. Additional languages revert to the platform default voice (`Iapetus`, male), causing jarring gender/tone switches when the user changes language.
+
+**Fix:** This was resolved in the CES Console (CL 908383873, deployed 2026-04-30). When you set a voice in the Console for one language, it is now propagated to all configured additional languages automatically. If you observe voice identity changes after a language switch, re-save your app's voice settings to trigger the propagation.
+
+**Temporary workaround** (if you need to unblock before re-saving): Switch to the default voice (`Iapetus`) for the agent. The default voice is consistent across all languages. This is not ideal for agents with board-approved persona voices but eliminates the jarring switch.

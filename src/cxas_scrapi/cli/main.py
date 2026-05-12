@@ -39,14 +39,17 @@ from cxas_scrapi.cli.app import (
 )
 from cxas_scrapi.cli.create_local import handle_local_create
 from cxas_scrapi.cli.insights_cli import populate_insights_parser
+from cxas_scrapi.cli.migration_cli import MigrationCLI
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
 from cxas_scrapi.core.github import init_github_action
 from cxas_scrapi.evals.callback_evals import CallbackEvals
 from cxas_scrapi.evals.tool_evals import ToolEvals
+from cxas_scrapi.migration.dfcx_exporter import ConversationalAgentsAPI
 from cxas_scrapi.utils.eval_utils import EvalUtils
 
 logger = logging.getLogger(__name__)
+
 
 
 def export_eval(args: argparse.Namespace) -> None:
@@ -75,6 +78,13 @@ def export_eval(args: argparse.Namespace) -> None:
     except Exception as e:
         print(f"Failed to export evaluation: {e}")
         sys.exit(1)
+
+
+def run_migration_dashboard(args: argparse.Namespace) -> None:
+    """Handles the 'dfcx-cxas migrate' command."""
+    dashboard = MigrationCLI()
+    cx_api = ConversationalAgentsAPI()
+    dashboard.run(default_agent_name=args.default_agent_name, cx_api=cx_api)
 
 
 def push_eval(args: argparse.Namespace) -> None:
@@ -440,6 +450,49 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
         sys.exit(1)
 
 
+
+
+
+def combined_evals_report_cmd(args: argparse.Namespace) -> None:
+    """Handles the 'evals report' command."""
+    import os  # noqa: PLC0415
+
+    from cxas_scrapi.utils.reporting import (  # noqa: PLC0415
+        generate_combined_report_from_dir,
+    )
+
+    output_path = args.gcs_path or args.output or os.path.join(
+        args.output_dir, "combined_report.html"
+    )
+
+    include_list = args.include.split(",") if args.include else []
+
+    if getattr(args, "input_dir", None):
+        if args.tool_test_file == "evals/tool_tests/":
+            args.tool_test_file = os.path.join(args.input_dir, "tool_tests/")
+        if args.goldens_dir == "evals/goldens/":
+            args.goldens_dir = os.path.join(args.input_dir, "goldens/")
+        if args.simulation_dir == "evals/simulations/":
+            args.simulation_dir = os.path.join(args.input_dir, "simulations/")
+
+    generate_combined_report_from_dir(
+        output_dir=args.output_dir,
+        golden_run=args.golden_run,
+        app_name=args.app_name,
+        output_path=output_path,
+        run=args.run,
+        app_dir=args.app_dir,
+        tool_test_file=args.tool_test_file,
+        goldens_dir=args.goldens_dir,
+        simulation_dir=args.simulation_dir,
+        format=args.format,
+        include=include_list,
+        modality=args.modality,
+        runs=args.runs
+    )
+    print(f"Combined report generated at {output_path}")
+
+
 def test_tools(args: argparse.Namespace) -> None:
     """Handles the 'test-tools' command."""
 
@@ -779,6 +832,26 @@ def get_parser() -> argparse.ArgumentParser:
         title="Commands", dest="command", required=True
     )
 
+    # Parser for 'migrate'
+    parser_migrate = subparsers.add_parser(
+        "migrate", help="Migration tools."
+    )
+    migrate_subparsers = parser_migrate.add_subparsers(
+        title="Migration Commands", dest="migrate_command", required=True
+    )
+
+    parser_migrate_dfcx = migrate_subparsers.add_parser(
+        "dfcx", help="Launch the interactive migration dashboard for DFCX."
+    )
+    parser_migrate_dfcx.add_argument(
+        "--default-agent-name",
+        default="migrated-agent",
+        help="Default name for the target agent.",
+    )
+    parser_migrate_dfcx.set_defaults(func=run_migration_dashboard)
+    # TODO: Add flags for non-interactive mode (e.g., --headless, --config)
+    # to bypass the interactive dashboard.
+
     # Parser for 'init-github-action'
     parser_init_gh = subparsers.add_parser(
         "init-github-action",
@@ -867,6 +940,91 @@ def get_parser() -> argparse.ArgumentParser:
     )
 
     parser_init_gh.set_defaults(func=init_github_action)
+
+    parser_evals = subparsers.add_parser("evals", help="Manage evaluations.")
+    evals_subparsers = parser_evals.add_subparsers(dest="evals_command")
+    parser_report = evals_subparsers.add_parser(
+        "report",
+        help="Generate combined report for golden + simulation results.",
+    )
+    parser_report.add_argument(
+        "--output-dir",
+        required=True,
+        help="Directory containing eval results (sim_results.json, etc.).",
+    )
+    parser_report.add_argument(
+        "--output",
+        help="Output path. Defaults to <evals-dir>/combined_report.html",
+    )
+    parser_report.add_argument(
+        "--golden-run",
+        help="Optional: Golden eval run ID to fetch from server.",
+    )
+    parser_report.add_argument(
+        "--app-name",
+        help="Optional: App resource name (projects/.../apps/...)",
+    )
+    parser_report.add_argument(
+        "--run",
+        action="store_true",
+        help="Run evaluations before generating report.",
+    )
+    parser_report.add_argument(
+        "--app-dir",
+        help="Directory of the app (used for callback tests).",
+    )
+    parser_report.add_argument(
+        "--input-dir",
+        help=(
+            "Base directory containing goldens/, simulations/, "
+            "and tool_tests/ subdirectories."
+        ),
+    )
+    parser_report.add_argument(
+        "--tool-test-file",
+        default="evals/tool_tests/",
+        help="Path to tool test file or directory.",
+    )
+    parser_report.add_argument(
+        "--goldens-dir",
+        default="evals/goldens/",
+        help="Path to goldens directory or file to push.",
+    )
+    parser_report.add_argument(
+        "--simulation-dir",
+        default="evals/simulations/",
+        help="Path to simulation files directory.",
+    )
+    parser_report.add_argument(
+        "--gcs-path",
+        help="Optional: GCS path to store the combined report (starts with gs://).",
+    )
+    parser_report.add_argument(
+        "--format",
+        default="html",
+        help="Output format (default: html).",
+    )
+    parser_report.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="Number of runs per golden and simulation test case.",
+    )
+    parser_report.add_argument(
+        "--modality",
+        choices=["text", "audio"],
+        default="text",
+        help="Evaluation execution modality (text or audio). Defaults to text.",
+    )
+    parser_report.add_argument(
+        "--include",
+        default="sims,goldens,scenarios",
+        help=(
+            "Categories to include (comma-separated, "
+            "default: sims,goldens,scenarios)."
+        ),
+    )
+    parser_report.set_defaults(func=combined_evals_report_cmd)
 
     parser_test_tools = subparsers.add_parser(
         "test-tools",

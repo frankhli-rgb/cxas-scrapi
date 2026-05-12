@@ -4,10 +4,6 @@
 
 - [Round 1: The Big Picture](#round-1-the-big-picture)
 - [Round 2: Write the Technical Design Document (TDD)](#round-2-write-the-technical-design-document-tdd)
-  - [Agent Design](#agent-design)
-  - [Eval Design](#eval-design)
-  - [Build Steps](#build-steps)
-- [Keeping the TDD Current](#keeping-the-tdd-current)
 - [Golden vs Scenario Decision](#golden-vs-scenario-decision)
 - [Golden Design Principles](#golden-design-principles)
 
@@ -19,52 +15,20 @@
 2. **Modality** -- Voice/audio or text? This determines the model:
    - **Audio/voice**: `gemini-3.1-flash-live` (streaming, real-time voice)
    - **Text**: `gemini-3-flash` (text-only, lower latency)
+   - **If voice:** Ask about speaking rate requirements. The default tempo can feel slow for some use cases. Set `speakingRate` in the Console's voice config rather than relying on prompt instructions — natural language pacing guidance is unreliable (see `references/gecx-design-guide.md` → Speech Rate and Pacing).
 3. **Requirements source** -- Ask for the PRD, spec doc, or requirements. Can be a file path, URL, or pasted text. If they don't have a formal doc, interview them to build one.
 4. **Existing resources** -- Do they have sample conversations, mock data, customer profiles, or an existing agent to reference?
+5. **Multilingual requirements** -- Does this agent need to support more than one language?
+   - **Which languages?** (e.g., English + German, English + Spanish)
+   - **Switching mode:** Should switching be **explicit-only** (user must say "speak German") or **auto-detected** (agent detects from utterance)? **Default to explicit-only** -- auto-detection is non-deterministic on `gemini-3.1-flash-live` and is not recommended for production (b/484305525).
+   - **Datastore language:** Is the knowledge base / datastore in a different language than the agent instructions? If yes, the translate-around-tool-calls pattern is required (see `references/gecx-design-guide.md` → Multilingual Agents).
+   - **Voice persona:** Is there a specific approved voice? Non-default voices have a known issue where additional languages revert to the default voice. Re-saving app voice settings in the Console fixes this (see `references/gecx-design-guide.md` → Voice / Audio).
 
 ## Round 2: Write the Technical Design Document (TDD)
 
-After gathering requirements, write a TDD to `tdd.md` in the project root. This is a **living document** -- it persists as the source of truth for the agent architecture and eval coverage. When requirements change later, the TDD is updated first, then evals are updated to match.
-
-Ask the user to review and approve the TDD before building anything.
-
-### Agent Design
-1. **Agent architecture** -- root agent + sub-agents, what each one handles
-2. **Tools needed** -- knowledge base, API connectors, session tools (with tool names and types)
-3. **Routing logic** -- how customers get routed (auth status, issue type, etc.)
-4. **Variables** -- what session variables are needed and where they come from
-5. **Callbacks** -- before/after agent callbacks for setup logic (auth, profile lookup)
-
-### Eval Design
-For each requirement in the PRD:
-1. **Eval type** -- golden or scenario (with rationale)
-2. **What it tests** -- the specific behavior being verified
-3. **Priority and severity** -- P0/P1/P2, NO-GO/HIGH/MEDIUM/LOW
-4. **Session parameters** -- which customer profile, what variables
-5. **For goldens** -- summary of the ideal conversation flow
-6. **For scenarios** -- task description, max turns, LLM expectations
-7. **Tool tests** -- which tools need isolated tests and what to assert
-8. **Callback tests** -- which callbacks need tests and what logic paths to cover
-9. **Tags** -- for filtering (category, PRD ID, priority)
-
-### Build Steps
-Numbered list of exactly what will be created, in order:
-1. App + agents with instructions
-2. Tools + tool configurations
-3. Variables
-4. Callbacks
-5. Golden YAML files
-6. Scenario YAML entries
-7. Simulation YAML entries
-8. Tool test YAML files
-9. Callback test files (python_code.py + test.py)
-10. Initial eval run
+After gathering requirements, write the TDD following `references/tdd-guide.md` -> "Generating from Requirements". The TDD covers agent architecture (agents, tools, routing, variables, callbacks) and eval design (coverage map, test data, build steps).
 
 **Wait for user approval before proceeding.** The user may want to adjust the architecture, add/remove evals, change priorities, or modify the routing logic. Don't build anything until the TDD is approved.
-
-## Keeping the TDD Current
-
-Keep the TDD in sync with reality. When requirements, agent behavior, or evals change, update the TDD first, then update evals to match. Hooks remind you to update the TDD after pushing changes.
 
 ## Golden vs Scenario Decision
 
