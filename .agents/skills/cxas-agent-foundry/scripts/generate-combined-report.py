@@ -38,6 +38,8 @@ from cxas_scrapi.utils.reporting import (
 )
 
 REPORTS_DIR = get_project_path("eval-reports")
+
+USER_AGENT_EXTENSION = "skill/cxas-agent-foundry/generate-combined-report"
 SIM_EVALS_YAML = get_project_path("evals", "simulations", "simulations.yaml")
 
 
@@ -112,7 +114,7 @@ def main():
         golden_results = load_golden_results(
             args.golden_run,
             args.app_name,
-            user_agent_extension="skill/cxas-agent-foundry/generate-combined-report",
+            user_agent_extension=USER_AGENT_EXTENSION,
         )
         print(f"  {len(golden_results)} golden results")
 
@@ -157,7 +159,7 @@ def main():
         golden_modality=args.golden_modality,
         sim_modality=args.sim_modality,
         sim_wall_clock_s=sim_wall_clock_s,
-        user_agent_extension="skill/cxas-agent-foundry/generate-combined-report",
+        user_agent_extension=USER_AGENT_EXTENSION,
     )
     print(f"\nReport: {output_path}")
 

@@ -30,6 +30,8 @@ import textwrap
 
 from config import load_app_name
 
+USER_AGENT_EXTENSION = "skill/cxas-agent-foundry/inspect-app"
+
 
 def inspect(app_name, verbose=False):
     """Inspect app and return structured data."""
@@ -44,7 +46,7 @@ def inspect(app_name, verbose=False):
     location = parts[3]
 
     # App
-    apps = Apps(project_id=project, location=location, user_agent_extension="skill/cxas-agent-foundry/inspect-app")
+    apps = Apps(project_id=project, location=location, user_agent_extension=USER_AGENT_EXTENSION)
     try:
         app = apps.get_app(app_name=app_name)
     except Exception as e:
@@ -73,14 +75,14 @@ def inspect(app_name, verbose=False):
         }
 
     # Agents
-    agents_client = Agents(app_name=app_name, user_agent_extension="skill/cxas-agent-foundry/inspect-app")
+    agents_client = Agents(app_name=app_name, user_agent_extension=USER_AGENT_EXTENSION)
     try:
         agent_list = agents_client.list_agents()
     except Exception as e:
         print(f"Error: Failed to list agents: {e}")
         agent_list = []
 
-    callbacks_client = Callbacks(app_name=app_name, user_agent_extension="skill/cxas-agent-foundry/inspect-app")
+    callbacks_client = Callbacks(app_name=app_name, user_agent_extension=USER_AGENT_EXTENSION)
 
     for agent in agent_list:
         agent_info = {
@@ -118,7 +120,7 @@ def inspect(app_name, verbose=False):
         result["agents"].append(agent_info)
 
     # Tools
-    tools_client = Tools(app_name=app_name, user_agent_extension="skill/cxas-agent-foundry/inspect-app")
+    tools_client = Tools(app_name=app_name, user_agent_extension=USER_AGENT_EXTENSION)
     try:
         tools_map = tools_client.get_tools_map()
         for display_name, tool in tools_map.items():
@@ -132,7 +134,7 @@ def inspect(app_name, verbose=False):
         result["tools_error"] = str(e)
 
     # Existing evals
-    evals_client = Evaluations(app_name=app_name, user_agent_extension="skill/cxas-agent-foundry/inspect-app")
+    evals_client = Evaluations(app_name=app_name, user_agent_extension=USER_AGENT_EXTENSION)
     try:
         evals_list = evals_client.list_evaluations()
         for ev in evals_list:
