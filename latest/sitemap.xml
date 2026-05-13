@@ -201,6 +201,34 @@
          <lastmod>2026-05-13</lastmod>
     </url>
     <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/design-guide/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/design-guide/agent-architecture/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/design-guide/callbacks/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/design-guide/error-handling/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/design-guide/instruction-design/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/design-guide/tool-design/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/design-guide/variables/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
          <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/getting-started/</loc>
          <lastmod>2026-05-13</lastmod>
     </url>
@@ -334,6 +362,30 @@
     </url>
     <url>
          <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/includes/abbreviations/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/patterns/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/patterns/dynamic-prompting/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/patterns/self-healing/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/patterns/slot-filling/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/tutorials/</loc>
+         <lastmod>2026-05-13</lastmod>
+    </url>
+    <url>
+         <loc>https://googlecloudplatform.github.io/cxas-scrapi/latest/tutorials/restaurant-reservation/</loc>
          <lastmod>2026-05-13</lastmod>
     </url>
 </urlset>
