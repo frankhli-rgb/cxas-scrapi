@@ -108,8 +108,7 @@ def test_guardrail_execution_flow(
     # Verify second test passed its evaluation logic
     # (Expects None, actually got None)
     assert results_df.iloc[1]["pass"]
-    actual_name = results_df.iloc[1]["actual_guardrail_name"]
-    assert actual_name is None or pd.isna(actual_name)
+    assert pd.isna(results_df.iloc[1]["actual_guardrail_name"])
 
     # Test the reporting functionality
     summary_df = guard_utils.generate_report(results_df)
