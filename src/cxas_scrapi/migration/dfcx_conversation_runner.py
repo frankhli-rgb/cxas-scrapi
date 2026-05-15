@@ -181,9 +181,7 @@ class DFCXConversationRunner(BaseDFCXClient):
             )
         return results
 
-    def load_past_conversation(
-        self, conversation_id: str
-    ) -> ConversationTrace:
+    def load_past_conversation(self, conversation_id: str) -> ConversationTrace:
         """Replace `self.trace` with a recorded conversation from history.
 
         The conversation's stored interactions are decoded through the same
