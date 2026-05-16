@@ -41,7 +41,6 @@ import _prompts  # noqa: E402
 import _shared  # noqa: E402
 import _synthesis  # noqa: E402
 
-from cxas_scrapi.core.agents import Agents
 from cxas_scrapi.core.versions import Versions
 from cxas_scrapi.migration.dfcx_dep_analyzer import DependencyAnalyzer
 from cxas_scrapi.migration.integrity_checks import (
@@ -55,6 +54,9 @@ from cxas_scrapi.migration.structural_consolidator import (
     persist_grouping,
     root_group_name,
     validate_groupings,
+)
+from cxas_scrapi.migration.topology_wirer import (
+    delete_orphan_agents as _wire_delete_orphan_agents,
 )
 from cxas_scrapi.utils.gemini import GeminiGenerate
 
@@ -77,81 +79,45 @@ def _delete_orphan_agents(
     *,
     max_passes: int = 5,
 ) -> tuple[int, int]:
-    """Delete every CXAS agent under `app_resource_name` whose resource name
-    is NOT in `keep_resources`.
+    """Rich-progress wrapper around
+    :func:`cxas_scrapi.migration.topology_wirer.delete_orphan_agents`."""
 
-    CXAS rejects deleting an agent that is still listed as a child of another
-    agent. We do up to `max_passes` iterations: each pass deletes whatever
-    is currently a leaf (no longer referenced as a child by any remaining
-    orphan), which then exposes new leaves on the next pass. Stops early
-    once a pass makes no progress.
-
-    Returns (total_deleted, remaining_undeletable).
-    """
-    try:
-        agents_client = Agents(app_name=app_resource_name)
-    except Exception as exc:  # noqa: BLE001
-        console.print(f"[yellow]Could not init Agents client: {exc}[/]")
-        return 0, 0
-
-    total_deleted = 0
-    pass_num = 0
-    while pass_num < max_passes:
-        pass_num += 1
-        try:
-            live_agents = agents_client.list_agents()
-        except Exception as exc:  # noqa: BLE001
-            console.print(f"[yellow]list_agents failed mid-cleanup: {exc}[/]")
-            break
-
-        orphans = [a for a in live_agents if a.name not in keep_resources]
-        if not orphans:
-            if pass_num == 1:
-                console.print("[green]No orphan agents to delete.[/]")
-            break
-
-        if pass_num == 1:
+    def _progress(event: str, payload) -> None:
+        if event == "init_failed":
             console.print(
-                f"[cyan]Deleting up to {len(orphans)} orphan agents from the "
-                "1:1 migration…[/]"
+                f"[yellow]Could not init Agents client: {payload}[/]"
             )
-
-        deleted_this_pass = 0
-        failed_this_pass: list[tuple[str, str, str]] = []
-        for agent in orphans:
-            short = _short_id(agent.name)
-            try:
-                agents_client.delete_agent(agent_name=agent.name)
-                console.print(
-                    f"  [dim]pass {pass_num}: deleted[/] "
-                    f"{agent.display_name!r} ({short})"
-                )
-                deleted_this_pass += 1
-                total_deleted += 1
-            except Exception as exc:  # noqa: BLE001
-                msg = str(exc).splitlines()[0][:80]
-                failed_this_pass.append((agent.display_name, short, msg))
-
-        if deleted_this_pass == 0:
-            # No progress — remaining orphans likely cycle-linked. Surface
-            # the unique failure messages and stop.
-            n_failed = len(failed_this_pass)
+        elif event == "list_failed":
             console.print(
-                f"[yellow]Pass {pass_num}: no progress; {n_failed} "
-                "orphans remain undeletable.[/]"
+                f"[yellow]list_agents failed mid-cleanup: {payload}[/]"
             )
-            unique_msgs = {msg for _, _, msg in failed_this_pass}
-            for msg in unique_msgs:
+        elif event == "empty":
+            console.print("[green]No orphan agents to delete.[/]")
+        elif event == "pass_start":
+            console.print(
+                f"[cyan]Deleting up to {payload['count']} orphan agents "
+                "from the 1:1 migration…[/]"
+            )
+        elif event == "deleted":
+            console.print(
+                f"  [dim]pass {payload['pass']}: deleted[/] "
+                f"{payload['display_name']!r} ({payload['short']})"
+            )
+        elif event == "no_progress":
+            failed = payload["failed"]
+            console.print(
+                f"[yellow]Pass {payload['pass']}: no progress; "
+                f"{len(failed)} orphans remain undeletable.[/]"
+            )
+            for msg in {m for _, _, m in failed}:
                 console.print(f"  [dim]reason:[/] {msg}")
-            return total_deleted, len(failed_this_pass)
 
-    # Re-list to count whatever's left over after max_passes.
-    try:
-        live_agents = agents_client.list_agents()
-        remaining = sum(1 for a in live_agents if a.name not in keep_resources)
-    except Exception:  # noqa: BLE001
-        remaining = 0
-    return total_deleted, remaining
+    return _wire_delete_orphan_agents(
+        app_resource_name,
+        keep_resources,
+        max_passes=max_passes,
+        progress=_progress,
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
