@@ -33,6 +33,8 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import re as _re
+
 import _bundle  # noqa: E402
 import _grouping  # noqa: E402
 import _optimizer_runner  # noqa: E402
@@ -42,21 +44,23 @@ import _shared  # noqa: E402
 import _synthesis  # noqa: E402
 
 from cxas_scrapi.core.agents import Agents
+from cxas_scrapi.core.tools import Tools
 from cxas_scrapi.core.versions import Versions
 from cxas_scrapi.migration.data_models import MigrationIR
 from cxas_scrapi.migration.dfcx_dep_analyzer import DependencyAnalyzer
+from cxas_scrapi.migration.eval_generator import DeterministicEvalGenerator
 from cxas_scrapi.migration.service import MigrationService
 from cxas_scrapi.migration.structural_consolidator import (
     AGENT_REF_RE,
     SENTINEL_REFS,
     StructuralConsolidator,
     detect_root_key,
+    load_grouping,
     persist_grouping,
     root_group_name,
+    validate_groupings,
 )
 from cxas_scrapi.utils.gemini import GeminiGenerate
-
-import re as _re
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -76,7 +80,9 @@ _TOOL_REF_RE = _re.compile(r"\{@TOOL:\s*([^}]+)\}")
 
 def _short_id(resource_name: str) -> str:
     return (
-        resource_name.split("/")[-1] if "/" in resource_name else resource_name
+        resource_name.rsplit("/", maxsplit=1)[-1]
+        if "/" in resource_name
+        else resource_name
     )
 
 
@@ -130,17 +136,13 @@ def _check_consolidation_integrity(
 
         # 3. {@TOOL: name} refs in the instruction
         instruction = agent.instruction or ""
-        for tool_name in _TOOL_REF_RE.findall(instruction):
-            tool_name = tool_name.strip()
+        for raw_tool_ref in _TOOL_REF_RE.findall(instruction):
+            tool_name = raw_tool_ref.strip()
             if tool_name in {"end_session"}:  # sentinel — auto-registered
                 continue
-            if (
-                tool_name not in available_tool_ids
-                and not any(
-                    _short_id(t.name) == tool_name
-                    or t.id == tool_name
-                    for t in current_ir.tools.values()
-                )
+            if tool_name not in available_tool_ids and not any(
+                _short_id(t.name) == tool_name or t.id == tool_name
+                for t in current_ir.tools.values()
             ):
                 blocking.append(
                     f"Group {group_name!r} instruction has "
@@ -244,8 +246,9 @@ def _delete_orphan_agents(
         if deleted_this_pass == 0:
             # No progress — remaining orphans likely cycle-linked. Surface
             # the unique failure messages and stop.
+            n_failed = len(failed_this_pass)
             console.print(
-                f"[yellow]Pass {pass_num}: no progress; {len(failed_this_pass)} "
+                f"[yellow]Pass {pass_num}: no progress; {n_failed} "
                 "orphans remain undeletable.[/]"
             )
             unique_msgs = {msg for _, _, msg in failed_this_pass}
@@ -264,7 +267,10 @@ def _delete_orphan_agents(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Stage 1: variable dedup + optional Gemini consolidation. Loads <target>_ir.json.",
+        description=(
+            "Stage 1: variable dedup + optional Gemini consolidation. "
+            "Loads <target>_ir.json."
+        ),
         formatter_class=argparse.RawTextHelpFormatter,
     )
     src = p.add_mutually_exclusive_group()
@@ -292,7 +298,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--gemini-model",
         default="gemini-3.1-pro-preview",
-        help="Model for the grouping proposal (default: gemini-3.1-pro-preview)",
+        help=(
+            "Model for the grouping proposal (default: gemini-3.1-pro-preview)"
+        ),
     )
     p.add_argument(
         "--grouping-json",
@@ -324,16 +332,12 @@ def _restore_service(bundle: _bundle.IRBundle, args) -> MigrationService:
     `_deploy_pending_agents(is_update_pass=True)` can run without going through
     a full `run_migration` cycle:
 
-      * `deployment_state` — tells the service the app + vars are already deployed.
+      * `deployment_state` — tells the service the app + vars exist.
       * `ps_agents` / `ps_tools` — the per-app clients (normally created
         AFTER the app exists, inside run_migration). Must be initialized
         here pointing at the existing app.
       * `eval_generator` — used by Stage 2's unit test regeneration.
     """
-    from cxas_scrapi.core.agents import Agents
-    from cxas_scrapi.core.tools import Tools
-    from cxas_scrapi.migration.eval_generator import DeterministicEvalGenerator
-
     project_id = args.project_id or bundle.config.project_id
     location = args.location or _resolve_location_from_bundle(bundle)
     service = MigrationService(
@@ -391,7 +395,9 @@ async def _run(args) -> None:
     started_at = datetime.now()
 
     # ---- Stage 1A: variable dedup --------------------------------------
-    with tracker.phase("Stage 1 — variable dedup", "CXASOptimizer.optimize_stage1"):
+    with tracker.phase(
+        "Stage 1 — variable dedup", "CXASOptimizer.optimize_stage1"
+    ):
         try:
             stage1_optimizer = await _optimizer_runner.run_stage_with_redeploy(
                 service, stage=1, console=console
@@ -422,21 +428,15 @@ async def _run(args) -> None:
                     service.ir, gemini, service.source_agent_data
                 )
 
-                root_key = detect_root_key(service.ir, service.source_agent_data)
+                root_key = detect_root_key(
+                    service.ir, service.source_agent_data
+                )
                 analyzer = DependencyAnalyzer(service.source_agent_data)
                 dep_summary = _shared.build_dep_summary(analyzer, service.ir)
 
                 if args.grouping_json:
                     console.print(f"Loading grouping from {args.grouping_json}")
-                    from cxas_scrapi.migration.structural_consolidator import (
-                        load_grouping,
-                    )
-
                     groupings = load_grouping(args.grouping_json)
-                    from cxas_scrapi.migration.structural_consolidator import (
-                        validate_groupings,
-                    )
-
                     validate_groupings(service.ir, groupings, root_key)
                 else:
                     groupings = await consolidator.propose_groupings(
@@ -456,7 +456,8 @@ async def _run(args) -> None:
                     )
                     if result is None:
                         console.print(
-                            "[yellow]Consolidation aborted; keeping post-Stage-1 IR.[/]"
+                            "[yellow]Consolidation aborted; "
+                            "keeping post-Stage-1 IR.[/]"
                         )
                         optimized_ir = None
                     else:
@@ -466,15 +467,19 @@ async def _run(args) -> None:
                     grouping_path = persist_grouping(
                         groupings, f"{target_name}_grouping.json"
                     )
-                    console.print(f"[green]Grouping persisted → {grouping_path}[/]")
+                    console.print(
+                        f"[green]Grouping persisted → {grouping_path}[/]"
+                    )
                     _bundle.attach_grouping(bundle, groupings)
 
                     # Snapshot the original 1:1 IR before mutation. Persisted
                     # in the bundle so the post-migrate state survives even
                     # after consolidation collapses N agents into M groups.
-                    bundle.pre_consolidation_ir = service.ir.model_copy(deep=True)
+                    bundle.pre_consolidation_ir = service.ir.model_copy(
+                        deep=True
+                    )
 
-                    statuses = await _synthesis.synthesize_instructions_for_ir(
+                    await _synthesis.synthesize_instructions_for_ir(
                         optimized_ir, service, groupings, console
                     )
 
@@ -508,7 +513,9 @@ async def _run(args) -> None:
 
                     # Push the consolidated agents
                     service.ir.agents = optimized_ir.agents
-                    console.print("[cyan]Pushing consolidated agents to CXAS…[/]")
+                    console.print(
+                        "[cyan]Pushing consolidated agents to CXAS…[/]"
+                    )
                     await service._deploy_base_resources(is_update_pass=True)
                     await service._deploy_pending_agents(is_update_pass=True)
 

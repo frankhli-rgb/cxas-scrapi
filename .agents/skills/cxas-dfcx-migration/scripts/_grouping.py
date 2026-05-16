@@ -22,7 +22,6 @@ All consolidation/grouping logic lives in
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from InquirerPy import inquirer
@@ -42,14 +41,12 @@ from cxas_scrapi.migration.structural_consolidator import (
     root_group_name,
     validate_groupings,
 )
-from cxas_scrapi.utils.gemini import GeminiGenerate
 
 # Re-export the symbols other skill modules already import.
 __all__ = [
     "GROUP_NAME_RE",
     "StructuralConsolidator",
     "consolidate",
-    "consolidate_ir",  # backcompat alias
     "detect_root_key",
     "interactive_review",
     "load_grouping",
@@ -64,23 +61,23 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-# Backcompat alias for old optimize_migration.py callers.
-consolidate_ir = consolidate
-
-
 # ---------------------------------------------------------------------------
 # Rich tree rendering
 # ---------------------------------------------------------------------------
 
 
 def _short_id(resource_name: str) -> str:
-    return resource_name.split("/")[-1] if "/" in resource_name else resource_name
+    return (
+        resource_name.rsplit("/", maxsplit=1)[-1]
+        if "/" in resource_name
+        else resource_name
+    )
 
 
 def render_ir_tree(
     ir: MigrationIR, title: str, root_key: str | None = None
 ) -> Tree:
-    """Build a Rich Tree showing every agent with its tools/toolsets/callbacks."""
+    """Build a Rich Tree of every agent + its tools/toolsets/callbacks."""
     root_label = (
         f"[bold]{title}[/]  ({len(ir.agents)} agents, {len(ir.tools)} tools)"
     )
@@ -157,11 +154,15 @@ def render_diff(
 def _merge_groups(groupings: dict, console: Console) -> dict:
     names = list(groupings.keys())
     choices = [
-        Choice(value=i, name=f"{n} ({len(groupings[n].get('agents', []))} agents)")
+        Choice(
+            value=i, name=f"{n} ({len(groupings[n].get('agents', []))} agents)"
+        )
         for i, n in enumerate(names)
     ]
     selected = inquirer.checkbox(
-        message="Pick groups to merge (Space to toggle, Enter to confirm; need ≥2):",
+        message=(
+            "Pick groups to merge (Space to toggle, Enter to confirm; need ≥2):"
+        ),
         choices=choices,
         validate=lambda r: len(r) >= 2 or "Pick at least 2 groups",
     ).execute()
@@ -198,13 +199,18 @@ def _split_group(ir: MigrationIR, groupings: dict, console: Console) -> dict:
     target = inquirer.select(
         message="Group to split:",
         choices=[
-            Choice(value=n, name=f"{n} ({len(groupings[n].get('agents', []))} agents)")
+            Choice(
+                value=n,
+                name=f"{n} ({len(groupings[n].get('agents', []))} agents)",
+            )
             for n in names
         ],
     ).execute()
     members = groupings[target].get("agents", [])
     if len(members) < 2:
-        console.print("[yellow]Group has fewer than 2 members; cannot split.[/]")
+        console.print(
+            "[yellow]Group has fewer than 2 members; cannot split.[/]"
+        )
         return groupings
     moving_choices = [
         Choice(value=m, name=f"{m} ('{ir.agents[m].display_name}')")
@@ -213,13 +219,14 @@ def _split_group(ir: MigrationIR, groupings: dict, console: Console) -> dict:
     moving = inquirer.checkbox(
         message="Members to MOVE to a new group:",
         choices=moving_choices,
-        validate=lambda r: 0 < len(r) < len(members)
-        or "Pick a strict subset",
+        validate=lambda r: 0 < len(r) < len(members) or "Pick a strict subset",
     ).execute()
     new_name = inquirer.text(
         message="Name for new group:",
-        validate=lambda v: (bool(GROUP_NAME_RE.match(v)) and v not in groupings)
-        or "Invalid or duplicate name",
+        validate=lambda v: (
+            (bool(GROUP_NAME_RE.match(v)) and v not in groupings)
+            or "Invalid or duplicate name"
+        ),
     ).execute()
 
     new_groupings = {k: dict(v) for k, v in groupings.items()}
@@ -241,8 +248,10 @@ def _rename_group(groupings: dict, console: Console) -> dict:
     ).execute()
     new_name = inquirer.text(
         message="New name:",
-        validate=lambda v: (bool(GROUP_NAME_RE.match(v)) and v not in groupings)
-        or "Invalid or duplicate name",
+        validate=lambda v: (
+            (bool(GROUP_NAME_RE.match(v)) and v not in groupings)
+            or "Invalid or duplicate name"
+        ),
     ).execute()
     return {(new_name if k == old else k): v for k, v in groupings.items()}
 
@@ -304,20 +313,3 @@ async def interactive_review(
             groupings = _split_group(ir, groupings, console)
         elif action == "rename":
             groupings = _rename_group(groupings, console)
-
-
-# ---------------------------------------------------------------------------
-# Backcompat function for old callers
-# ---------------------------------------------------------------------------
-
-
-async def propose_groupings(
-    ir: MigrationIR,
-    gemini: GeminiGenerate,
-    root_key: str | None,
-    dep_summary: dict[str, Any] | None = None,
-    feedback: str | None = None,
-) -> dict[str, dict[str, Any]]:
-    """Backcompat helper for the legacy `optimize_migration.py` orchestrator."""
-    consolidator = StructuralConsolidator(ir, gemini)
-    return await consolidator.propose_groupings(root_key, dep_summary, feedback)

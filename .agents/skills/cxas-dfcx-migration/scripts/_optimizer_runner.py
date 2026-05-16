@@ -52,9 +52,7 @@ async def run_stage1(
     before = len(ir.parameters)
     await optimizer.optimize_stage1()
     after = len(ir.parameters)
-    console.print(
-        f"[green]Stage 1 complete:[/] parameters {before} → {after}"
-    )
+    console.print(f"[green]Stage 1 complete:[/] parameters {before} → {after}")
     _print_logs(optimizer, "Stage 1", console)
     return optimizer
 
@@ -86,7 +84,9 @@ def merge_optimizer_logs_into_ir(
     if optimizer is None or not optimizer.optimization_logs:
         return
     ir.optimization_logs.setdefault("stages", {})
-    ir.optimization_logs["stages"][stage_label] = list(optimizer.optimization_logs)
+    ir.optimization_logs["stages"][stage_label] = list(
+        optimizer.optimization_logs
+    )
 
 
 async def run_stage_with_redeploy(

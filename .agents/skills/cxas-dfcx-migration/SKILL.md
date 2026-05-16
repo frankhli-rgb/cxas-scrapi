@@ -121,7 +121,7 @@ Skill-local helpers (TUI / persistence / formatting only):
 - `_optimizer_runner.py` — `run_stage_with_redeploy(service, stage)` helper (Stage N + update-pass redeploys).
 - `_lint.py` — `cxas pull` + `cxas lint` post-deploy.
 - `_reporter.py` — `OptimizationReporter` audit markdown.
-- `_shared.py` — auth check, dependency analysis, project/location prompt wiring.
+- `_shared.py` — **delegates to `MigrationCLI`** for `check_auth`, `display_status`, `run_dependency_analysis`, `select_resources`, `show_visualizations`. Skill-specific reimplementation only for: project + location prompts upfront (CLI doesn't ask), source loading via InquirerPy (CLI version is inline + uses rich.Prompt), `MigrationConfig` assembly that interleaves InquirerPy prompts with CLI flag overrides.
 
 ## IR bundle (`<target>_ir.json`)
 
@@ -148,17 +148,13 @@ Killing a stage script mid-run leaves the bundle untouched (only persisted on su
 
 ## Pre-flight HTML preview
 
-Both `migrate.py` and the legacy optimization paths generate `<target>_tree_preview.html` in ~5 seconds after source loading. Open it in any browser to see:
+`migrate.py` generates `<target>_tree_preview.html` in ~5 seconds after source loading. Open it in any browser to see:
 
 - Source overview (resource counts, estimated migration time).
 - Topology graph (graphviz SVG when `dot` is on PATH; Mermaid fallback otherwise).
 - Per-playbook and per-flow Rich trees.
 
 `migrate.py --preview-only` exits after the preview without running the migration.
-
-## Deprecated
-
-`run_migration.py` and `optimize_migration.py` are kept for one release cycle as `*_legacy.py`. They print a deprecation warning on import. Migrate any external callers to `migrate.py` / `stage1.py` / `stage2.py`.
 
 ## Troubleshooting
 

@@ -50,12 +50,14 @@ async def synthesize_instructions_for_ir(
     *,
     per_group_timeout_s: int | None = None,
 ) -> dict[str, str]:
-    """Backcompat wrapper around `StructuralConsolidator.synthesize_instructions`.
+    """Wrapper around `StructuralConsolidator.synthesize_instructions`.
 
     Returns the per-group status dict so the caller can surface failures.
     """
     console.print("\n[bold cyan]Synthesizing consolidated instructions…[/]")
-    timeout = per_group_timeout_s or int(os.environ.get("SYNTHESIS_TIMEOUT_S", 600))
+    timeout = per_group_timeout_s or int(
+        os.environ.get("SYNTHESIS_TIMEOUT_S", "600")
+    )
     consolidator = StructuralConsolidator(
         service.ir, service.gemini_client, service.source_agent_data
     )
@@ -76,9 +78,7 @@ async def synthesize_instructions_for_ir(
                 "(kept fallback)"
             )
         else:
-            console.print(
-                f"  [red]✗[/] {group} — {status} (kept fallback)"
-            )
+            console.print(f"  [red]✗[/] {group} — {status} (kept fallback)")
     return statuses
 
 
@@ -91,11 +91,14 @@ def _truncate(text: str, max_lines: int = 80) -> str:
     lines = (text or "").splitlines()
     if len(lines) <= max_lines:
         return text or ""
-    return "\n".join(lines[:max_lines]) + f"\n… ({len(lines) - max_lines} more lines)"
+    return (
+        "\n".join(lines[:max_lines])
+        + f"\n… ({len(lines) - max_lines} more lines)"
+    )
 
 
 def _open_in_editor(initial_text: str) -> str:
-    """Open $EDITOR (falls back to vi) on a temp file. Returns the saved text."""
+    """Open $EDITOR (or vi) on a temp file. Returns the saved text."""
     editor = os.environ.get("EDITOR", "vi")
     with tempfile.NamedTemporaryFile(
         mode="w+", suffix=".xml", delete=False
@@ -125,7 +128,7 @@ async def _resynthesize_one(
     statuses = await consolidator.synthesize_instructions(
         ir,
         {group_name: groupings[group_name]},
-        per_group_timeout_s=int(os.environ.get("SYNTHESIS_TIMEOUT_S", 600)),
+        per_group_timeout_s=int(os.environ.get("SYNTHESIS_TIMEOUT_S", "600")),
     )
     return statuses.get(group_name, "unknown")
 
@@ -159,8 +162,12 @@ async def interactive_synthesis_review(
             choices=[
                 Choice(value="accept", name="[a]ccept all and continue"),
                 Choice(value="view", name="[v]iew a group's instruction"),
-                Choice(value="edit", name="[e]dit a group's instruction in $EDITOR"),
-                Choice(value="resynth", name="[r]e-synthesize a group via Gemini"),
+                Choice(
+                    value="edit", name="[e]dit a group's instruction in $EDITOR"
+                ),
+                Choice(
+                    value="resynth", name="[r]e-synthesize a group via Gemini"
+                ),
             ],
             default="accept",
         ).execute()

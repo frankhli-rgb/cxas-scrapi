@@ -42,6 +42,8 @@ import _prompts  # noqa: E402
 import _reporter  # noqa: E402
 import _shared  # noqa: E402
 
+from cxas_scrapi.core.agents import Agents
+from cxas_scrapi.core.tools import Tools
 from cxas_scrapi.core.versions import Versions
 from cxas_scrapi.migration.eval_generator import DeterministicEvalGenerator
 from cxas_scrapi.migration.service import MigrationService
@@ -52,12 +54,16 @@ console = Console()
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Stage 2: instruction state machines + tool mocks + lint + report.",
+        description=(
+            "Stage 2: instruction state machines + tool mocks + lint + report."
+        ),
         formatter_class=argparse.RawTextHelpFormatter,
     )
     src = p.add_mutually_exclusive_group()
     src.add_argument("--ir-bundle", help="Path to <target>_ir.json")
-    src.add_argument("--target-name", help="Resolves to <target>_ir.json in cwd")
+    src.add_argument(
+        "--target-name", help="Resolves to <target>_ir.json in cwd"
+    )
     p.add_argument("--project-id", help="Override bundle project ID")
     p.add_argument("--location", help="Override bundle location")
 
@@ -94,11 +100,7 @@ def _resolve_bundle_path(args) -> str:
 
 def _restore_service(bundle: _bundle.IRBundle, args) -> MigrationService:
     """Recreate a MigrationService from a persisted IR bundle. See stage1.py
-    `_restore_service` for the full list of attributes initialized here and why."""
-    from cxas_scrapi.core.agents import Agents
-    from cxas_scrapi.core.tools import Tools
-    from cxas_scrapi.migration.eval_generator import DeterministicEvalGenerator
-
+    `_restore_service` for the attributes initialized here and why."""
     project_id = args.project_id or bundle.config.project_id
     location = args.location or _resolve_location_from_bundle(bundle)
     service = MigrationService(
@@ -176,7 +178,9 @@ async def _run(args) -> None:
             try:
                 Versions(service.ir.metadata.app_resource_name).create_version(
                     display_name="0.0.2",
-                    description="Stage 2: instruction state machines + tool mocks",
+                    description=(
+                        "Stage 2: instruction state machines + tool mocks"
+                    ),
                 )
                 _bundle.attach_version(
                     bundle,
@@ -260,9 +264,7 @@ async def _run(args) -> None:
                 report_path = reporter.export(
                     f"{target_name}_optimization_report.md"
                 )
-                console.print(
-                    f"[green]Optimization report → {report_path}[/]"
-                )
+                console.print(f"[green]Optimization report → {report_path}[/]")
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Report generation failed: %s", exc)
 
@@ -275,7 +277,13 @@ async def _run(args) -> None:
         started_at,
         notes=(
             "Stage 2 complete; "
-            + ("lint passed" if lint_passed else "lint had issues" if lint_passed is False else "lint skipped")
+            + (
+                "lint passed"
+                if lint_passed
+                else "lint had issues"
+                if lint_passed is False
+                else "lint skipped"
+            )
         ),
     )
     _bundle.save(bundle, bundle_path)

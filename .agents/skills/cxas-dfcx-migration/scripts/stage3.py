@@ -58,6 +58,7 @@ import _shared  # noqa: E402
 import stage1 as _stage1  # noqa: E402  (reuses _restore_service)
 
 from cxas_scrapi.core.agents import Agents
+from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.migration.dfcx_dep_analyzer import DependencyAnalyzer
 from cxas_scrapi.migration.structural_consolidator import (
     member_to_group_map,
@@ -83,7 +84,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     src = p.add_mutually_exclusive_group()
     src.add_argument("--ir-bundle", help="Path to <target>_ir.json")
-    src.add_argument("--target-name", help="Resolves to <target>_ir.json in cwd")
+    src.add_argument(
+        "--target-name", help="Resolves to <target>_ir.json in cwd"
+    )
     p.add_argument("--project-id", help="Override bundle project ID")
     p.add_argument("--location", help="Override bundle location")
     mode = p.add_mutually_exclusive_group()
@@ -111,12 +114,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print the proposed parent → children mapping without applying it.",
+        help=("Print the proposed parent → children mapping without applying."),
     )
     p.add_argument(
         "--no-set-root",
         action="store_true",
-        help="Skip resetting the app's root_agent (leave whatever's currently set).",
+        help=("Skip resetting the app's root_agent (keep whatever is set)."),
     )
     p.add_argument("--yes", "-y", action="store_true", help="Non-interactive.")
     return p
@@ -141,7 +144,9 @@ def _resolve_bundle_path(args) -> str:
 
 def _short(resource_name: str) -> str:
     return (
-        resource_name.split("/")[-1] if "/" in resource_name else resource_name
+        resource_name.rsplit("/", maxsplit=1)[-1]
+        if "/" in resource_name
+        else resource_name
     )
 
 
@@ -197,7 +202,9 @@ def _build_raw_source_edges(
             if not member_resource:
                 agent = pre_ir.agents.get(member_key)
                 if agent:
-                    member_resource = display_to_resource.get(agent.display_name)
+                    member_resource = display_to_resource.get(
+                        agent.display_name
+                    )
             if not member_resource:
                 continue
 
@@ -213,9 +220,7 @@ def _build_raw_source_edges(
     return edges
 
 
-def _has_path(
-    edges: dict[str, set[str]], src: str, dst: str
-) -> bool:
+def _has_path(edges: dict[str, set[str]], src: str, dst: str) -> bool:
     """Reachability check (BFS) — used by cycle breaker to test if adding
     src → dst would create a cycle (i.e. dst can already reach src)."""
     if src == dst:
@@ -353,9 +358,7 @@ def apply_topology(
             skipped += 1
             continue
         child_resources = [
-            group_resources[c]
-            for c in child_groups
-            if c in group_resources
+            group_resources[c] for c in child_groups if c in group_resources
         ]
         try:
             agents_client.update_agent(
@@ -363,7 +366,8 @@ def apply_topology(
                 child_agents=child_resources,
             )
             console.print(
-                f"  [green]updated[/] {parent} → {len(child_resources)} children"
+                f"  [green]updated[/] {parent} → "
+                f"{len(child_resources)} children"
             )
             updated += 1
         except Exception as exc:  # noqa: BLE001
@@ -392,8 +396,6 @@ def maybe_set_root(
         return
 
     try:
-        from cxas_scrapi.core.apps import Apps
-
         apps_client = Apps(
             project_id=bundle.config.project_id,
             location=_stage1._resolve_location_from_bundle(bundle),
@@ -403,7 +405,8 @@ def maybe_set_root(
             root_agent=agent.resource_name,
         )
         console.print(
-            f"[green]Set app start agent → {rg} ({_short(agent.resource_name)})[/]"
+            f"[green]Set app start agent → {rg} "
+            f"({_short(agent.resource_name)})[/]"
         )
     except Exception as exc:  # noqa: BLE001
         console.print(f"[yellow]Failed to set app root agent: {exc}[/]")
@@ -465,18 +468,14 @@ async def _run(args) -> None:
             "stage3",
             "ok" if failed == 0 else "partial",
             started_at,
-            notes=(
-                f"updated={updated} skipped={skipped} failed={failed}"
-            ),
+            notes=(f"updated={updated} skipped={skipped} failed={failed}"),
         )
         _bundle.save(bundle, bundle_path)
 
     console.print()
     console.print(tracker.summary_table())
     console.print("\n[bold green]Stage 3 complete.[/]")
-    console.print(
-        f"  • updated={updated}, skipped={skipped}, failed={failed}"
-    )
+    console.print(f"  • updated={updated}, skipped={skipped}, failed={failed}")
 
 
 def main() -> None:

@@ -57,7 +57,9 @@ class IRBundle(BaseModel):
     stage_history: list[StageHistoryEntry] = Field(default_factory=list)
     app_url: str | None = None
     version_checkpoints: list[tuple[str, str]] = Field(default_factory=list)
-    grouping: dict[str, Any] | None = None  # populated when Stage 1 consolidates
+    grouping: dict[str, Any] | None = (
+        None  # populated when Stage 1 consolidates
+    )
     # Snapshot of `ir` BEFORE consolidation mutated agents/tools, kept on disk
     # so the original 1:1 IR survives even after the consolidation flow
     # collapses N agents into M groups.
@@ -83,7 +85,9 @@ def save(bundle: IRBundle, path: str) -> str:
     return path
 
 
-def save_for_target(bundle: IRBundle, target_name: str, cwd: str | None = None) -> str:
+def save_for_target(
+    bundle: IRBundle, target_name: str, cwd: str | None = None
+) -> str:
     path = os.path.join(cwd or os.getcwd(), _bundle_filename(target_name))
     return save(bundle, path)
 

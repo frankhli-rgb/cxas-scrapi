@@ -6,31 +6,64 @@
 #
 #     https://www.apache.org/licenses/LICENSE-2.0
 
-"""Shared helpers used by both run_migration.py and optimize_migration.py."""
+"""Shared helpers for the cxas-dfcx-migration skill scripts.
+
+Where possible we DELEGATE to existing methods on
+`cxas_scrapi.cli.migration_cli.MigrationCLI` instead of reimplementing them:
+
+  * `auth_check`              → MigrationCLI.check_auth
+  * `display_status_table`    → MigrationCLI.display_status
+  * `run_dependency_analysis` → MigrationCLI.run_dependency_analysis
+  * `select_resources`        → MigrationCLI.select_resources
+  * `show_visualizations`     → MigrationCLI.show_visualizations
+
+What we KEEP skill-local because the CLI version has materially different
+behaviour we don't want:
+
+  * `load_source_agent_inquirer` — CLI's source-load flow lives inline inside
+    `MigrationCLI.run` (not exposed as a method) and uses rich.Prompt; our
+    version uses InquirerPy.
+  * `collect_migration_inputs` — `MigrationCLI.compose_config` doesn't ask
+    for `location` (silently hardcodes `us` deeper in the call), uses
+    rich.Prompt instead of InquirerPy, and conflates --gen-* CLI flags with
+    interactive prompts.
+"""
 
 from __future__ import annotations
 
+import functools
 import os
 import sys
 from datetime import datetime
 from typing import Any
 
+import _prompts  # InquirerPy-backed prompts (skill-local module)
 from rich.console import Console
 from rich.prompt import Prompt
-from rich.table import Table
 
-import _prompts  # InquirerPy-backed prompts (skill-local module)
-
+from cxas_scrapi.cli.migration_cli import MigrationCLI
 from cxas_scrapi.migration.config import AGENT_MODELS, DEFAULT_MODEL
 from cxas_scrapi.migration.data_models import DFCXAgentIR, MigrationIR
 from cxas_scrapi.migration.dfcx_dep_analyzer import DependencyAnalyzer
 from cxas_scrapi.migration.dfcx_exporter import ConversationalAgentsAPI
 
 
+@functools.lru_cache(maxsize=1)
+def _cli() -> MigrationCLI:
+    """Lazy-instantiate MigrationCLI once per process. Used to delegate the
+    presentation methods (auth, status table, dep analysis, resource picker,
+    visualization) instead of reimplementing them in this skill.
+
+    `MigrationCLI.__init__` calls `logging.basicConfig` which is idempotent
+    after the first call, so this is safe even when our scripts have already
+    set up logging."""
+    return MigrationCLI()
+
+
 def load_source_agent(
     args, console: Console
 ) -> tuple[DFCXAgentIR, str, ConversationalAgentsAPI]:
-    """Load source agent data from --source-agent-id, --zip-file, or interactive prompt.
+    """Load source agent data from --source-agent-id, --zip-file, or prompt.
 
     Returns (agent_data, agent_id, exporter).
     """
@@ -92,17 +125,14 @@ def collect_common_inputs(
     }
 
 
-def display_status_table(ir: MigrationIR, console: Console, title: str = "Resources Status") -> None:
-    """Render a Rich table of every tool and agent in the IR with its status."""
-    table = Table(title=title)
-    table.add_column("Type", style="cyan")
-    table.add_column("Name", style="magenta")
-    table.add_column("Status", style="green")
-    for tool in ir.tools.values():
-        table.add_row(tool.type, tool.id, tool.status.value)
-    for agent in ir.agents.values():
-        table.add_row(agent.type, agent.display_name, agent.status.value)
-    console.print(table)
+def display_status_table(
+    ir: MigrationIR, console: Console, title: str = "Resources Status"
+) -> None:
+    """Delegate to MigrationCLI.display_status (`title` is currently fixed
+    inside the CLI helper; preserved here for callsite ergonomics)."""
+    cli = _cli()
+    cli.console = console
+    cli.display_status(ir)
 
 
 def run_dependency_analysis(
@@ -110,40 +140,38 @@ def run_dependency_analysis(
     filtered_data: DFCXAgentIR,
     console: Console,
 ) -> tuple[DependencyAnalyzer, list[str], list[str]]:
-    """Run dependency analysis and print results.
+    """Delegate the printing to MigrationCLI.run_dependency_analysis, then
+    also build + return the analyzer + outgoing/incoming lists so downstream
+    callers (e.g. build_dep_summary) don't have to recompute them.
 
-    Returns (analyzer, outgoing_ids, incoming_ids).
+    The CLI method only prints; it doesn't return the structured result.
     """
+    cli = _cli()
+    cli.console = console
+    cli.run_dependency_analysis(full_data, filtered_data)
+
     analyzer = DependencyAnalyzer(full_data)
-
-    selected_ids: list[str] = []
-    for pb in filtered_data.playbooks:
-        selected_ids.append(pb.get("name"))
-    for flow in filtered_data.flows:
-        selected_ids.append(flow.flow_data.get("name"))
-
+    selected_ids: list[str] = [pb.get("name") for pb in filtered_data.playbooks]
+    selected_ids += [f.flow_data.get("name") for f in filtered_data.flows]
     outgoing, incoming = analyzer.get_impact(selected_ids)
-
-    if outgoing:
-        console.print("[yellow]Missing Dependencies (Outgoing):[/]")
-        console.print(
-            " The selected resources reference these items, "
-            "but they are NOT selected:"
-        )
-        for rid in outgoing:
-            det = analyzer.get_details(rid)
-            console.print(f"  - [{det['type']}] {det['name']}")
-    else:
-        console.print("[green]No missing dependencies detected.[/]")
-
-    if incoming:
-        console.print("\n[cyan]Incoming References:[/]")
-        console.print(" These unselected resources reference your selection:")
-        for rid in incoming:
-            det = analyzer.get_details(rid)
-            console.print(f"  - [{det['type']}] {det['name']}")
-
     return analyzer, outgoing, incoming
+
+
+def select_resources(agent_data: DFCXAgentIR, console: Console) -> DFCXAgentIR:
+    """Delegate to MigrationCLI.select_resources for the include/exclude
+    picker. (rich.Prompt-based; consistent with how `cxas migrate dfcx-cxas`
+    behaves.)"""
+    cli = _cli()
+    cli.console = console
+    return cli.select_resources(agent_data)
+
+
+def show_visualizations(prefix: str, console: Console) -> None:
+    """Delegate to MigrationCLI.show_visualizations — prints the SVG /
+    markdown paths that MainVisualizer.export_visualizations just wrote."""
+    cli = _cli()
+    cli.console = console
+    cli.show_visualizations(prefix)
 
 
 def build_dep_summary(
@@ -171,7 +199,10 @@ def build_dep_summary(
             for s in analyzer.reverse_graph.get(resource_id, set())
         )
         if outgoing or incoming:
-            summary[ir_key] = {"references": outgoing, "referenced_by": incoming}
+            summary[ir_key] = {
+                "references": outgoing,
+                "referenced_by": incoming,
+            }
     return summary
 
 
@@ -180,12 +211,11 @@ def build_dep_summary(
 # ---------------------------------------------------------------------------
 
 
-def prompt_project_and_location(
-    args, console: Console
-) -> tuple[str, str]:
+def prompt_project_and_location(args, console: Console) -> tuple[str, str]:
     """Ask for project_id + location upfront — the missing piece in the
     legacy skill. CLI flags (`--project-id`, `--location`) are honored as
-    defaults / overrides. Default location is `us` (matches `MigrationCLI.run`)."""
+    defaults / overrides. Default location is `us`
+    (matches `MigrationCLI.run`)."""
     project_id = getattr(args, "project_id", None)
     location = getattr(args, "location", None) or _prompts.DEFAULT_LOCATION
 
@@ -207,8 +237,8 @@ def prompt_project_and_location(
 def load_source_agent_inquirer(
     args, console: Console
 ) -> tuple[DFCXAgentIR, str, ConversationalAgentsAPI]:
-    """InquirerPy version of load_source_agent. Honors --source-agent-id / --zip-file
-    CLI flags as overrides; otherwise prompts."""
+    """InquirerPy version of load_source_agent. Honors --source-agent-id /
+    --zip-file CLI flags as overrides; otherwise prompts."""
     cx_api = ConversationalAgentsAPI()
     zip_path = getattr(args, "zip_file", None)
     agent_id = getattr(args, "source_agent_id", None)
@@ -245,8 +275,8 @@ def collect_migration_inputs(
     default_target_prefix: str = "migrated_agent",
 ) -> dict[str, str]:
     """InquirerPy version of collect_common_inputs that honors CLI overrides
-    and defaults logic version + env. Returns project / target_name / env / model
-    / location / migration_version."""
+    and defaults logic version + env. Returns project / target_name / env /
+    model / location / migration_version."""
     default_target = (
         f"{default_target_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     )
@@ -267,9 +297,7 @@ def collect_migration_inputs(
         else DEFAULT_MODEL
     )
     migration_version = getattr(args, "migration_version", None) or (
-        _prompts.prompt_logic_version()
-        if _prompts.is_interactive()
-        else "2.0"
+        _prompts.prompt_logic_version() if _prompts.is_interactive() else "2.0"
     )
     return {
         "project_id": project_id,
@@ -282,18 +310,7 @@ def collect_migration_inputs(
 
 
 def auth_check(console: Console) -> bool:
-    """Mirror of MigrationCLI.check_auth — verify gcloud + DFCX client init."""
-    console.print("[bold blue]Checking authentication…[/]")
-    try:
-        from google.cloud.dialogflowcx_v3beta1 import services as cx_services
-        cx_services.agents.AgentsClient()
-        console.print("[green]✅ Authentication successful.[/]")
-        return True
-    except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]❌ Authentication failed:[/] {exc}")
-        console.print(
-            "Try: [cyan]gcloud auth application-default login[/] and ensure "
-            "your account has read access to the source project + admin "
-            "access to the target project."
-        )
-        return False
+    """Delegate to MigrationCLI.check_auth (gcloud + DFCX client init)."""
+    cli = _cli()
+    cli.console = console
+    return cli.check_auth()

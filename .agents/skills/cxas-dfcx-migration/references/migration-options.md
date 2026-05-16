@@ -209,7 +209,3 @@ Killing a stage script mid-run leaves the bundle untouched (only persisted on su
 - Regenerated `<target>_unit_tests.json` against the final agents.
 - `<target>_optimization_report.md` — full audit.
 - CXAS Version `0.0.2`.
-
-## Deprecated scripts
-
-`run_migration.py` and `optimize_migration.py` are kept for one release cycle as `*_legacy.py`. They print a deprecation warning when invoked. Migrate to the three-script flow above.

@@ -64,17 +64,24 @@ console = Console()
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="1:1 DFCX → CXAS migration. Writes <target>_ir.json for stage1.py / stage2.py.",
+        description=(
+            "1:1 DFCX → CXAS migration. Writes <target>_ir.json for "
+            "stage1.py / stage2.py."
+        ),
         formatter_class=argparse.RawTextHelpFormatter,
     )
     src = p.add_mutually_exclusive_group()
     src.add_argument(
         "--source-agent-id",
-        help="Full DFCX resource name: projects/<p>/locations/<l>/agents/<uuid>",
+        help=(
+            "Full DFCX resource name: projects/<p>/locations/<l>/agents/<uuid>"
+        ),
     )
     src.add_argument("--zip-file", help="Path to local DFCX export .zip")
 
-    p.add_argument("--project-id", help="Target GCP project ID (prompted if omitted)")
+    p.add_argument(
+        "--project-id", help="Target GCP project ID (prompted if omitted)"
+    )
     p.add_argument(
         "--location",
         default=None,
@@ -95,7 +102,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--gen-unit-tests",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Generate <target>_unit_tests.json from the deployed IR (default: yes)",
+        help=(
+            "Generate <target>_unit_tests.json from the deployed IR "
+            "(default: yes)"
+        ),
     )
     p.add_argument(
         "--no-preview-html",
@@ -110,7 +120,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--export-svg",
         action="store_true",
-        help="Also call MainVisualizer.export_visualizations for SVG/markdown topology",
+        help=(
+            "Also call MainVisualizer.export_visualizations for "
+            "SVG/markdown topology"
+        ),
     )
     p.add_argument(
         "--skip-resource-selection",
@@ -122,7 +135,12 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip the dependency analysis step.",
     )
-    p.add_argument("--yes", "-y", action="store_true", help="Non-interactive; accept all defaults.")
+    p.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Non-interactive; accept all defaults.",
+    )
     return p
 
 
@@ -143,7 +161,9 @@ async def _run(args) -> None:
 
     # Phase 1: project + location + source loading
     with tracker.phase("Source load", "fetch + parse DFCX agent"):
-        agent_data, agent_id, _cx_api = _shared.load_source_agent_inquirer(args, console)
+        agent_data, agent_id, _cx_api = _shared.load_source_agent_inquirer(
+            args, console
+        )
 
     inputs = _shared.collect_migration_inputs(args, console)
 
@@ -158,21 +178,34 @@ async def _run(args) -> None:
                     output_path=f"{inputs['target_name']}_tree_preview.html",
                 )
                 stats = _visualizer.collect_stats(agent_data, analyzer_pre)
+                est = stats["estimated_minutes"]
                 console.print(
                     f"[bold green]Preview ready:[/] {preview_path}\n"
                     f"  • {stats['playbook_count']} playbooks, "
-                    f"{stats['flow_count']} flows, {stats['tool_count']} tools, "
+                    f"{stats['flow_count']} flows, "
+                    f"{stats['tool_count']} tools, "
                     f"{stats['routing_edge_count']} routing edges\n"
-                    f"  • Estimated 1:1 migration time: ~{stats['estimated_minutes']} min"
+                    f"  • Estimated 1:1 migration time: ~{est} min"
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Preview HTML generation failed: %s", exc)
 
     if args.preview_only:
-        console.print("\n[yellow]--preview-only set; exiting before migration.[/]")
+        console.print(
+            "\n[yellow]--preview-only set; exiting before migration.[/]"
+        )
         return
 
-    # Phase 3: build config
+    # Phase 3: optional resource selection (delegates to MigrationCLI)
+    filtered_data = agent_data
+    if not args.skip_resource_selection:
+        filtered_data = _shared.select_resources(agent_data, console)
+
+    # Phase 4: optional dependency analysis (delegates to MigrationCLI)
+    if not args.skip_dependency_analysis:
+        _shared.run_dependency_analysis(agent_data, filtered_data, console)
+
+    # Phase 5: build config
     config = MigrationConfig(
         project_id=inputs["project_id"],
         target_name=inputs["target_name"],
@@ -185,25 +218,31 @@ async def _run(args) -> None:
         migration_version=inputs["migration_version"],
         # Stage 1 / Stage 2 are separate scripts; never inline-optimize here.
         optimize_for_cxas=False,
-        source_agent_data_override=agent_data,
+        source_agent_data_override=filtered_data,
     )
 
     if args.export_svg:
         try:
-            MainVisualizer(agent_data).export_visualizations(inputs["target_name"])
+            MainVisualizer(filtered_data).export_visualizations(
+                inputs["target_name"]
+            )
+            _shared.show_visualizations(inputs["target_name"], console)
         except Exception as exc:  # noqa: BLE001
             logger.warning("SVG export failed: %s", exc)
 
-    # Phase 4: review + confirm
+    # Phase 6: review + confirm
     if not args.yes:
+        pb_count = len(filtered_data.playbooks)
+        flow_count = len(filtered_data.flows)
         console.print(
             "\n[bold blue]=== Review ===[/]\n"
-            f"Target Agent:   {config.target_name}\n"
-            f"Project:        {config.project_id}\n"
-            f"Location:       {inputs['location']}\n"
-            f"Environment:    {config.env}\n"
-            f"Model:          {config.model}\n"
-            f"Logic Version:  {config.migration_version}\n"
+            f"Target Agent:    {config.target_name}\n"
+            f"Project:         {config.project_id}\n"
+            f"Location:        {inputs['location']}\n"
+            f"Environment:     {config.env}\n"
+            f"Model:           {config.model}\n"
+            f"Logic Version:   {config.migration_version}\n"
+            f"Selected:        {pb_count} playbooks, {flow_count} flows\n"
         )
         if not _prompts.prompt_yes_no("Start migration?", default=True):
             console.print("Aborted.")
@@ -233,7 +272,11 @@ async def _run(args) -> None:
         ),
     )
     _bundle.append_stage(
-        bundle, "migrate", "ok", started_at, notes=f"{len(service.ir.agents)} agents"
+        bundle,
+        "migrate",
+        "ok",
+        started_at,
+        notes=f"{len(service.ir.agents)} agents",
     )
     bundle_path = _bundle.save_for_target(bundle, inputs["target_name"])
 
@@ -276,7 +319,7 @@ async def _run(args) -> None:
         console.print(f"  • App console:      {bundle.app_url}")
     console.print(
         "\n[dim]Next:[/] [cyan]stage1.py --target-name "
-        f"{inputs['target_name']}[/] for variable dedup + optional consolidation."
+        f"{inputs['target_name']}[/] for variable dedup + consolidation."
     )
 
 

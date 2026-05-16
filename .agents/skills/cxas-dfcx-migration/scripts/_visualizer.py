@@ -17,6 +17,7 @@ off a 30+ minute migration.
 from __future__ import annotations
 
 import html
+import io
 import json
 import re
 from collections import Counter
@@ -24,7 +25,6 @@ from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.tree import Tree
 
 from cxas_scrapi.migration.data_models import DFCXAgentIR, MigrationIR
 from cxas_scrapi.migration.dfcx_dep_analyzer import DependencyAnalyzer
@@ -34,7 +34,6 @@ from cxas_scrapi.migration.flow_visualizer import (
 )
 from cxas_scrapi.migration.graph_visualizer import HighLevelGraphVisualizer
 from cxas_scrapi.migration.playbook_visualizer import PlaybookTreeVisualizer
-
 
 # ---------------------------------------------------------------------------
 # Mermaid emission
@@ -141,7 +140,9 @@ def _collect_agent_tool_refs(
         full = pb.get("name", "")
         display = pb.get("displayName", "?")
         explicit = list(pb.get("referencedTools", []) or [])
-        scanned = _scan_text_for_tool_refs(json.dumps(pb.get("instruction", {})))
+        scanned = _scan_text_for_tool_refs(
+            json.dumps(pb.get("instruction", {}))
+        )
         merged = list(dict.fromkeys(explicit + sorted(scanned)))
         out.append(("Playbook", full, display, merged))
 
@@ -177,7 +178,9 @@ def build_mermaid_tools_per_agent(
             break
         agent_id = _mermaid_id("a", full_name)
         cls = "flow" if kind == "Flow" else "pb"
-        shape_open, shape_close = ("([", "])") if kind == "Flow" else ('["', '"]')
+        shape_open, shape_close = (
+            ("([", "])") if kind == "Flow" else ('["', '"]')
+        )
         lines.append(
             f'  {agent_id}{shape_open}"{_mermaid_label(display)}"{shape_close}:::{cls}'
             if kind == "Flow"
@@ -224,7 +227,9 @@ def collect_stats(
     intent_count = len(agent_data.intents)
     entity_count = len(agent_data.entity_types)
     code_block_count = len(agent_data.code_blocks)
-    routing_edge_count = sum(len(targets) for targets in analyzer.graph.values())
+    routing_edge_count = sum(
+        len(targets) for targets in analyzer.graph.values()
+    )
 
     # Top connected resources (in + out)
     in_out: Counter[str] = Counter()
@@ -285,7 +290,9 @@ def collect_resource_rows(
                 "type": "Playbook",
                 "name": pb.get("displayName", "?"),
                 "id": full.split("/")[-1] if full else "",
-                "tools": [t.split("/")[-1] for t in pb.get("referencedTools", [])],
+                "tools": [
+                    t.split("/")[-1] for t in pb.get("referencedTools", [])
+                ],
                 "playbooks": [
                     p.split("/")[-1] for p in pb.get("referencedPlaybooks", [])
                 ],
@@ -318,7 +325,9 @@ def collect_resource_rows(
                 "step_count": len(flow_wrapper.pages),
             }
         )
-    rows.sort(key=lambda r: (-len(r["outgoing"]) - len(r["incoming"]), r["name"]))
+    rows.sort(
+        key=lambda r: (-len(r["outgoing"]) - len(r["incoming"]), r["name"])
+    )
     return rows
 
 
@@ -438,15 +447,24 @@ def _render_resource_details(rows: list[dict[str, Any]]) -> str:
     out = []
     for r in rows:
         tools_html = (
-            " ".join(f"<span class='pill'>{html.escape(t)}</span>" for t in r["tools"])
+            " ".join(
+                f"<span class='pill'>{html.escape(t)}</span>"
+                for t in r["tools"]
+            )
             or "<em style='color:#64748b'>none</em>"
         )
         outgoing_html = (
-            " ".join(f"<span class='pill'>{html.escape(t)}</span>" for t in r["outgoing"])
+            " ".join(
+                f"<span class='pill'>{html.escape(t)}</span>"
+                for t in r["outgoing"]
+            )
             or "<em style='color:#64748b'>none</em>"
         )
         incoming_html = (
-            " ".join(f"<span class='pill'>{html.escape(t)}</span>" for t in r["incoming"])
+            " ".join(
+                f"<span class='pill'>{html.escape(t)}</span>"
+                for t in r["incoming"]
+            )
             or "<em style='color:#64748b'>none</em>"
         )
         out.append(
@@ -476,7 +494,9 @@ def generate_html_report(
     stats = collect_stats(agent_data, analyzer)
     rows = collect_resource_rows(agent_data, analyzer)
     mermaid_top = build_mermaid_topology(agent_data, analyzer)
-    mermaid_tools = build_mermaid_tools_per_agent(agent_data, max_agents=tools_top_n)
+    mermaid_tools = build_mermaid_tools_per_agent(
+        agent_data, max_agents=tools_top_n
+    )
 
     rendered = _HTML_TEMPLATE.format(
         agent_name=html.escape(stats["agent_name"] or "DFCX Agent"),
@@ -546,16 +566,16 @@ def topology_svg(
 def _rich_to_html(renderable, width: int = 140) -> str:
     """Capture a Rich renderable as HTML using Rich's exporter. Output is
     routed to an in-memory buffer (not stdout), so calling this is silent."""
-    import io as _io  # local import to avoid polluting module namespace
-
     buf_console = Console(
         record=True,
         width=width,
         force_terminal=True,
-        file=_io.StringIO(),
+        file=io.StringIO(),
     )
     buf_console.print(renderable)
-    full = buf_console.export_html(inline_styles=True, code_format="<pre>{code}</pre>")
+    full = buf_console.export_html(
+        inline_styles=True, code_format="<pre>{code}</pre>"
+    )
     start = full.find("<body")
     if start == -1:
         return full
@@ -602,7 +622,9 @@ def render_flow_trees_html(agent_data: DFCXAgentIR) -> str:
     return "\n".join(chunks) or "<em>No flows.</em>"
 
 
-def render_ir_tree_html(ir: MigrationIR, title: str, root_key: str | None) -> str:
+def render_ir_tree_html(
+    ir: MigrationIR, title: str, root_key: str | None
+) -> str:
     """Render an IR tree (post-compile, post-grouping, etc.) using the
     same render_ir_tree from _grouping, captured as HTML."""
     # Defer import to avoid circular dependency at module load.
@@ -697,7 +719,9 @@ class StageReport:
         self.subtitle = subtitle
         self._stages: list[tuple[str, str, str]] = []  # (id, label, body_html)
 
-    def add_section(self, label: str, body_html: str, anchor: str | None = None) -> None:
+    def add_section(
+        self, label: str, body_html: str, anchor: str | None = None
+    ) -> None:
         anchor = anchor or _SAFE_ID_RE.sub("_", label).lower()[:60]
         self._stages.append((anchor, label, body_html))
 
@@ -754,7 +778,9 @@ class StageReport:
             anchor="flows",
         )
 
-    def add_ir_snapshot(self, label: str, ir: MigrationIR, root_key: str | None) -> None:
+    def add_ir_snapshot(
+        self, label: str, ir: MigrationIR, root_key: str | None
+    ) -> None:
         self.add_section(
             label,
             render_ir_tree_html(ir, label, root_key),
@@ -779,9 +805,7 @@ class StageReport:
         )
         self.add_section("Grouping proposal", body, anchor="grouping")
 
-    def add_optimizer_logs(
-        self, label: str, logs: list[dict] | None
-    ) -> None:
+    def add_optimizer_logs(self, label: str, logs: list[dict] | None) -> None:
         if not logs:
             return
         rows = "\n".join(

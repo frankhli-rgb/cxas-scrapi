@@ -23,6 +23,8 @@ from InquirerPy.base.control import Choice
 from InquirerPy.utils import get_style
 from InquirerPy.validator import EmptyInputValidator
 
+from cxas_scrapi.core.apps import Apps
+
 logger = logging.getLogger(__name__)
 
 LOCATIONS = ["us", "eu", "global"]
@@ -196,8 +198,6 @@ def prompt_zip_path(default: str | None = None) -> str:
 def fetch_cxas_apps(project_id: str, location: str) -> list[dict]:
     """Fetch existing CXAS apps for a project. Returns [] on failure."""
     try:
-        from cxas_scrapi.core.apps import Apps
-
         apps_client = Apps(project_id=project_id, location=location)
         apps_list = apps_client.list_apps()
         results = []
@@ -210,13 +210,13 @@ def fetch_cxas_apps(project_id: str, location: str) -> list[dict]:
             )
         return results
     except Exception as exc:
-        logger.warning("Could not fetch apps from %s/%s: %s", project_id, location, exc)
+        logger.warning(
+            "Could not fetch apps from %s/%s: %s", project_id, location, exc
+        )
         return []
 
 
-def prompt_app_picker(
-    project_id: str, location: str
-) -> tuple[str, str, str]:
+def prompt_app_picker(project_id: str, location: str) -> tuple[str, str, str]:
     """Pick an existing CXAS app via fuzzy search.
 
     Returns (app_id, display_name, app_resource_name).
@@ -260,7 +260,7 @@ def prompt_app_picker(
 
 
 def prompt_resource_selection(
-    items: list[tuple[str, str, Any]]
+    items: list[tuple[str, str, Any]],
 ) -> list[tuple[str, str, Any]]:
     """Multi-select picker over (resource_type, display_name, raw_data).
 
@@ -272,10 +272,13 @@ def prompt_resource_selection(
         for i, (rtype, name, _) in enumerate(items)
     ]
     selected_indices = inquirer.checkbox(
-        message="Select resources to migrate (Space to toggle, Enter to confirm):",
+        message=(
+            "Select resources to migrate (Space to toggle, Enter to confirm):"
+        ),
         choices=choices,
-        validate=lambda result: len(result) > 0
-        or "Select at least one resource",
+        validate=lambda result: (
+            len(result) > 0 or "Select at least one resource"
+        ),
         style=PROMPT_STYLE,
         instruction="(default: all selected)",
     ).execute()

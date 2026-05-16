@@ -7,7 +7,7 @@
 #     https://www.apache.org/licenses/LICENSE-2.0
 
 """OptimizationReporter: writes a Markdown audit report describing the
-consolidated CXAS app produced by optimize_migration.py."""
+consolidated CXAS app produced by stage1.py + stage2.py."""
 
 from __future__ import annotations
 
@@ -62,7 +62,11 @@ class OptimizationReporter:
         self.dependency_incoming = list(incoming)
 
     def set_grouping(
-        self, groupings: dict, before_count: int, after_count: int, path: str = ""
+        self,
+        groupings: dict,
+        before_count: int,
+        after_count: int,
+        path: str = "",
     ) -> None:
         self.groupings = groupings
         self.before_agent_count = before_count
@@ -110,7 +114,7 @@ class OptimizationReporter:
         out += [
             "## Consolidation Summary",
             f"- **1:1 IR agents (before grouping):** {self.before_agent_count}",
-            f"- **Consolidated agents (after grouping):** {self.after_agent_count}",
+            f"- **Consolidated agents (after):** {self.after_agent_count}",
         ]
         if self.grouping_path:
             out.append(f"- **Grouping JSON artifact:** `{self.grouping_path}`")
@@ -132,11 +136,15 @@ class OptimizationReporter:
         if self.dependency_outgoing or self.dependency_incoming:
             out += ["## Source Dependency Analysis"]
             if self.dependency_outgoing:
-                out.append("**Outgoing (selection references → not selected):**")
+                out.append(
+                    "**Outgoing (selection references → not selected):**"
+                )
                 for r in self.dependency_outgoing:
                     out.append(f"- {r}")
             if self.dependency_incoming:
-                out.append("\n**Incoming (not selected → references selection):**")
+                out.append(
+                    "\n**Incoming (not selected → references selection):**"
+                )
                 for r in self.dependency_incoming:
                     out.append(f"- {r}")
             out.append("")
@@ -193,7 +201,8 @@ class OptimizationReporter:
         if self.lint_passed is not None:
             out += [
                 "## Lint",
-                f"- **Status:** {'✅ passed' if self.lint_passed else '⚠️ issues found'}",
+                "- **Status:** "
+                + ("✅ passed" if self.lint_passed else "⚠️ issues found"),
             ]
             if self.lint_output_excerpt:
                 out += [

@@ -58,7 +58,13 @@ class PhaseTracker:
                 rec["status"] = status
                 rec["note"] = note
                 self._stack.remove(rec)
-                tag = "[green]✓[/]" if status == "ok" else "[red]✗[/]" if status == "fail" else "[yellow]~[/]"
+                tag = (
+                    "[green]✓[/]"
+                    if status == "ok"
+                    else "[red]✗[/]"
+                    if status == "fail"
+                    else "[yellow]~[/]"
+                )
                 self.console.print(
                     f"{tag} [bold]{label}[/] in {rec['duration']:.1f}s"
                     + (f" — {note}" if note else "")
@@ -85,7 +91,9 @@ class PhaseTracker:
         table.add_column("Duration", justify="right")
         for rec in self._records:
             duration = (
-                f"{rec['duration']:.1f}s" if rec["duration"] is not None else "—"
+                f"{rec['duration']:.1f}s"
+                if rec["duration"] is not None
+                else "—"
             )
             status_color = {
                 "ok": "[green]ok[/]",

@@ -54,7 +54,11 @@ DEFAULT_PER_GROUP_TIMEOUT_S = 600
 
 
 def _short_id(resource_name: str) -> str:
-    return resource_name.split("/")[-1] if "/" in resource_name else resource_name
+    return (
+        resource_name.rsplit("/", maxsplit=1)[-1]
+        if "/" in resource_name
+        else resource_name
+    )
 
 
 def _instruction_summary(text: str, n: int = INSTRUCTION_SUMMARY_LEN) -> str:
@@ -136,7 +140,10 @@ def rewrite_agent_refs(
         if target_group is None:
             normalized = re.sub(r"[_\-]+", " ", raw).strip().lower()
             for display, grp in member_display_to_group.items():
-                if re.sub(r"[_\-]+", " ", display).strip().lower() == normalized:
+                if (
+                    re.sub(r"[_\-]+", " ", display).strip().lower()
+                    == normalized
+                ):
                     target_group = grp
                     break
 
@@ -268,13 +275,17 @@ RULES:
 
 
 def _parse_grouping_response(response: str) -> dict:
-    cleaned = response.strip().removeprefix("```json").removeprefix("```").strip()
+    cleaned = (
+        response.strip().removeprefix("```json").removeprefix("```").strip()
+    )
     if cleaned.endswith("```"):
         cleaned = cleaned[:-3].strip()
     start = cleaned.find("{")
     end = cleaned.rfind("}")
     if start == -1 or end == -1:
-        raise ValueError(f"Could not find JSON object in LLM response:\n{response}")
+        raise ValueError(
+            f"Could not find JSON object in LLM response:\n{response}"
+        )
     return json.loads(cleaned[start : end + 1])
 
 
@@ -309,18 +320,21 @@ def validate_groupings(
 
     missing = set(ir.agents.keys()) - seen
     if missing:
-        raise ValueError(f"IR agents not assigned to any group: {sorted(missing)}")
+        raise ValueError(
+            f"IR agents not assigned to any group: {sorted(missing)}"
+        )
 
     if root_key:
         root_groups = [
             name
             for name, payload in groupings.items()
-            if payload.get("is_root") or root_key in (payload.get("agents") or [])
+            if payload.get("is_root")
+            or root_key in (payload.get("agents") or [])
         ]
         if not root_groups:
             raise ValueError(
-                f"No group claims is_root=true and no group contains the source "
-                f"root agent key {root_key!r}."
+                "No group claims is_root=true and no group contains the "
+                f"source root agent key {root_key!r}."
             )
 
 
@@ -374,7 +388,9 @@ def consolidate(ir: MigrationIR, groupings: dict) -> MigrationIR:
 
             for ts in agent.toolsets:
                 key = ts.get("toolset")
-                if not any(existing.get("toolset") == key for existing in toolsets):
+                if not any(
+                    existing.get("toolset") == key for existing in toolsets
+                ):
                     toolsets.append(dict(ts))
 
             for cb_type, cb_code in (agent.callbacks or {}).items():
@@ -534,7 +550,8 @@ class StructuralConsolidator:
         error, the existing concatenated instruction stays in place and the
         group is recorded in the returned status dict.
 
-        Returns a per-group status dict: ``{group_name: "ok" | "timeout" | "error"}``.
+        Returns a per-group status dict like
+        ``{group_name: "ok" | "timeout" | "error"}``.
         """
         designer = AsyncAgentDesigner(gemini_client=self.gemini)
         m2g = member_to_group_map(groupings)
@@ -615,6 +632,8 @@ class StructuralConsolidator:
             ),
             return_exceptions=False,
         )
-        for (group_name, _), status in zip(groupings.items(), results, strict=True):
+        for (group_name, _), status in zip(
+            groupings.items(), results, strict=True
+        ):
             statuses[group_name] = status
         return statuses
