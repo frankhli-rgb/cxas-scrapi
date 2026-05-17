@@ -118,8 +118,10 @@ Key properties:
 | `success_check` | Key in the result dict that must be truthy for the task to count as successful. |
 | `terminal` | If `True`, successful completion ends the conversation (sets `status = "complete"`). |
 | `readback_inputs` | Defer slot readback to grouped confirmation (7a). |
-| `then_say` | Message template shown on success. Supports `{slot_name}` placeholders. |
+| `then_say` | Message template shown on success. Supports `{slot_name}` placeholders from filled slots AND `{key}` placeholders from the task's result dict. For example, if the task tool returns `{"success": True, "symbolName": "Apple Inc.", "lastTradeValue": "$180.00"}`, you can write `"then_say": "{symbolName} is trading at {lastTradeValue}."`. See Section 12.5. |
+| `then_response` | Structured response list for channel-aware payloads. Same substitution rules as `then_say` — both filled slots and task result keys are available. See Section 12.5. |
 | `condition` | Optional lambda string compiled to a callable. When present, the task only fires if the condition returns `True`. Inactive tasks are skipped during DAG evaluation. Same compilation as slot conditions. |
+| `on_complete` | Optional dict with `clear_slots` (list of slot names). When present on a terminal task, after success the engine clears the specified slots, removes the task result, and resets `status` to `"in_progress"` — enabling conversation restart. See Section 12.6. |
 | `on_failure` | Retry and escalation configuration (see Section 5). |
 
 ### 2.3 The DAG
@@ -1282,6 +1284,296 @@ The engine also returns an `si_suffix` field containing `<readback_scope>` and `
 
 ---
 
+## 8a. Rich Response Payloads
+
+By default, preempted messages are delivered as plain text via
+`Part.from_text()`. Rich response payloads extend preemption to
+support structured UI content — buttons, cards, deep links,
+SSML audio, session control — delivered as typed response parts
+that map directly to Dialogflow CX's `ResponseMessage` model.
+
+### Response Part Types
+
+Each response part has a `type` field that maps to a CES
+`Part.from_*()` factory:
+
+| `type` | Maps to | Dialogflow CX equivalent |
+|--------|---------|--------------------------|
+| `"text"` | `Part.from_text(text)` | `ResponseMessage.text` |
+| `"payload"` | `Part.from_json(data)` | `ResponseMessage.payload` |
+| `"audio"` | `Part.from_audio(uri, ...)` | `ResponseMessage.play_audio` |
+| `"end_session"` | `Part.from_end_session(...)` | `ResponseMessage.end_interaction` |
+| `"transfer"` | `Part.from_agent_transfer(...)` | `ResponseMessage.live_agent_handoff` |
+
+### Declaring Responses in dag_config
+
+Any message-producing location in the config can define a
+`response` list — an ordered sequence of response parts. A
+single string field (`ask`, `message`, `then_say`) is shorthand
+for `[{"type": "text", "text": "..."}]`. When both a string
+field and `response` are present, `response` takes priority for
+preempted output; the string is still used for system
+instruction directives and logging.
+
+**User slot with buttons:**
+```python
+{
+    "name": "seating_preference",
+    "source": "user",
+    "setter": "set_seating_preference",
+    "ask": "Indoor, outdoor, or bar seating?",
+    "response": [
+        {"type": "payload", "data": {
+            "messageType": "static",
+            "scenarios": [{
+                "name": "StaticResponse",
+                "responses": [
+                    {"text": "For {party_size} guests on {date}:",
+                     "type": "text"},
+                    {"text": "Choose seating:", "type": "text"},
+                    {"buttonType": "event", "text": "Indoor",
+                     "type": "button"},
+                    {"buttonType": "event", "text": "Outdoor",
+                     "type": "button"},
+                ],
+            }],
+        }},
+    ],
+}
+```
+
+**Announce slot with payload:**
+```python
+{
+    "name": "welcome",
+    "source": "announce",
+    "message": "Let's get started.",
+    "response": [
+        {"type": "payload", "data": {
+            "messageType": "static",
+            "scenarios": [{"name": "StaticResponse",
+                           "responses": [{"text": "Let's get started.",
+                                          "type": "text"}]}],
+        }},
+    ],
+}
+```
+
+**Task with end_session:**
+```python
+{
+    "name": "ConfirmReservation",
+    "tool": "confirm_reservation",
+    "then_say": "Reservation confirmed for {guest_name}!",
+    "then_response": [
+        {"type": "payload", "data": {"messageType": "static", ...}},
+        {"type": "end_session", "reason": "completed"},
+    ],
+}
+```
+
+### Response Fields by Location
+
+| Location | Text field | Response field |
+|----------|-----------|----------------|
+| Announce slot | `message` | `response` |
+| User slot (ask) | `ask` | `response` |
+| Readback confirmation | (generated) | `readback_response` (top-level) |
+| Task success (terminal) | `then_say` | `then_response` |
+| Task success (non-terminal) | `then_say` | `then_response` |
+| Task retry | `retry_say` | `retry_response` |
+| Task exhaust | `on_exhaust.say` | `on_exhaust.response` |
+| Validation error | `errors[code]` | `error_responses[code]` |
+| Readback exhaust | `on_exhaust.say` | `on_exhaust.response` |
+| Progress exhaust | `on_exhaust.say` | `on_exhaust.response` |
+
+### Readback Confirmation Response
+
+When the engine generates a readback prompt ("Just to confirm —
+3 guests, on June 15th. Is that correct?"), you can attach
+payloads via a top-level `readback_response` config field. This
+is useful for showing a summary card or confirm/reject chips
+during readback.
+
+```python
+{
+    "readback_response": [
+        {"type": "payload", "data": {
+            "richContent": [[
+                {"type": "chips", "options": [
+                    {"text": "Confirm"},
+                    {"text": "Change something"},
+                ]},
+            ]],
+        }},
+    ],
+}
+```
+
+The response supports `{slot_name}` substitution from both
+filled and pending values (since pending values are what the
+readback is confirming). Delivery uses the unconditional stash
+path (`sm["_pending_payloads"]`), so the after_model_callback
+injects the payload alongside the LLM's natural readback text.
+
+### Channel-Aware Responses
+
+Dialogflow CX supports a `channel` field on each
+`ResponseMessage` for routing different responses to different
+surfaces (web, mobile, telephony). The framework supports this
+via `channel_responses` dicts that override the default `response`
+for specific channels:
+
+```python
+{
+    "name": "occasion",
+    "source": "user",
+    "setter": "set_occasion",
+    "ask": "Is this for a special occasion?",
+    "response": [
+        {"type": "text", "text": "Any special occasion?"},
+    ],
+    "channel_responses": {
+        "MOBILE": [
+            {"type": "payload", "data": {
+                "messageType": "static",
+                "scenarios": [{
+                    "name": "StaticResponse",
+                    "responses": [
+                        {"text": "Select an occasion:", "type": "text"},
+                        {"buttonType": "event", "text": "Birthday",
+                         "type": "button"},
+                    ],
+                }],
+            }},
+        ],
+    },
+}
+```
+
+**Resolution order:** The engine reads `channel` from
+`sm["channel"]` (set by the before_model_callback from
+`callback_context.state`). If `channel_responses[channel]`
+exists, it is used; otherwise the default `response` is used;
+otherwise the string field (`ask`/`message`/`say`) is used as
+plain text.
+
+Channel field naming follows the pattern
+`channel_{response_field}`:
+
+- `channel_responses` for `response`
+- `channel_then_response` for `then_response`
+- `channel_retry_response` for `retry_response`
+- Exhaust and error responses use nested dicts in
+  `on_exhaust.channel_responses` and
+  `channel_error_responses`
+
+### Variable Substitution
+
+All string values within response parts support `{slot_name}`
+substitution from filled slots, identical to `ask` and
+`then_say`:
+
+```python
+{"type": "payload", "data": {
+    "scenarios": [{"responses": [
+        {"text": "Table for {party_size} on {date}.", "type": "text"},
+    ]}],
+}}
+```
+
+Substitution is applied recursively to all strings in the
+response part dicts after channel resolution and before delivery
+to the callback.
+
+### How It Works
+
+1. **Engine** resolves channel overrides and applies variable
+   substitution, returning a `"response"` key in the action
+   dict alongside the existing `"message"` key
+2. **before_model_callback** checks for `result["response"]`
+   in the preemption block. If present, iterates the response
+   parts and maps each `type` to the corresponding
+   `Part.from_*()` factory. Falls back to
+   `Part.from_text(result["message"])` when no response parts
+   are defined
+3. **`function_call`** handling is unchanged — it runs after
+   the response/message block and can coexist with response
+   parts
+
+### Payload Delivery Mechanics
+
+Rich payloads (`Part.from_json()`) are only delivered to the
+client on **preempted turns** — turns where the callback returns
+an `LlmResponse` that bypasses the LLM. The engine includes
+`response` parts in its action dict only when `preempt` is True.
+This means payloads are delivered at these moments:
+
+| Preemption trigger | Typical payloads |
+|-------------------|------------------|
+| Announce slot (`preempt: True`) | Welcome cards, disclosure banners, chips for first question |
+| Task fire (success `then_response`) | Confirmation cards, end_session signals |
+| Task retry/exhaust (`on_failure`) | Error cards, escalation deep links |
+| Validation error (`error_responses`) | Re-prompt chips, error banners |
+| Readback/progress stall exhaust | Escalation cards |
+
+On non-preempted turns, payloads are delivered via the
+**after_model_callback injection** path (see below).
+
+Non-terminal task `then_response` and readback `readback_response`
+payloads are always stashed to `sm["_pending_payloads"]` (since
+the LLM runs after both) and injected by the after_model_callback.
+
+**CES output format:** CES maps `Part.from_text()` to
+`output.text` and `Part.from_json()` to `output.payload`.
+Multiple parts in a single `LlmResponse` produce multiple
+`SessionOutput` entries — each text/payload part becomes a
+separate output. A chat frontend reads `output.payload` to
+render rich UI elements (cards, chips, buttons) alongside the
+text responses.
+
+### after_model_callback Payload Injection
+
+When `response` parts exist but the engine is NOT preempting
+(e.g., welcome card with `preempt: False`, party-size chips on
+a regular question turn), the engine stashes them in
+`sm["_pending_payloads"]`. The `after_model_callback` then:
+
+1. Reads `sm["_pending_payloads"]` from
+   `callback_context.state`
+2. Guards against multi-model-call turns — if the agent
+   already produced output in an earlier model call this
+   turn, skips injection to avoid duplicates
+3. Converts each response descriptor to a CES Part (same
+   type→factory mapping as the preemption block)
+4. Appends the Parts AFTER the LLM's existing parts (text
+   first, payloads second)
+5. Clears `_pending_payloads` to prevent re-injection
+
+```
+Engine runs → combined_response exists
+  ├─ preempt=True  → response in engine result
+  │                  → before_model dispatches
+  └─ preempt=False → stashed in sm._pending_payloads
+                       → LLM runs naturally
+                       → after_model reads stash
+                       → appends Parts to response
+                       → clears stash
+```
+
+This allows rich UI elements (cards, chips) to accompany the
+LLM's natural text without sacrificing the LLM's ability to
+process user input and call setter tools.
+
+### Backward Compatibility
+
+- Slots without `response` fields continue to work exactly as
+  before via `Part.from_text()`
+- The `ask`/`message`/`say` string fields remain the primary mechanism for system instruction directives
+- Existing evals are unaffected since they don't check payload content
+
+---
+
 ## 9. Guarantees
 
 The framework provides the following guarantees, none of which depend on LLM behavior:
@@ -1509,28 +1801,36 @@ like `"user"` remain backward compatible.
 
 Event pre-fill runs inside `slot_filling_engine`, after
 config compilation but before DAG evaluation. It runs
-once per session (guarded by `sm["_events_checked"]`):
+on **every engine call** — no persistent guard is needed
+because `fill_slots()` is idempotent for already-filled
+slots (it returns `"skipped"` and moves on):
 
 ```python
-if not sm.get("_events_checked"):
-    event_data = callback_context.state.get("event_data", {})
-    if event_data:
-        event_values = {}
-        for slot_def in config["slots"]:
-            if "event" not in _normalize_sources(
-                slot_def.get("source", "user"),
-            ):
-                continue
-            key = slot_def.get("event_key", slot_def["name"])
-            value = event_data.get(key)
-            if value is not None:
-                event_values[slot_def["name"]] = value
-        if event_values:
-            result = fill_slots(sm, config, event_values)
-            if result["filled"]:
-                sm["_event_prefilled_this_turn"] = True
-    sm["_events_checked"] = True
+if event_data:
+    event_values = {}
+    for slot_def in config["slots"]:
+        if "event" not in _normalize_sources(
+            slot_def.get("source", "user"),
+        ):
+            continue
+        key = slot_def.get("event_key", slot_def["name"])
+        value = event_data.get(key)
+        if value is not None:
+            event_values[slot_def["name"]] = value
+    if event_values:
+        result = fill_slots(sm, config, event_values)
+        if result["filled"]:
+            sm["_event_prefilled_this_turn"] = True
 ```
+
+> **Why no guard?** An earlier version used an
+> `_events_checked` flag to run event processing only once.
+> This caused a bug: when new events arrived on later turns
+> (e.g., button presses injected as `ia_event_name`), the
+> flag was already `True` and the events were silently
+> ignored. Since `fill_slots()` skips already-filled slots,
+> re-processing the same event data is a no-op, making
+> the guard unnecessary.
 
 Event pre-fill uses `fill_slots()` (Section 12.2) with
 `skip_readback=True` (the default), writing trusted event
@@ -1790,6 +2090,174 @@ Without task `requires`, the only way to gate a task on
 a non-argument slot is via transitive slot `requires` —
 which doesn't work when the gate comes AFTER all input
 slots are collected but BEFORE the task fires.
+
+### 12.5 Task Result Substitution in `then_say` / `then_response`
+
+By default, `then_say` and `then_response` templates
+substitute from filled slots. Task result substitution
+extends this: the task tool's return dict is merged into
+the substitution context, so templates can reference
+**both** filled slots and task result keys.
+
+```python
+{
+    "name": "FulfillQuote",
+    "tool": "fulfill_quote",
+    "inputs": ["action", "symbol"],
+    "terminal": True,
+    "then_say": "As of {quoteDate}, {symbolName} ({symbol}) is trading at {lastTradeValue}.",
+}
+```
+
+Here `symbol` comes from filled slots, while `quoteDate`,
+`symbolName`, and `lastTradeValue` come from the
+`fulfill_quote` tool's return dict (e.g.,
+`{"success": True, "quoteDate": "2024-01-15",
+"symbolName": "Apple Inc.", "lastTradeValue": "$180.00"}`).
+
+The same substitution applies to `then_response` payloads:
+
+```python
+{
+    "name": "FulfillQuote",
+    "tool": "fulfill_quote",
+    "inputs": ["action", "symbol"],
+    "terminal": True,
+    "then_response": [
+        {"type": "payload", "data": {
+            "text": "{symbolName} ({symbol}) is {upDownPercent}, "
+                    "trading at {lastTradeValue}.",
+        }},
+    ],
+}
+```
+
+**Implementation:** In `_handle_post_executor()`, after
+a successful task, the engine builds
+`sub_context = {**filled, **result}` and uses it for
+both `then_say` format and `_resolve_response()` calls.
+If a key exists in both `filled` and `result`, the task
+result takes precedence (dict merge order).
+
+### 12.6 DAG Restart via `on_complete`
+
+By default, when a terminal task succeeds, the engine
+sets `status = "complete"` and the conversation ends.
+The `on_complete` field enables **conversation restart**
+— after a terminal task completes, specified slots are
+cleared and the DAG resets to `"in_progress"`, ready
+for the next query.
+
+```python
+{
+    "name": "FulfillQuote",
+    "tool": "fulfill_quote",
+    "inputs": ["action", "symbol"],
+    "condition": "lambda filled: filled.get('action') == 'Quote'",
+    "terminal": True,
+    "then_say": "{symbolName} is trading at {lastTradeValue}.",
+    "on_complete": {
+        "clear_slots": ["action", "symbol"],
+    },
+}
+```
+
+**Behavior:** After the task succeeds and `then_say` is
+delivered:
+
+1. Each slot in `clear_slots` is removed from `filled`.
+2. The task's result entry is removed from
+   `sm["_task_results"]`.
+3. `sm["status"]` is reset to `"in_progress"`.
+4. `sm["_events_checked"]` is reset to `False` (allowing
+   event re-processing if applicable).
+
+The DAG re-enters collection mode and asks for the next
+unfilled slot. If the user provides new values (e.g.,
+"what about MSFT?"), the same or a different conditional
+task can fire.
+
+**Use case:** Multi-action flows where the user can
+perform several operations in one session (e.g., get a
+stock quote, then a rating, then set a price alert).
+Each action is a conditional terminal task with
+`on_complete` clearing the action-specific slots.
+
+**Without `on_complete`:** The task sets
+`status = "complete"` and the conversation freezes. The
+user cannot start a new query without a new session.
+
+### 12.7 Event Mappings: CES Event Name → Slot Values
+
+CES UI elements (buttons, cards) can fire named events
+(e.g., `alert_last_price`, `alert_bid_price`). The
+`event_mappings` config maps these event names to slot
+values, keeping business logic out of callbacks.
+
+#### Config syntax
+
+Add `event_mappings` at the top level of your DAG config:
+
+```python
+{
+    "slots": [...],
+    "tasks": [...],
+    "event_mappings": {
+        "alert_last_price": {"alert_price_type": "last"},
+        "alert_bid_price": {"alert_price_type": "bid"},
+        "alert_ask_price": {"alert_price_type": "ask"},
+        "alert_rises_above": {"alert_price_direction": "rises above"},
+        "alert_drops_below": {"alert_price_direction": "drops below"},
+    },
+}
+```
+
+When the engine receives `event_data` with an
+`ia_event_name` key matching one of the mapping entries,
+the mapped slot values are injected into `event_data`
+before normal event pre-fill processing.
+
+#### Callback passthrough
+
+The standard `before_model_callback` passes
+`ia_event_name` through `event_data` so the engine can
+process it:
+
+```python
+event_data = callback_context.state.get("event_data", {})
+ia_event = callback_context.state.get("ia_event_name")
+if ia_event:
+    event_data["ia_event_name"] = ia_event
+```
+
+This is framework-level code (not agent-specific) and is
+already included in the standard `before_model_callback`.
+
+#### How it works
+
+In `slot_filling_engine()`, before event pre-fill:
+
+1. Read `event_mappings` from the compiled config.
+2. Check for `ia_event_name` in `event_data`.
+3. If a match is found, merge the mapped values into
+   `event_data`.
+4. Normal event pre-fill then processes the enriched
+   `event_data`, writing matched values to `filled`.
+
+Unmatched event names are ignored — the engine falls
+through to normal slot collection.
+
+#### Declaring `ia_event_name` in `app.json`
+
+CES only exposes declared variables. Add to
+`variableDeclarations`:
+
+```json
+{
+    "name": "ia_event_name",
+    "schema": {"type": "STRING", "default": ""}
+}
+```
 
 ---
 
