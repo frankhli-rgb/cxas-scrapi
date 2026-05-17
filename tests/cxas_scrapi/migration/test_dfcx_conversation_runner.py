@@ -112,14 +112,11 @@ def _build_runner_with_mock_session(query_result_factory=_make_query_result):
     fake_sessions_client = MagicMock()
     fake_sessions_client.detect_intent.return_value = fake_response
 
-    with patch(
-        "cxas_scrapi.migration.dfcx_conversation_runner.google.auth.default",
-        return_value=(MagicMock(), "p"),
-    ):
-        runner = DFCXConversationRunner(
-            agent_id=AGENT_BASE,
-            language_code="en",
-        )
+    runner = DFCXConversationRunner(
+        agent_id=AGENT_BASE,
+        creds=MagicMock(),
+        language_code="en",
+    )
 
     # Inject the mock SessionsClient and pre-populate display-name caches
     # so no network calls happen.
@@ -146,11 +143,7 @@ def test_dataclass_round_trip():
 
 
 def test_session_id_built_with_correct_prefix():
-    with patch(
-        "cxas_scrapi.migration.dfcx_conversation_runner.google.auth.default",
-        return_value=(MagicMock(), "p"),
-    ):
-        runner = DFCXConversationRunner(agent_id=AGENT_BASE)
+    runner = DFCXConversationRunner(agent_id=AGENT_BASE, creds=MagicMock())
     assert runner.session_id.startswith(f"{AGENT_BASE}/sessions/")
 
 
@@ -221,7 +214,7 @@ def test_inline_tool_action_is_tagged_and_id_preserved():
     assert "inline-action" not in runner._tools_map
 
 
-def test_run_scripted_conversation_appends_turns():
+def test_run_golden_appends_turns():
     runner, fake_client = _build_runner_with_mock_session()
     fake_client.detect_intent.side_effect = [
         SimpleNamespace(query_result=_make_query_result(agent_text="hi 1")),
@@ -229,7 +222,7 @@ def test_run_scripted_conversation_appends_turns():
         SimpleNamespace(query_result=_make_query_result(agent_text="hi 3")),
     ]
 
-    trace = runner.run_scripted_conversation(["a", "b", "c"])
+    trace = runner.run_golden(["a", "b", "c"])
 
     assert len(trace.turns) == 3
     assert [t.user_query for t in trace.turns] == ["a", "b", "c"]
@@ -319,14 +312,11 @@ def _build_runner_with_mock_history(convo):
     fake_history_client.get_conversation.return_value = convo
     fake_history_client.list_conversations.return_value = iter([convo])
 
-    with patch(
-        "cxas_scrapi.migration.dfcx_conversation_runner.google.auth.default",
-        return_value=(MagicMock(), "p"),
-    ):
-        runner = DFCXConversationRunner(
-            agent_id=AGENT_BASE,
-            language_code="en",
-        )
+    runner = DFCXConversationRunner(
+        agent_id=AGENT_BASE,
+        creds=MagicMock(),
+        language_code="en",
+    )
 
     runner._history_client = fake_history_client
     runner._tools_map = {TOOL_ID: "my_tool"}
@@ -335,11 +325,11 @@ def _build_runner_with_mock_history(convo):
     return runner, fake_history_client
 
 
-def test_list_past_conversations_returns_summary():
+def test_list_conversations_returns_summary():
     convo = _make_recorded_conversation()
     runner, fake_client = _build_runner_with_mock_history(convo)
 
-    listing = runner.list_past_conversations()
+    listing = runner.list_conversations()
 
     fake_client.list_conversations.assert_called_once()
     assert len(listing) == 1
@@ -348,11 +338,11 @@ def test_list_past_conversations_returns_summary():
     assert listing[0]["interaction_count"] == 2
 
 
-def test_load_past_conversation_replays_into_trace():
+def test_get_conversation_replays_into_trace():
     convo = _make_recorded_conversation()
     runner, fake_client = _build_runner_with_mock_history(convo)
 
-    trace = runner.load_past_conversation(convo.name)
+    trace = runner.get_conversation(convo.name)
 
     fake_client.get_conversation.assert_called_once()
     # The historical conversation_id replaces session_id as the source ref.
@@ -371,7 +361,7 @@ def test_load_past_conversation_replays_into_trace():
     )
 
 
-def test_load_past_conversation_handles_non_text_inputs():
+def test_get_conversation_handles_non_text_inputs():
     interactions = [
         SimpleNamespace(
             request=SimpleNamespace(
@@ -403,7 +393,7 @@ def test_load_past_conversation_handles_non_text_inputs():
     convo = _make_recorded_conversation(interactions=interactions)
     runner, _ = _build_runner_with_mock_history(convo)
 
-    trace = runner.load_past_conversation(convo.name)
+    trace = runner.get_conversation(convo.name)
     queries = [t.user_query for t in trace.turns]
     assert "<intent:welcome>" in queries
     assert "<event:WELCOME>" in queries
@@ -412,7 +402,7 @@ def test_load_past_conversation_handles_non_text_inputs():
 def test_save_to_yaml_works_for_loaded_history(tmp_path):
     convo = _make_recorded_conversation()
     runner, _ = _build_runner_with_mock_history(convo)
-    runner.load_past_conversation(convo.name)
+    runner.get_conversation(convo.name)
 
     out_path = tmp_path / "history.yaml"
     runner.save_to_yaml(str(out_path))
@@ -427,25 +417,22 @@ def test_save_to_yaml_works_for_loaded_history(tmp_path):
     assert loaded["turns"][0]["tool_calls"][0]["tool_id"] == TOOL_ID
 
 
-def test_from_past_conversation_classmethod():
+def test_from_conversation_classmethod():
     convo = _make_recorded_conversation()
     fake_history_client = MagicMock()
     fake_history_client.get_conversation.return_value = convo
 
-    with patch(
-        "cxas_scrapi.migration.dfcx_conversation_runner.google.auth.default",
-        return_value=(MagicMock(), "p"),
+    # Patch _get_history_client at class level so it survives __init__.
+    with patch.object(
+        DFCXConversationRunner,
+        "_get_history_client",
+        return_value=fake_history_client,
     ):
-        # Patch _get_history_client at class level so it survives __init__.
-        with patch.object(
-            DFCXConversationRunner,
-            "_get_history_client",
-            return_value=fake_history_client,
-        ):
-            runner = DFCXConversationRunner.from_past_conversation(
-                agent_id=AGENT_BASE,
-                conversation_id=convo.name,
-            )
+        runner = DFCXConversationRunner.from_conversation(
+            agent_id=AGENT_BASE,
+            conversation_id=convo.name,
+            creds=MagicMock(),
+        )
 
     assert runner.session_id == convo.name
     assert len(runner.trace.turns) == 2
@@ -467,12 +454,12 @@ def test_live_history_pull_against_test_agent(tmp_path):
         language_code="en",
     )
 
-    listing = runner.list_past_conversations()
+    listing = runner.list_conversations()
     if not listing:
         pytest.skip("No recorded conversations on the test agent")
 
     convo_id = listing[0]["name"]
-    trace = runner.load_past_conversation(convo_id)
+    trace = runner.get_conversation(convo_id)
 
     assert trace.session_id == convo_id
     assert trace.agent_id == LIVE_AGENT_ID
@@ -503,7 +490,7 @@ def test_live_conversation_against_test_agent(tmp_path):
     )
 
     utterances = ["hi", "I need help", "thanks"]
-    trace = runner.run_scripted_conversation(utterances)
+    trace = runner.run_golden(utterances)
 
     assert trace.agent_id == LIVE_AGENT_ID
     assert trace.session_id.startswith(f"{LIVE_AGENT_ID}/sessions/")

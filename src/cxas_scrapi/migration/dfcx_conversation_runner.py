@@ -28,14 +28,13 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
-import google.auth
 import yaml
 from google.cloud.dialogflowcx_v3beta1 import services as cx_services
 from google.cloud.dialogflowcx_v3beta1 import types as cx_types
-from google.oauth2 import service_account
 from google.protobuf.json_format import MessageToDict
 from proto.marshal.collections import maps, repeated
 
+from cxas_scrapi.core.common import Common
 from cxas_scrapi.migration.dfcx_exporter import BaseDFCXClient
 
 logger = logging.getLogger(__name__)
@@ -102,7 +101,7 @@ class DFCXConversationRunner(BaseDFCXClient):
     ):
         self.agent_id = agent_id
         self.language_code = language_code
-        self.creds = self._resolve_credentials(creds, creds_path)
+        self.creds = Common(creds_path=creds_path, creds=creds).creds
         self._client_options = self._get_client_options(agent_id)
 
         # Lazy resource clients & display-name maps.
@@ -148,15 +147,18 @@ class DFCXConversationRunner(BaseDFCXClient):
         self.trace.turns.append(turn)
         return turn
 
-    def run_scripted_conversation(
-        self, utterances: Iterable[str]
-    ) -> ConversationTrace:
-        """Send a list of utterances in order and return the trace."""
+    def run_golden(self, utterances: Iterable[str]) -> ConversationTrace:
+        """Replay a golden script of utterances against the agent and return
+        the resulting trace.
+
+        Each utterance is sent in order via `send_message`, so the produced
+        trace can be diffed against a recorded baseline to detect regressions.
+        """
         for utterance in utterances:
             self.send_message(utterance)
         return self.trace
 
-    def list_past_conversations(self) -> List[Dict[str, Any]]:
+    def list_conversations(self) -> List[Dict[str, Any]]:
         """List historical conversations stored for this agent.
 
         Returns a list of dicts: `{name, start_time, interaction_count}`.
@@ -181,7 +183,7 @@ class DFCXConversationRunner(BaseDFCXClient):
             )
         return results
 
-    def load_past_conversation(self, conversation_id: str) -> ConversationTrace:
+    def get_conversation(self, conversation_id: str) -> ConversationTrace:
         """Replace `self.trace` with a recorded conversation from history.
 
         The conversation's stored interactions are decoded through the same
@@ -230,7 +232,7 @@ class DFCXConversationRunner(BaseDFCXClient):
         return self.trace
 
     @classmethod
-    def from_past_conversation(
+    def from_conversation(
         cls,
         agent_id: str,
         conversation_id: str,
@@ -246,7 +248,7 @@ class DFCXConversationRunner(BaseDFCXClient):
             language_code=language_code,
             session_id=conversation_id,  # avoid live-session UUID generation
         )
-        runner.load_past_conversation(conversation_id)
+        runner.get_conversation(conversation_id)
         return runner
 
     @staticmethod
@@ -285,19 +287,8 @@ class DFCXConversationRunner(BaseDFCXClient):
         return content
 
     # ------------------------------------------------------------------ #
-    # Credentials, region routing, session ID
+    # Session ID
     # ------------------------------------------------------------------ #
-
-    @staticmethod
-    def _resolve_credentials(creds, creds_path):
-        if creds is not None:
-            return creds
-        if creds_path:
-            return service_account.Credentials.from_service_account_file(
-                creds_path
-            )
-        adc_creds, _ = google.auth.default()
-        return adc_creds
 
     def _build_session_id(
         self, agent_id: str, environment_id: Optional[str]
