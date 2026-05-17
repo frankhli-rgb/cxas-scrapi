@@ -113,8 +113,7 @@ def check_consolidation_integrity(
                 and short not in available_tool_ids
             ):
                 blocking.append(
-                    f"Group {group_name!r} references unknown toolset "
-                    f"{short!r}"
+                    f"Group {group_name!r} references unknown toolset {short!r}"
                 )
 
         # 3. {@TOOL: name} refs in the instruction
