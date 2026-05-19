@@ -20,7 +20,12 @@
   .failure-group .affected-item { display: inline-block; padding: 2px 8px; margin: 2px; border-radius: 4px; background: #fdecea; font-size: 0.8em; }
   .pass { color: #27ae60; } .fail { color: #e74c3c; }
   table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #ddd; }
+  th,
+  td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid #ddd;
+  }
   th { background: #2c3e50; color: white; }
   tr.clickable { cursor: pointer; }
   tr.clickable:hover { background: #eef; }
@@ -30,8 +35,10 @@
   .eval-header.fail-bg { background: #f8d7da; border-left: 4px solid #e74c3c; }
   .eval-body { padding: 0 16px 16px; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
-  .badge.pass, .badge.met { background: #d4edda; color: #155724; }
-  .badge.fail, .badge.not-met { background: #f8d7da; color: #721c24; }
+  .badge.pass,
+  .badge.met { background: #d4edda; color: #155724; }
+  .badge.fail,
+  .badge.not-met { background: #f8d7da; color: #721c24; }
   .badge.golden { background: #fff3e0; color: #e65100; }
   .badge.sim { background: #e8eaf6; color: #283593; }
   .badge.tool { background: #e0f2f1; color: #004d40; }
@@ -81,7 +88,10 @@
 
   @media (prefers-color-scheme: dark) {
     body { background: #121212; color: #e0e0e0; }
-    h1, h2 { color: #e0e0e0; }
+    h1,
+    h2 {
+      color: #e0e0e0;
+    }
     h1 { border-bottom-color: #e94560; }
     .summary { background: #1e1e1e; box-shadow: 0 2px 4px rgba(255,255,255,0.05); }
     .summary-card { background: #2d2d2d; }
@@ -97,8 +107,10 @@
     .eval-card { background: #1e1e1e; box-shadow: 0 2px 4px rgba(255,255,255,0.05); }
     .eval-header.pass-bg { background: #1b382b; border-left-color: #27ae60; color: #e0e0e0; }
     .eval-header.fail-bg { background: #3d1e22; border-left-color: #e74c3c; color: #e0e0e0; }
-    .badge.pass, .badge.met { background: #1b382b; color: #81c784; }
-    .badge.fail, .badge.not-met { background: #3d1e22; color: #e57373; }
+    .badge.pass,
+    .badge.met { background: #1b382b; color: #81c784; }
+    .badge.fail,
+    .badge.not-met { background: #3d1e22; color: #e57373; }
     .badge.golden { background: #332211; color: #ffb74d; }
     .badge.sim { background: #1a237e; color: #9fa8da; }
     .badge.tool { background: #004d40; color: #80cbc4; }
@@ -111,9 +123,11 @@
     .comparison.pass-bg { background: #1b382b; }
     .comparison.fail-bg { background: #3d1e22; }
     .comp-label { color: #aaa; }
-    .sem-4, .sem-3 { background: #1b382b; color: #81c784; }
+    .sem-4,
+    .sem-3 { background: #1b382b; color: #81c784; }
     .sem-2 { background: #332c00; color: #ffd54f; }
-    .sem-1, .sem-0 { background: #3d1e22; color: #e57373; }
+    .sem-1,
+    .sem-0 { background: #3d1e22; color: #e57373; }
     .transcript { background: #252525; }
     .transcript .user { color: #64b5f6; }
     .transcript .agent { color: #81c784; }

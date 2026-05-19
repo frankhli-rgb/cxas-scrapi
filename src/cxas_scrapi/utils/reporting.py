@@ -115,7 +115,8 @@ def _get_html_head(ts):
   .fail {{ color: #e74c3c; }}
   .error {{ color: #e67e22; }}
   table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
-  th, td {{
+  th,
+  td {{
     text-align: left;
     padding: 8px 12px;
     border-bottom: 1px solid #ddd;
