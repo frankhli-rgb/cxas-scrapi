@@ -9,41 +9,30 @@
 
 """Stage 2: instruction state machines + tool mocks + lint + report.
 
-Loads the <target>_ir.json bundle written by migrate.py / stage1.py, then:
-
-  1. Runs CXASOptimizer.optimize_stage2() — Playbook XML state machine
-     restructuring (parallel) + Python tool `mock_mode` injection (parallel).
-  2. Pushes via update-pass deploys.
-  3. Creates CXAS Version `0.0.2`.
-  4. Re-generates deterministic unit tests against the final agents.
-  5. Runs `cxas pull` + `cxas lint`.
-  6. Writes the final OptimizationReporter audit markdown.
+Thin shell over :meth:`MigrationService.run_stage2`. Loads the IR bundle
+written by :mod:`stage1`, restores a :class:`MigrationService`, then
+delegates everything (CXASOptimizer Stage 2, redeploy, version
+checkpoint, unit-test regen, post-deploy lint, OptimizationReporter
+markdown, bundle persist) to the service method.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 import sys
-from datetime import datetime
 
 from rich.console import Console
 from rich.logging import RichHandler
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _bundle  # noqa: E402
-import _lint  # noqa: E402
-import _optimizer_runner  # noqa: E402
 import _phase_tracker  # noqa: E402
 import _prompts  # noqa: E402
-import _reporter  # noqa: E402
 import _shared  # noqa: E402
 
-from cxas_scrapi.core.versions import Versions
-from cxas_scrapi.migration.eval_generator import DeterministicEvalGenerator
 from cxas_scrapi.migration.service import MigrationService
 
 logger = logging.getLogger(__name__)
@@ -96,20 +85,6 @@ def _resolve_bundle_path(args) -> str:
     return path
 
 
-def _restore_service(bundle: _bundle.IRBundle, args) -> MigrationService:
-    """Delegate to `MigrationService.restore_from_bundle`, honoring the
-    skill's `--project-id` / `--location` CLI overrides."""
-    return MigrationService.restore_from_bundle(
-        bundle,
-        project_id=getattr(args, "project_id", None),
-        location=getattr(args, "location", None),
-    )
-
-
-def _resolve_location_from_bundle(bundle: _bundle.IRBundle) -> str:
-    return bundle.resolve_location(default=_prompts.DEFAULT_LOCATION)
-
-
 async def _run(args) -> None:
     tracker = _phase_tracker.PhaseTracker(console)
 
@@ -122,152 +97,42 @@ async def _run(args) -> None:
     bundle_path = _resolve_bundle_path(args)
     console.print(f"[cyan]Loading IR bundle:[/] {bundle_path}")
     bundle = _bundle.load(bundle_path)
-
     target_name = bundle.config.target_name
-    service = _restore_service(bundle, args)
-    started_at = datetime.now()
 
-    # ---- Stage 2: instruction state machines + tool mocks ----------------
-    stage2_optimizer = None
-    with tracker.phase(
-        "Stage 2", "instruction state machines + tool mocks + redeploy"
-    ):
-        try:
-            stage2_optimizer = await _optimizer_runner.run_stage_with_redeploy(
-                service, stage=2, console=console
-            )
-            _optimizer_runner.merge_optimizer_logs_into_ir(
-                service.ir, stage2_optimizer, "stage2"
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Stage 2 failed: %s", exc)
-            _bundle.append_stage(bundle, "stage2", "fail", started_at, str(exc))
-            _bundle.save(bundle, bundle_path)
-            console.print(f"[red]Stage 2 failed: {exc}[/]")
-            sys.exit(2)
-
-    # ---- CXAS Version 0.0.2 ----------------------------------------------
-    if service.ir.metadata.app_resource_name:
-        with tracker.phase("Version 0.0.2", "CXAS post-Stage-2 checkpoint"):
-            try:
-                Versions(service.ir.metadata.app_resource_name).create_version(
-                    display_name="0.0.2",
-                    description=(
-                        "Stage 2: instruction state machines + tool mocks"
-                    ),
-                )
-                _bundle.attach_version(
-                    bundle,
-                    "0.0.2",
-                    "Stage 2: instruction state machines + tool mocks",
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Version 0.0.2 checkpoint failed: %s", exc)
-
-    # ---- Re-generate deterministic unit tests ---------------------------
-    test_path = ""
-    test_counts: dict[str, int] = {}
-    if not args.no_unit_tests:
-        with tracker.phase("Unit tests", "DeterministicEvalGenerator"):
-            try:
-                gen = DeterministicEvalGenerator(service.ir)
-                by_agent: dict[str, list] = {}
-                for agent_name in service.ir.agents:
-                    cases = gen.generate_tests_for_agent(agent_name)
-                    if cases:
-                        by_agent[agent_name] = [
-                            tc.model_dump(mode="json") for tc in cases
-                        ]
-                test_path = f"{target_name}_unit_tests.json"
-                with open(test_path, "w") as f:
-                    json.dump(by_agent, f, indent=2, default=str)
-                test_counts = {n: len(v) for n, v in by_agent.items()}
-                console.print(
-                    f"[green]Regenerated {sum(test_counts.values())} tests for "
-                    f"{len(test_counts)} agents → {test_path}[/]"
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Unit test regeneration failed: %s", exc)
-
-    # ---- Lint ------------------------------------------------------------
-    lint_passed: bool | None = None
-    lint_output = ""
-    if not args.no_lint:
-        with tracker.phase("Lint", "cxas pull + cxas lint"):
-            try:
-                lint_passed, lint_output = await _lint.run_post_deploy_lint(
-                    service, console
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Lint failed to run: %s", exc)
-                console.print(f"[yellow]Lint did not run: {exc}[/]")
-
-    # ---- OptimizationReporter audit markdown -----------------------------
-    report_path = ""
-    if not args.no_report:
-        with tracker.phase("Audit report", "OptimizationReporter markdown"):
-            try:
-                stage1_logs = bundle.ir.optimization_logs.get("stages", {}).get(
-                    "stage1"
-                )
-                stage2_logs = bundle.ir.optimization_logs.get("stages", {}).get(
-                    "stage2"
-                )
-                reporter = _reporter.OptimizationReporter()
-                reporter.set_app_info(
-                    "(see bundle)",
-                    target_name,
-                    service.ir.metadata.app_resource_name or "",
-                    bundle.app_url or "",
-                )
-                reporter.set_grouping(
-                    bundle.grouping or {},
-                    before_count=len(bundle.source_agent_data.playbooks)
-                    + len(bundle.source_agent_data.flows),
-                    after_count=len(service.ir.agents),
-                    path=f"{target_name}_grouping.json"
-                    if bundle.grouping
-                    else "",
-                )
-                reporter.set_optimizer_logs(stage1_logs, stage2_logs)
-                reporter.set_version_checkpoints(bundle.version_checkpoints)
-                if test_counts:
-                    reporter.set_unit_test_summary(test_counts, test_path)
-                if lint_passed is not None:
-                    reporter.set_lint_result(lint_passed, lint_output)
-                report_path = reporter.export(
-                    f"{target_name}_optimization_report.md"
-                )
-                console.print(f"[green]Optimization report → {report_path}[/]")
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Report generation failed: %s", exc)
-
-    # ---- Persist updated bundle -----------------------------------------
-    bundle.ir = service.ir
-    _bundle.append_stage(
+    service = MigrationService.restore_from_bundle(
         bundle,
-        "stage2",
-        "ok",
-        started_at,
-        notes=(
-            "Stage 2 complete; "
-            + (
-                "lint passed"
-                if lint_passed
-                else "lint had issues"
-                if lint_passed is False
-                else "lint skipped"
-            )
-        ),
+        project_id=args.project_id,
+        location=args.location,
     )
-    _bundle.save(bundle, bundle_path)
+
+    unit_tests_path = (
+        f"{target_name}_unit_tests.json" if not args.no_unit_tests else None
+    )
+    report_path = (
+        f"{target_name}_optimization_report.md" if not args.no_report else None
+    )
+
+    with tracker.phase(
+        "Stage 2",
+        "instruction state machines + tool mocks + redeploy",
+    ):
+        await service.run_stage2(
+            version_label="0.0.2",
+            generate_unit_tests=not args.no_unit_tests,
+            unit_tests_path=unit_tests_path,
+            run_lint=not args.no_lint,
+            write_report_to=report_path,
+            bundle=bundle,
+            persist_bundle_path=bundle_path,
+            console=console,
+        )
 
     console.print()
     console.print(tracker.summary_table())
     console.print("\n[bold green]Stage 2 complete.[/]")
     console.print(f"  • IR bundle:        {bundle_path}")
-    if test_path:
-        console.print(f"  • Unit tests:       {test_path}")
+    if unit_tests_path:
+        console.print(f"  • Unit tests:       {unit_tests_path}")
     if report_path:
         console.print(f"  • Audit report:     {report_path}")
     if bundle.app_url:

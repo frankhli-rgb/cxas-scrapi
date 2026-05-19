@@ -39,7 +39,12 @@ from cxas_scrapi.cli.app import (
 )
 from cxas_scrapi.cli.create_local import handle_local_create
 from cxas_scrapi.cli.insights_cli import populate_insights_parser
-from cxas_scrapi.cli.migration_cli import MigrationCLI
+from cxas_scrapi.cli.migration_cli import (
+    MigrationCLI,
+)
+from cxas_scrapi.cli.migration_cli import (
+    register as register_dfcx_cxas_subparsers,
+)
 from cxas_scrapi.cli.trace_cli import register as register_trace_subparser
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
@@ -863,8 +868,10 @@ def get_parser() -> argparse.ArgumentParser:
         help="Default name for the target agent.",
     )
     parser_migrate_dfcx.set_defaults(func=run_migration_dashboard)
-    # TODO: Add flags for non-interactive mode (e.g., --headless, --config)
-    # to bypass the interactive dashboard.
+
+    # Register the dfcx-cxas subcommand tree (run / stage1 / stage2 /
+    # stage3 / resume). Lives in its own module to keep main.py lean.
+    register_dfcx_cxas_subparsers(migrate_subparsers)
 
     # Parser for 'init-github-action'
     parser_init_gh = subparsers.add_parser(

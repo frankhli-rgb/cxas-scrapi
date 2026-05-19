@@ -33,7 +33,6 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -255,11 +254,11 @@ async def _run(args) -> None:
         default_model=inputs["model"],
     )
 
-    started_at = datetime.now()
     with tracker.phase("Migration", "MigrationService.run_migration"):
         await service.run_migration(source_cx_agent_id=agent_id, config=config)
 
-    # Phase 6: persist IR bundle
+    # Phase 6: persist IR bundle. service.persist_bundle handles the
+    # IR snapshot + stage_history append + atomic file write.
     bundle = _bundle.IRBundle(
         config=config,
         source_agent_data=agent_data,
@@ -271,14 +270,13 @@ async def _run(args) -> None:
             else None
         ),
     )
-    _bundle.append_stage(
+    bundle_path = service.persist_bundle(
         bundle,
-        "migrate",
-        "ok",
-        started_at,
+        f"{inputs['target_name']}_ir.json",
+        phase="migrate",
+        status="ok",
         notes=f"{len(service.ir.agents)} agents",
     )
-    bundle_path = _bundle.save_for_target(bundle, inputs["target_name"])
 
     # Phase 7: deterministic unit tests
     test_path = ""

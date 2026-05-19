@@ -9,15 +9,15 @@
 
 """Stage 1: CXASOptimizer variable dedup + optional Gemini consolidation.
 
-Loads the <target>_ir.json bundle written by migrate.py (does NOT re-fetch or
-re-compile the source agent), then:
+Thin shell over :meth:`MigrationService.run_stage1`. Loads the IR bundle
+written by :mod:`migrate`, restores a :class:`MigrationService` from it,
+then delegates everything (dedup, consolidator, integrity checks,
+topology link, orphan cleanup, version checkpoint, bundle persist) to
+the service method.
 
-  1. Runs CXASOptimizer.optimize_stage1() — global variable deduplication.
-  2. (Optional) Runs the StructuralConsolidator (Gemini grouping + per-group
-     PIF XML synthesis) to collapse N agents into M capability-rich groups.
-  3. Pushes the resulting IR via update-pass deploys.
-  4. Creates CXAS Version `0.0.1`.
-  5. Persists the updated IR back to <target>_ir.json.
+This script's only skill-specific responsibility is wiring the
+interactive grouping review TUI (`cxas_scrapi.migration.grouping_review`) into
+the service's ``grouping_callback``.
 """
 
 from __future__ import annotations
@@ -27,95 +27,22 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime
 
 from rich.console import Console
 from rich.logging import RichHandler
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _bundle  # noqa: E402
-import _grouping  # noqa: E402
-import _optimizer_runner  # noqa: E402
 import _phase_tracker  # noqa: E402
 import _prompts  # noqa: E402
 import _shared  # noqa: E402
-import _synthesis  # noqa: E402
 
-from cxas_scrapi.core.versions import Versions
-from cxas_scrapi.migration.dfcx_dep_analyzer import DependencyAnalyzer
-from cxas_scrapi.migration.integrity_checks import (
-    check_consolidation_integrity as _check_consolidation_integrity,
-)
+from cxas_scrapi.migration import grouping_review
 from cxas_scrapi.migration.service import MigrationService
-from cxas_scrapi.migration.structural_consolidator import (
-    StructuralConsolidator,
-    detect_root_key,
-    load_grouping,
-    persist_grouping,
-    root_group_name,
-    validate_groupings,
-)
-from cxas_scrapi.migration.topology_wirer import (
-    delete_orphan_agents as _wire_delete_orphan_agents,
-)
 from cxas_scrapi.utils.gemini import GeminiGenerate
 
 logger = logging.getLogger(__name__)
 console = Console()
-
-
-def _short_id(resource_name: str) -> str:
-    return (
-        resource_name.rsplit("/", maxsplit=1)[-1]
-        if "/" in resource_name
-        else resource_name
-    )
-
-
-def _delete_orphan_agents(
-    app_resource_name: str,
-    keep_resources: set[str],
-    console: Console,
-    *,
-    max_passes: int = 5,
-) -> tuple[int, int]:
-    """Rich-progress wrapper around
-    :func:`cxas_scrapi.migration.topology_wirer.delete_orphan_agents`."""
-
-    def _progress(event: str, payload) -> None:
-        if event == "init_failed":
-            console.print(f"[yellow]Could not init Agents client: {payload}[/]")
-        elif event == "list_failed":
-            console.print(
-                f"[yellow]list_agents failed mid-cleanup: {payload}[/]"
-            )
-        elif event == "empty":
-            console.print("[green]No orphan agents to delete.[/]")
-        elif event == "pass_start":
-            console.print(
-                f"[cyan]Deleting up to {payload['count']} orphan agents "
-                "from the 1:1 migration…[/]"
-            )
-        elif event == "deleted":
-            console.print(
-                f"  [dim]pass {payload['pass']}: deleted[/] "
-                f"{payload['display_name']!r} ({payload['short']})"
-            )
-        elif event == "no_progress":
-            failed = payload["failed"]
-            console.print(
-                f"[yellow]Pass {payload['pass']}: no progress; "
-                f"{len(failed)} orphans remain undeletable.[/]"
-            )
-            for msg in {m for _, _, m in failed}:
-                console.print(f"  [dim]reason:[/] {msg}")
-
-    return _wire_delete_orphan_agents(
-        app_resource_name,
-        keep_resources,
-        max_passes=max_passes,
-        progress=_progress,
-    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -141,12 +68,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--no-consolidate",
         action="store_true",
-        help="Skip the Gemini consolidation; only run CXASOptimizer Stage 1.",
-    )
-    p.add_argument(
-        "--no-instruction-review",
-        action="store_true",
-        help="Skip the per-group instruction review (view/edit/re-synthesize).",
+        help="Skip Gemini consolidation; only run CXASOptimizer Stage 1.",
     )
     p.add_argument(
         "--gemini-model",
@@ -159,6 +81,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--grouping-json",
         default=None,
         help="Load a previously persisted grouping instead of asking Gemini.",
+    )
+    p.add_argument(
+        "--on-integrity-fail",
+        choices=["abort", "warn", "ignore"],
+        default="abort",
+        help="What to do if pre-deploy integrity checks find blockers.",
     )
     p.add_argument("--yes", "-y", action="store_true", help="Non-interactive.")
     return p
@@ -177,18 +105,28 @@ def _resolve_bundle_path(args) -> str:
     return path
 
 
-def _restore_service(bundle: _bundle.IRBundle, args) -> MigrationService:
-    """Delegate to `MigrationService.restore_from_bundle`, honoring the
-    skill's `--project-id` / `--location` CLI overrides."""
-    return MigrationService.restore_from_bundle(
-        bundle,
-        project_id=getattr(args, "project_id", None),
-        location=getattr(args, "location", None),
-    )
+def _make_grouping_callback(yes: bool):
+    """Build the grouping_callback for `MigrationService.run_stage1`.
 
+    Non-interactive (``--yes``) callers get auto-accept — the proposed
+    groupings are returned unchanged. Interactive callers get the
+    accept/re-propose/merge/split/rename TUI from
+    :mod:`cxas_scrapi.migration.grouping_review`.
+    """
+    if yes:
+        return None  # service auto-accepts when callback is None
 
-def _resolve_location_from_bundle(bundle: _bundle.IRBundle) -> str:
-    return bundle.resolve_location(default=_prompts.DEFAULT_LOCATION)
+    async def cb(*, ir, groupings, consolidator, root_key, dep_summary):
+        return await grouping_review.interactive_review(
+            ir,
+            groupings,
+            consolidator,
+            root_key=root_key,
+            dep_summary=dep_summary,
+            console=console,
+        )
+
+    return cb
 
 
 async def _run(args) -> None:
@@ -203,237 +141,41 @@ async def _run(args) -> None:
     bundle_path = _resolve_bundle_path(args)
     console.print(f"[cyan]Loading IR bundle:[/] {bundle_path}")
     bundle = _bundle.load(bundle_path)
-
     target_name = bundle.config.target_name
-    service = _restore_service(bundle, args)
-    started_at = datetime.now()
 
-    # ---- Stage 1A: variable dedup --------------------------------------
-    with tracker.phase(
-        "Stage 1 — variable dedup", "CXASOptimizer.optimize_stage1"
-    ):
-        try:
-            stage1_optimizer = await _optimizer_runner.run_stage_with_redeploy(
-                service, stage=1, console=console
-            )
-            _optimizer_runner.merge_optimizer_logs_into_ir(
-                service.ir, stage1_optimizer, "stage1"
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.error("Stage 1 failed: %s", exc)
-            _bundle.append_stage(bundle, "stage1", "fail", started_at, str(exc))
-            _bundle.save(bundle, bundle_path)
-            console.print(f"[red]Stage 1 failed: {exc}[/]")
-            sys.exit(2)
-
-    # ---- Stage 1B (optional): consolidation --------------------------------
-    if not args.no_consolidate:
-        with tracker.phase(
-            "Consolidation", "Gemini grouping + per-group PIF XML synthesis"
-        ):
-            try:
-                gemini = GeminiGenerate(
-                    project_id=service.project_id,
-                    location="global",
-                    model_name=args.gemini_model,
-                    max_concurrent_requests=10,
-                )
-                consolidator = StructuralConsolidator(
-                    service.ir, gemini, service.source_agent_data
-                )
-
-                root_key = detect_root_key(
-                    service.ir, service.source_agent_data
-                )
-                analyzer = DependencyAnalyzer(service.source_agent_data)
-                dep_summary = _shared.build_dep_summary(analyzer, service.ir)
-
-                if args.grouping_json:
-                    console.print(f"Loading grouping from {args.grouping_json}")
-                    groupings = load_grouping(args.grouping_json)
-                    validate_groupings(service.ir, groupings, root_key)
-                else:
-                    groupings = await consolidator.propose_groupings(
-                        root_key, dep_summary
-                    )
-
-                if args.yes:
-                    optimized_ir = consolidator.consolidate(groupings)
-                else:
-                    result = await _grouping.interactive_review(
-                        service.ir,
-                        groupings,
-                        consolidator,
-                        root_key,
-                        dep_summary,
-                        console,
-                    )
-                    if result is None:
-                        console.print(
-                            "[yellow]Consolidation aborted; "
-                            "keeping post-Stage-1 IR.[/]"
-                        )
-                        optimized_ir = None
-                    else:
-                        optimized_ir, groupings = result
-
-                if optimized_ir is not None:
-                    grouping_path = persist_grouping(
-                        groupings, f"{target_name}_grouping.json"
-                    )
-                    console.print(
-                        f"[green]Grouping persisted → {grouping_path}[/]"
-                    )
-                    _bundle.attach_grouping(bundle, groupings)
-
-                    # Snapshot the original 1:1 IR before mutation. Persisted
-                    # in the bundle so the post-migrate state survives even
-                    # after consolidation collapses N agents into M groups.
-                    bundle.pre_consolidation_ir = service.ir.model_copy(
-                        deep=True
-                    )
-
-                    await _synthesis.synthesize_instructions_for_ir(
-                        optimized_ir, service, groupings, console
-                    )
-
-                    if not (args.yes or args.no_instruction_review):
-                        await _synthesis.interactive_synthesis_review(
-                            optimized_ir, service, groupings, console
-                        )
-
-                    # Pre-deploy integrity checks on the consolidated IR.
-                    blocking, warnings_ = _check_consolidation_integrity(
-                        optimized_ir, service.ir
-                    )
-                    if warnings_:
-                        console.print(
-                            "[yellow]Integrity warnings (non-blocking):[/]"
-                        )
-                        for w in warnings_:
-                            console.print(f"  • {w}")
-                    if blocking:
-                        console.print("[red]Integrity errors (blocking):[/]")
-                        for b in blocking:
-                            console.print(f"  • {b}")
-                        if not args.yes and not _prompts.prompt_yes_no(
-                            "Proceed with deploy anyway?", default=False
-                        ):
-                            console.print(
-                                "[yellow]Aborting consolidation. "
-                                "Pre-consolidation IR is preserved on disk.[/]"
-                            )
-                            raise RuntimeError("integrity check failed")
-
-                    # Push the consolidated agents
-                    service.ir.agents = optimized_ir.agents
-                    console.print(
-                        "[cyan]Pushing consolidated agents to CXAS…[/]"
-                    )
-                    await service._deploy_base_resources(is_update_pass=True)
-                    await service._deploy_pending_agents(is_update_pass=True)
-
-                    # Wire parent → child topology by scanning the deployed
-                    # agents' instructions for `{@AGENT: GroupName}` refs.
-                    # Without this step the root group has no `child_agents`
-                    # and can't transfer to the other groups at runtime.
-                    console.print("[cyan]Linking agent topology…[/]")
-                    try:
-                        service.topology_linker.link_and_finalize_topology(
-                            service.ir, service.source_agent_data
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        console.print(
-                            f"[yellow]Topology linking failed: {exc}[/]"
-                        )
-
-                    if root_group_name(groupings, root_key):
-                        # Update app's start agent to the root group's resource.
-                        rg = root_group_name(groupings, root_key)
-                        agent = service.ir.agents.get(rg)
-                        if agent and agent.resource_name:
-                            try:
-                                service.ps_apps.update_app(
-                                    service.ir.metadata.app_resource_name,
-                                    root_agent=agent.resource_name,
-                                )
-                                console.print(
-                                    f"[green]Set app start agent → {rg} "
-                                    f"({_short_id(agent.resource_name)})[/]"
-                                )
-                            except Exception as exc:  # noqa: BLE001
-                                console.print(
-                                    f"[yellow]Failed to set app root agent "
-                                    f"{rg}: {exc}[/]"
-                                )
-
-                    # Delete orphans — original 1:1 agents that the
-                    # consolidation didn't replace in place. "Keep" set is
-                    # the resource names of the agents we just deployed;
-                    # everything else under the app is an orphan.
-                    keep = {
-                        a.resource_name
-                        for a in service.ir.agents.values()
-                        if a.resource_name
-                    }
-                    deleted, failed = _delete_orphan_agents(
-                        service.ir.metadata.app_resource_name,
-                        keep_resources=keep,
-                        console=console,
-                    )
-                    if deleted or failed:
-                        console.print(
-                            f"[cyan]Orphan cleanup: {deleted} deleted, "
-                            f"{failed} failed.[/]"
-                        )
-            except Exception as exc:  # noqa: BLE001
-                logger.error("Consolidation failed: %s", exc)
-                console.print(
-                    f"[yellow]Consolidation failed; Stage 1 changes are still "
-                    f"deployed. Reason: {exc}[/]"
-                )
-
-    # ---- CXAS Version 0.0.1 ----------------------------------------------
-    if service.ir.metadata.app_resource_name:
-        with tracker.phase("Version 0.0.1", "CXAS pre-Stage-2 checkpoint"):
-            try:
-                Versions(service.ir.metadata.app_resource_name).create_version(
-                    display_name="0.0.1",
-                    description=(
-                        "Stage 1: variable dedup"
-                        + (
-                            " + consolidation"
-                            if not args.no_consolidate and bundle.grouping
-                            else ""
-                        )
-                    ),
-                )
-                _bundle.attach_version(
-                    bundle,
-                    "0.0.1",
-                    "Stage 1: variable dedup"
-                    + (
-                        " + consolidation"
-                        if not args.no_consolidate and bundle.grouping
-                        else ""
-                    ),
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Version 0.0.1 checkpoint failed: %s", exc)
-
-    # ---- Persist updated bundle ------------------------------------------
-    bundle.ir = service.ir
-    _bundle.append_stage(
+    service = MigrationService.restore_from_bundle(
         bundle,
-        "stage1",
-        "ok",
-        started_at,
-        notes=(
-            f"{len(service.ir.agents)} agents after Stage 1"
-            + (" (consolidated)" if bundle.grouping else "")
-        ),
+        project_id=args.project_id,
+        location=args.location,
     )
-    _bundle.save(bundle, bundle_path)
+
+    consolidate = not args.no_consolidate
+    gemini = None
+    if consolidate and args.gemini_model:
+        # Honor --gemini-model by constructing a client up front; service
+        # would otherwise use its default model.
+        gemini = GeminiGenerate(
+            project_id=service.project_id,
+            location="global",
+            model_name=args.gemini_model,
+            max_concurrent_requests=10,
+        )
+
+    with tracker.phase(
+        "Stage 1",
+        "variable dedup" + (" + Gemini consolidation" if consolidate else ""),
+    ):
+        await service.run_stage1(
+            consolidate=consolidate,
+            bundle=bundle if consolidate else None,
+            gemini_client=gemini,
+            grouping_callback=_make_grouping_callback(args.yes),
+            grouping_json_path=args.grouping_json,
+            on_integrity_fail=args.on_integrity_fail,
+            version_label="0.0.1",
+            persist_bundle_path=bundle_path,
+            console=console,
+        )
 
     console.print()
     console.print(tracker.summary_table())

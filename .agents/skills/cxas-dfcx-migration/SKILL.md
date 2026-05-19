@@ -23,6 +23,24 @@ Four small scripts, one persistent IR bundle:
 
 State flows through `<target>_ir.json` (a Pydantic `IRBundle` containing the `MigrationConfig`, source `DFCXAgentIR`, target `MigrationIR`, stage history, and version checkpoints). Each stage loads it from disk, mutates it, and writes it back. **No re-fetching or re-compiling between stages.**
 
+## When to use this skill vs. the CLI directly
+
+This skill (InquirerPy prompts + HTML pre-flight preview + Gemini model picker) is the right entry when you want to **interactively** drive a migration with rich pre-flight context. The same `MigrationService.run_stage*` methods this skill calls are also exposed via the canonical CLI for scripted / CI use:
+
+```bash
+# Same plumbing, scripted (no skill scripts needed):
+cxas migrate dfcx-cxas run --source-agent-id … --project-id … --target-name … --consolidate --persist-bundle
+cxas migrate dfcx-cxas stage1 --target-name my_app          # re-run stage 1 against the bundle
+cxas migrate dfcx-cxas stage2 --target-name my_app
+cxas migrate dfcx-cxas stage3 --target-name my_app
+cxas migrate dfcx-cxas resume --target-name my_app          # interactive bundle + stage picker
+
+# Or the existing interactive dashboard (now with opt-in consolidation / stage3 / persist-bundle):
+cxas migrate dfcx
+```
+
+The skill, the dashboard, and the stage subcommands all go through the **same** `MigrationService.run_stage1/run_stage2/run_stage3` methods — pick whichever entry point matches your workflow.
+
 ## Prerequisites
 
 ```bash
@@ -92,36 +110,45 @@ python .agents/skills/cxas-dfcx-migration/scripts/stage3.py --target-name my_cxa
 
 ## What lives in the skill vs. in `cxas_scrapi`
 
-The skill is a thin orchestrator. All migration / optimization logic lives in `src/cxas_scrapi/migration/`:
+The skill is a thin orchestrator. **Every migration / optimization step lives in `src/cxas_scrapi/migration/` and is reachable via `MigrationService.run_stage*` methods**, so the same logic powers all three entry points: this skill, `cxas migrate dfcx` (interactive dashboard), and `cxas migrate dfcx-cxas {stage1,stage2,stage3,resume,run}` (non-interactive subcommands).
 
 | Operation | src/ entry point |
 |---|---|
 | Source agent fetch / zip parse | `migration/dfcx_exporter.py:ConversationalAgentsAPI` |
-| Full migration pipeline | `migration/service.py:MigrationService.run_migration` |
-| Variable dedup (Stage 1) | `migration/optimizer.py:CXASOptimizer.optimize_stage1` |
-| Instruction restructuring + tool mocks (Stage 2) | `migration/optimizer.py:CXASOptimizer.optimize_stage2` |
+| 1:1 migration | `migration/service.py:MigrationService.run_migration` |
+| **Stage 1 orchestrator** (variable dedup + optional consolidation + integrity + topology link + orphan cleanup + version + bundle persist) | `migration/service.py:MigrationService.run_stage1` |
+| **Stage 2 orchestrator** (state machines + tool mocks + unit-test regen + lint + audit report + bundle persist) | `migration/service.py:MigrationService.run_stage2` |
+| **Stage 3 orchestrator** (parent-child topology wiring) | `migration/service.py:MigrationService.run_stage3` |
+| Bundle persist convenience | `migration/service.py:MigrationService.persist_bundle` |
+| Variable dedup primitive (Stage 1) | `migration/optimizer.py:CXASOptimizer.optimize_stage1` |
+| Instruction restructuring + tool mocks primitive (Stage 2) | `migration/optimizer.py:CXASOptimizer.optimize_stage2` |
+| Gemini N→M grouping + per-group PIF XML synthesis | `migration/structural_consolidator.py:StructuralConsolidator` |
+| Pre-deploy integrity checks | `migration/integrity_checks.py:check_consolidation_integrity` |
+| Parent-child topology + orphan cleanup | `migration/topology_wirer.py` |
 | Update-pass redeploys | `migration/service.py:MigrationService._deploy_base_resources(is_update_pass=True)` + `_deploy_pending_agents(is_update_pass=True)` |
 | Topology link | `migration/cxas_topology_linker.py` |
 | Version checkpoints | `core/versions.py:Versions.create_version` |
 | Topology SVG | `migration/graph_visualizer.py:HighLevelGraphVisualizer` |
 | Per-resource Rich trees | `migration/playbook_visualizer.py` + `migration/flow_visualizer.py` |
-
 | Deterministic unit tests | `migration/eval_generator.py:DeterministicEvalGenerator` |
 | Migration report | `migration/dfcx_migration_reporter.py` |
-| Gemini N→M grouping + per-group PIF XML synthesis | `migration/structural_consolidator.py:StructuralConsolidator` *(new in src/, promoted out of the skill)* |
+| Optimization audit report | `migration/optimization_reporter.py:OptimizationReporter` |
+| Grouping review TUI (accept / re-propose / merge / split / rename) | `cli/grouping_review.py:interactive_review` |
+| HTML pre-flight preview | `migration/html_preview.py` |
+| Post-deploy lint | `migration/post_deploy_lint.py` |
+| IR bundle persistence | `migration/ir_bundle.py:IRBundle` |
 
-Skill-local helpers (TUI / persistence / formatting only):
+Skill-local helpers (UX glue only — every one is either a re-export shim or InquirerPy prompt wiring):
 
 - `_prompts.py` — InquirerPy prompt library (matches agent-foundry).
-- `_bundle.py` — `<target>_ir.json` persistence (Pydantic roundtrip).
-- `_phase_tracker.py` — timed phase markers for the terminal.
-- `_visualizer.py` — pre-flight HTML preview + multi-stage HTML report aggregator.
-- `_grouping.py` — TUI wrapper around `StructuralConsolidator` (interactive accept / re-propose / merge / split / rename).
-- `_synthesis.py` — TUI wrapper for view / edit-in-`$EDITOR` / re-synthesize per group.
-- `_optimizer_runner.py` — `run_stage_with_redeploy(service, stage)` helper (Stage N + update-pass redeploys).
-- `_lint.py` — `cxas pull` + `cxas lint` post-deploy.
-- `_reporter.py` — `OptimizationReporter` audit markdown.
-- `_shared.py` — **delegates to `MigrationCLI`** for `check_auth`, `display_status`, `run_dependency_analysis`, `select_resources`, `show_visualizations`. Skill-specific reimplementation only for: project + location prompts upfront (CLI doesn't ask), source loading via InquirerPy (CLI version is inline + uses rich.Prompt), `MigrationConfig` assembly that interleaves InquirerPy prompts with CLI flag overrides.
+- `_phase_tracker.py` — re-export shim for `migration/phase_tracker.py` (terminal phase timing markers).
+- `_grouping.py` — re-export shim for `cli/grouping_review.py` (the interactive review TUI).
+- `_visualizer.py` — re-export shim for `migration/html_preview.py` (HTML preview / StageReport).
+- `_bundle.py` — re-export shim for `migration/ir_bundle.py`.
+- `_lint.py` / `_reporter.py` / `_optimizer_runner.py` — re-export shims for their respective `migration/*` modules.
+- `_shared.py` — InquirerPy variants of project/location prompts, source loader, and `MigrationConfig` assembly; plus pure delegations to `MigrationCLI` for `check_auth`, `run_dependency_analysis`, `select_resources`, `show_visualizations`.
+
+The skill's stage scripts (`migrate.py` / `stage1.py` / `stage2.py` / `stage3.py`) are now ~80-200 line shells: parse args → restore service from bundle → call the matching `MigrationService.run_stage*` → print summary. There is no orchestration logic left in the skill — only InquirerPy prompts and the HTML preview that's specific to the skill's pre-flight UX.
 
 ## IR bundle (`<target>_ir.json`)
 

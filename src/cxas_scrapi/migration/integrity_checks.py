@@ -88,11 +88,18 @@ def check_consolidation_integrity(
     new_group_names = set(optimized_ir.agents.keys())
     available_vars = set(current_ir.parameters.keys())
     sentinel_lower = {s.lower() for s in SENTINEL_REFS} | {"end_session"}
+    # Sentinel tool short-IDs that the server auto-registers at deploy
+    # time — they're never in current_ir.tools but are valid refs in
+    # agent.tools / agent.toolsets / instructions. Kept in sync with
+    # MigrationService._inject_system_variables sentinel handling.
+    sentinel_tool_ids = {"end_session", "set_session_variables"}
 
     for group_name, agent in optimized_ir.agents.items():
         # 1. Tool refs (the agent.tools list)
         for tool_ref in agent.tools:
             short = _short_id(tool_ref)
+            if short in sentinel_tool_ids:
+                continue
             if (
                 tool_ref not in available_tool_resources
                 and short not in available_tool_ids
@@ -108,6 +115,8 @@ def check_consolidation_integrity(
             if not ts_id:
                 continue
             short = _short_id(ts_id)
+            if short in sentinel_tool_ids:
+                continue
             if (
                 ts_id not in available_tool_resources
                 and short not in available_tool_ids
@@ -120,7 +129,7 @@ def check_consolidation_integrity(
         instruction = agent.instruction or ""
         for raw_tool_ref in TOOL_REF_RE.findall(instruction):
             tool_name = raw_tool_ref.strip()
-            if tool_name in {"end_session"}:  # sentinel — auto-registered
+            if tool_name in sentinel_tool_ids:
                 continue
             if tool_name not in available_tool_ids and not any(
                 _short_id(t.name) == tool_name or t.id == tool_name

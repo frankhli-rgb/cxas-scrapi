@@ -72,6 +72,109 @@ def _sanitize_display_name(name: str, max_len: int = 85) -> str:
     return sanitized[:max_len] or "MigratedAgent"
 
 
+# `{@TOOL: name}` directive matcher — kept in sync with
+# :data:`integrity_checks.TOOL_REF_RE`.
+_HEAL_TOOL_REF_RE = re.compile(r"\{@TOOL:\s*([^}]+)\}")
+
+# Suffix transforms tried in order. Each is `(suffix_to_strip, "")` so
+# `X<suffix>` rewrites to `X`. Stored as a tuple of (description, callable)
+# so we can extend with non-suffix transforms later if needed.
+_HEAL_SUFFIX_STRIPS: tuple[str, ...] = ("_wrapper", "_tool")
+
+
+def heal_tool_refs(ir: MigrationIR) -> tuple[dict[str, str], list[str]]:
+    """Reconcile ``{@TOOL: …}`` references in every agent's instruction
+    against the actual tool registry in ``ir.tools``.
+
+    Gemini-synthesized PIF instructions occasionally use a tool ID that
+    doesn't exist verbatim — most commonly because the synthesizer
+    learned a ``_wrapper`` / ``_tool`` suffix pattern from some tools
+    and over-applied it. This pass walks each instruction, finds
+    ``{@TOOL: X}`` directives that don't resolve, and applies a small
+    set of safe rewrites:
+
+      * ``X_wrapper`` → ``X``   (if ``X`` exists and ``X_wrapper`` doesn't)
+      * ``X_tool``    → ``X``   (same rule)
+
+    Only rewrites when the target form exists and the original doesn't.
+    If both the original and the candidate exist (rare), the original
+    is left alone — the wrapper might have been intentional.
+
+    Does NOT touch refs that resolve directly, sentinel refs
+    (``end_session``), or refs with no near-match (those stay for the
+    integrity check to surface as genuine hallucinations).
+
+    Args:
+        ir: The (consolidated) :class:`MigrationIR` to heal. Mutated in
+            place — each agent's ``instruction`` is updated.
+
+    Returns:
+        Tuple ``(rewrites_applied, unhealed_refs)``:
+
+        * ``rewrites_applied`` — ``{original_ref: new_ref}`` map of
+          every rewrite the pass made, deduped across agents.
+        * ``unhealed_refs`` — sorted list of refs that didn't resolve
+          and had no safe rewrite. These will be caught by
+          :func:`integrity_checks.check_consolidation_integrity`.
+    """
+    available_ids = set(ir.tools.keys())
+    available_short = {_short_id(t.name) for t in ir.tools.values() if t.name}
+    # Sentinels that are always auto-registered at deploy time.
+    sentinels = {"end_session", "set_session_variables"}
+    known = available_ids | available_short | sentinels
+
+    def _candidate(ref: str) -> str | None:
+        """Return a safe rewrite for ``ref``, or None."""
+        for suffix in _HEAL_SUFFIX_STRIPS:
+            if ref.endswith(suffix):
+                base = ref[: -len(suffix)]
+                if base in known and ref not in known:
+                    return base
+        return None
+
+    # Bogus placeholders Gemini sometimes emits when it gives up mid-list.
+    # Stripped unconditionally — never a valid tool ID.
+    bogus_placeholders = {"...", "…", "TODO", "<tool_name>", "<TOOL_NAME>"}
+
+    rewrites: dict[str, str] = {}
+    unhealed: set[str] = set()
+
+    for agent in ir.agents.values():
+        instruction = agent.instruction or ""
+        if not instruction:
+            continue
+        new_instruction = instruction
+        for match in _HEAL_TOOL_REF_RE.findall(instruction):
+            ref = match.strip()
+            if ref in known:
+                continue
+            if ref in bogus_placeholders:
+                # Strip the whole `{@TOOL: …}` directive — clearly junk.
+                new_instruction = re.sub(
+                    r"\{@TOOL:\s*" + re.escape(ref) + r"\s*\}",
+                    "",
+                    new_instruction,
+                )
+                rewrites[ref] = "(stripped: placeholder)"
+                continue
+            cand = _candidate(ref)
+            if cand is not None:
+                rewrites[ref] = cand
+                # Replace `{@TOOL: ref}` → `{@TOOL: cand}` everywhere
+                # in this instruction, preserving surrounding whitespace.
+                new_instruction = re.sub(
+                    r"\{@TOOL:\s*" + re.escape(ref) + r"\s*\}",
+                    f"{{@TOOL: {cand}}}",
+                    new_instruction,
+                )
+            else:
+                unhealed.add(ref)
+        if new_instruction != instruction:
+            agent.instruction = new_instruction
+
+    return rewrites, sorted(unhealed)
+
+
 def detect_root_key(ir: MigrationIR, source_data: Any) -> str | None:
     """Find the IRAgent key corresponding to the source agent's start.
 
@@ -118,16 +221,107 @@ def root_group_name(groupings: dict, root_key: str | None) -> str | None:
     return next(iter(groupings))
 
 
+# Suffixes Gemini commonly appends when paraphrasing source agent names
+# into a target-like identifier (e.g. "Agent Escalation agent" →
+# "AgentEscalationTarget"). Stripped during the normalization pass so the
+# core name still matches.
+_AGENT_REF_NOISE_SUFFIXES: tuple[str, ...] = (
+    "target",
+    "wrapper",
+    "tool",
+    "subagent",
+    "sub_agent",
+    "agent",
+    "flow",
+    "playbook",
+    "handler",
+    "router",
+)
+
+
+def _normalize_agent_ref(name: str) -> str:
+    """Aggressively normalize an agent reference for fuzzy matching.
+
+    Strategy:
+      1. Insert spaces at camelCase boundaries
+         ("AgentEscalationTarget" → "agent escalation target")
+      2. Replace ``_-`` runs with spaces; lowercase; drop non-alphanumerics
+      3. Repeatedly strip trailing "noise" words like ``target``, ``agent``,
+         ``flow`` etc. that Gemini glues onto a base name
+      4. Collapse internal whitespace
+
+    Example transforms:
+      ``AgentEscalationTarget`` → ``escalation``
+      ``Agent Escalation agent`` → ``escalation``
+      ``Subflow_API_Error`` → ``subflow api error`` (no noise to strip)
+      ``Subflows`` → ``subflows``
+    """
+    # camelCase → space-separated
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", name)
+    spaced = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", spaced)
+    # punctuation → space
+    spaced = re.sub(r"[_\-?!.,/]+", " ", spaced)
+    # lowercase + collapse whitespace
+    tokens = [t for t in spaced.lower().split() if t.strip()]
+    # Strip trailing noise suffixes repeatedly
+    changed = True
+    while changed and len(tokens) > 1:
+        changed = False
+        if tokens[-1] in _AGENT_REF_NOISE_SUFFIXES:
+            tokens.pop()
+            changed = True
+    return " ".join(tokens)
+
+
+def _agent_ref_prefix_match(
+    needle: str, haystack: dict[str, str]
+) -> str | None:
+    """Last-resort matcher: if the needle's normalized form is a prefix
+    (or contains) a known display_name's normalized form, return that
+    group. Used when full equality fails (``Subflow_API_Error`` →
+    ``Subflows``)."""
+    if not needle:
+        return None
+    for display, grp in haystack.items():
+        norm_display = _normalize_agent_ref(display)
+        if not norm_display:
+            continue
+        # Either side being a prefix / substring of the other is enough.
+        if (
+            norm_display.startswith(needle)
+            or needle.startswith(norm_display)
+            or norm_display in needle
+            or needle in norm_display
+        ):
+            return grp
+    return None
+
+
 def rewrite_agent_refs(
     instruction: str,
     member_to_group: dict[str, str],
     member_display_to_group: dict[str, str],
     self_group: str,
+    *,
+    group_names: set[str] | None = None,
 ) -> str:
     """Rewrite {@AGENT: X} so X points to the group containing the original
     target. Refs to members of the same group collapse to an empty string
     (completing the subtask naturally). Unresolved refs also collapse to
-    completion to prevent linter errors."""
+    completion to prevent linter errors.
+
+    Resolution order:
+      1. Exact match against ``group_names`` — Gemini emitted a consolidated
+         group name directly. No rewrite needed.
+      2. Exact IR-key match in ``member_to_group``.
+      3. Exact display_name match in ``member_display_to_group``.
+      4. Normalized-name match (camelCase split, lowercase, strip
+         ``_-?!`` and trailing noise suffixes like ``Target``, ``Agent``,
+         ``Flow``).
+      5. Prefix/substring match on the normalized name.
+      6. Strip the directive — unresolved.
+    """
+    group_names = group_names or set()
 
     def _sub(match: re.Match) -> str:
         raw = match.group(1).strip()
@@ -136,16 +330,39 @@ def rewrite_agent_refs(
                 return "{@TOOL: end_session}"
             return ""
 
-        target_group = member_to_group.get(raw)
+        # 1. Exact group-name match (Gemini emitted the consolidated name).
+        if raw in group_names:
+            target_group = raw
+        else:
+            # 2. Exact IR-key match.
+            target_group = member_to_group.get(raw)
+
+        # 3. Exact display_name match.
         if target_group is None:
-            normalized = re.sub(r"[_\-]+", " ", raw).strip().lower()
+            target_group = member_display_to_group.get(raw)
+
+        # 4. Normalized match against member display names.
+        if target_group is None:
+            normalized_raw = _normalize_agent_ref(raw)
             for display, grp in member_display_to_group.items():
-                if (
-                    re.sub(r"[_\-]+", " ", display).strip().lower()
-                    == normalized
-                ):
+                if _normalize_agent_ref(display) == normalized_raw:
                     target_group = grp
                     break
+
+        # 4b. Normalized match against group names (e.g. "RootAgent" raw
+        # vs "Root Agent" group).
+        if target_group is None:
+            normalized_raw = _normalize_agent_ref(raw)
+            for grp in group_names:
+                if _normalize_agent_ref(grp) == normalized_raw:
+                    target_group = grp
+                    break
+
+        # 5. Prefix/substring match (last resort before stripping).
+        if target_group is None:
+            target_group = _agent_ref_prefix_match(
+                _normalize_agent_ref(raw), member_display_to_group
+            )
 
         if target_group is None:
             logger.warning(
@@ -536,6 +753,26 @@ class StructuralConsolidator:
     def consolidate(self, groupings: dict) -> MigrationIR:
         return consolidate(self.ir, groupings)
 
+    @staticmethod
+    def _build_available_groups_context(groupings: dict) -> str:
+        """Render the consolidated group inventory for the synthesis
+        prompt — each group name plus the original member display names
+        it absorbed. Tells Gemini exactly which ``{@AGENT: …}`` IDs are
+        valid transfer targets so it stops inventing new ones."""
+        if not groupings:
+            return "(no other consolidated groups)"
+        lines: list[str] = []
+        for grp_name, payload in groupings.items():
+            members = payload.get("agents") or []
+            members_str = (
+                ", ".join(members)
+                if members
+                else "(no original members listed)"
+            )
+            tag = " [root]" if payload.get("is_root") else ""
+            lines.append(f"- {grp_name}{tag} (consolidates: {members_str})")
+        return "\n".join(lines)
+
     async def synthesize_instructions(
         self,
         consolidated_ir: MigrationIR,
@@ -560,6 +797,9 @@ class StructuralConsolidator:
             for k, g in m2g.items()
             if k in self.ir.agents
         }
+        available_groups_context = self._build_available_groups_context(
+            groupings
+        )
 
         async def _one(group_name: str, members: list[str]) -> str:
             combined_tree = _build_combined_tree_view(
@@ -578,6 +818,8 @@ class StructuralConsolidator:
                         flow_name=group_name,
                         tree_view=combined_tree,
                         target_ir=self.ir,
+                        available_groups=available_groups_context,
+                        self_group=group_name,
                     ),
                     timeout=per_group_timeout_s,
                 )
@@ -601,6 +843,13 @@ class StructuralConsolidator:
                         flow_name=group_name,
                         blueprint=blueprint,
                         tree_view=combined_tree,
+                        # Pass the IR so the 2B prompt receives the exact
+                        # tool registry — prevents Gemini from
+                        # hallucinating ``_wrapper`` / ``_tool`` suffixes
+                        # on tool IDs that don't actually exist.
+                        target_ir=self.ir,
+                        available_groups=available_groups_context,
+                        self_group=group_name,
                     ),
                     timeout=per_group_timeout_s,
                 )
@@ -619,7 +868,14 @@ class StructuralConsolidator:
                 return "empty-response"
 
             xml_instructions = rewrite_agent_refs(
-                xml_instructions, m2g, member_display_to_group, group_name
+                xml_instructions,
+                m2g,
+                member_display_to_group,
+                group_name,
+                # Gemini may emit a consolidated group name directly when
+                # the synthesis prompt advertises them — accept those as
+                # exact matches without going through the member lookup.
+                group_names=set(groupings.keys()),
             )
             consolidated_ir.agents[group_name].instruction = xml_instructions
             return "ok"
