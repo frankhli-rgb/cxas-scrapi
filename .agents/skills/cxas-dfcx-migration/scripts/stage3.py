@@ -176,9 +176,7 @@ def _maybe_set_root_with_rich(bundle: _bundle.IRBundle) -> None:
     ok, msg = set_app_root_agent(bundle)
     if ok:
         console.print(f"[green]{msg}[/]")
-    elif "no_grouping" in msg or msg.startswith(
-        ("No grouping", "No is_root")
-    ):
+    elif "no_grouping" in msg or msg.startswith(("No grouping", "No is_root")):
         return
     else:
         console.print(f"[yellow]{msg}[/]")

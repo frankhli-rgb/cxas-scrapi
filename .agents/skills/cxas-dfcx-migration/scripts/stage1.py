@@ -84,9 +84,7 @@ def _delete_orphan_agents(
 
     def _progress(event: str, payload) -> None:
         if event == "init_failed":
-            console.print(
-                f"[yellow]Could not init Agents client: {payload}[/]"
-            )
+            console.print(f"[yellow]Could not init Agents client: {payload}[/]")
         elif event == "list_failed":
             console.print(
                 f"[yellow]list_agents failed mid-cleanup: {payload}[/]"
