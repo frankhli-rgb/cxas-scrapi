@@ -393,7 +393,9 @@ def apps_list(args: argparse.Namespace) -> None:
             ]
             df = pd.DataFrame(data)
             print("\nApps:")
-            print(df.to_string(index=False))
+            pd.set_option('display.max_colwidth', None)
+            pd.set_option('display.width', 1000)
+            print(df.to_string(index=False, line_width=1000))
         except ImportError:
             for app in apps:
                 print(f"- {app.display_name} ({app.name})")
