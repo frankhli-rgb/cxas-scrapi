@@ -264,21 +264,16 @@ class Tools(Apps):
             )
             return self.client.create_toolset(request=request)
         else:
-            from unittest.mock import Mock  # noqa: PLC0415
-
             from google.protobuf import json_format  # noqa: PLC0415
 
             if description and "description" not in payload_copy:
                 payload_copy["description"] = description
 
             tool = types.Tool(display_name=display_name)
-            if isinstance(tool, Mock):
-                setattr(tool, tool_type, payload_copy)
-            else:
-                tool_dict = {tool_type: payload_copy}
-                json_format.ParseDict(
-                    tool_dict, tool, ignore_unknown_fields=True
-                )
+            tool_dict = {tool_type: payload_copy}
+            json_format.ParseDict(
+                tool_dict, tool._pb, ignore_unknown_fields=True
+            )
 
             request = types.CreateToolRequest(
                 parent=self.app_name, tool_id=tool_id, tool=tool
