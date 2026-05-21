@@ -15,6 +15,7 @@
 """CLI script for running CXAS SCRAPI evaluations."""
 
 import argparse
+import json
 import logging
 import os
 import subprocess
@@ -24,6 +25,8 @@ import uuid
 from typing import Dict, List
 
 import pandas as pd
+from google.api_core.exceptions import NotFound
+from google.protobuf.json_format import MessageToDict
 
 from cxas_scrapi import Sessions
 from cxas_scrapi.cli.app import (
@@ -41,6 +44,8 @@ from cxas_scrapi.cli.create_local import handle_local_create
 from cxas_scrapi.cli.insights_cli import populate_insights_parser
 from cxas_scrapi.cli.migration_cli import MigrationCLI
 from cxas_scrapi.core.apps import Apps
+from cxas_scrapi.core.conversation_history import ConversationHistory
+from cxas_scrapi.core.deployments import Deployments
 from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
 from cxas_scrapi.core.github import init_github_action
 from cxas_scrapi.evals.callback_evals import CallbackEvals
@@ -49,7 +54,6 @@ from cxas_scrapi.migration.dfcx_exporter import ConversationalAgentsAPI
 from cxas_scrapi.utils.eval_utils import EvalUtils
 
 logger = logging.getLogger(__name__)
-
 
 
 def export_eval(args: argparse.Namespace) -> None:
@@ -449,13 +453,8 @@ def run_eval(args: argparse.Namespace) -> None:  # noqa: C901
         sys.exit(1)
 
 
-
-
-
 def combined_evals_report_cmd(args: argparse.Namespace) -> None:
     """Handles the 'evals report' command."""
-    import os  # noqa: PLC0415
-
     from cxas_scrapi.utils.reporting import (  # noqa: PLC0415
         generate_combined_report_from_dir,
     )
@@ -477,7 +476,7 @@ def combined_evals_report_cmd(args: argparse.Namespace) -> None:
         golden_file=args.golden_file,
         simulation_dir=args.simulation_dir,
         format=args.format,
-        include=include_list
+        include=include_list,
     )
     print(f"Combined report generated at {output_path}")
 
@@ -785,17 +784,9 @@ def run_session(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-
-
-
 def conversations_list(args: argparse.Namespace) -> None:
     """Lists conversations for an app."""
     print(f"Listing conversations for App: {args.app_name}")
-    import json  # noqa: PLC0415
-
-    from google.auth.transport.requests import (  # noqa: PLC0415
-        AuthorizedSession,
-    )
 
     # Extract project_id and location from app_name
     parts = args.app_name.split("/")
@@ -803,51 +794,61 @@ def conversations_list(args: argparse.Namespace) -> None:
     location = parts[3]
 
     apps_client = Apps(project_id=project_id, location=location)
-    session = AuthorizedSession(apps_client.creds)
+    ch_client = ConversationHistory(
+        app_name=args.app_name, creds=apps_client.creds
+    )
+    conversations = ch_client.list_conversations()
 
-    url = f"https://ces.googleapis.com/v1/{args.app_name}/conversations"
-    response = session.get(url)
-    response.raise_for_status()
-    data = response.json()
-    print(json.dumps(data.get("conversations", []), indent=2))
+    conversations_dict = []
+    for c in conversations:
+        try:
+            c_dict = MessageToDict(c._pb)
+        except AttributeError:
+            c_dict = MessageToDict(c)
+        conversations_dict.append(c_dict)
+
+    print(json.dumps(conversations_dict, indent=2))
 
 
 def conversations_get(args: argparse.Namespace) -> None:
     """Gets details of a specific conversation."""
     print(f"Getting conversation: {args.conversation_resource_name}")
-    import json  # noqa: PLC0415
-
-    from google.auth.transport.requests import (  # noqa: PLC0415
-        AuthorizedSession,
-    )
 
     # Extract project_id and location from conversation_resource_name
     parts = args.conversation_resource_name.split("/")
     project_id = parts[1]
     location = parts[3]
+    app_name = "/".join(parts[:6])
 
     apps_client = Apps(project_id=project_id, location=location)
-    session = AuthorizedSession(apps_client.creds)
+    ch_client = ConversationHistory(app_name=app_name, creds=apps_client.creds)
+    conv = ch_client.get_conversation(
+        conversation_id=args.conversation_resource_name
+    )
 
-    url = f"https://ces.googleapis.com/v1/{args.conversation_resource_name}"
-    response = session.get(url)
-    response.raise_for_status()
-    print(json.dumps(response.json(), indent=2))
+    try:
+        conv_dict = MessageToDict(conv._pb)
+    except AttributeError:
+        conv_dict = MessageToDict(conv)
+
+    print(json.dumps(conv_dict, indent=2))
 
 
 def deployments_list(args: argparse.Namespace) -> None:
     """Lists deployments for an app."""
     print(f"Listing deployments for App: {args.app_name}")
-    import json  # noqa: PLC0415
-
-    from cxas_scrapi.core.deployments import Deployments  # noqa: PLC0415
 
     deployments_client = Deployments(app_name=args.app_name)
     deployments = deployments_client.list_deployments()
 
     try:
-        from google.protobuf.json_format import MessageToDict  # noqa: PLC0415
-        deployments_dict = [MessageToDict(d) for d in deployments]
+        deployments_dict = []
+        for d in deployments:
+            try:
+                d_dict = MessageToDict(d._pb)
+            except AttributeError:
+                d_dict = MessageToDict(d)
+            deployments_dict.append(d_dict)
         print(json.dumps(deployments_dict, indent=2))
     except Exception:
         # Fallback to string representation if serialization fails
@@ -857,13 +858,12 @@ def deployments_list(args: argparse.Namespace) -> None:
 def deployments_create(args: argparse.Namespace) -> None:
     """Creates a deployment."""
     print(f"Creating deployment {args.deployment_id} for App: {args.app_name}")
-    from cxas_scrapi.core.deployments import Deployments  # noqa: PLC0415
 
     deployments_client = Deployments(app_name=args.app_name)
     deployment = deployments_client.create_deployment(
         deployment_id=args.deployment_id,
         display_name=args.deployment_id,
-        app_version=args.version_id
+        app_version=args.version_id,
     )
     print(f"Deployment created successfully: {deployment.name}")
 
@@ -871,7 +871,6 @@ def deployments_create(args: argparse.Namespace) -> None:
 def deployments_promote(args: argparse.Namespace) -> None:
     """Promotes app to live traffic."""
     print(f"Promoting app {args.app_resource_name} to live traffic...")
-
 
     # Step 1: Push and create version
     push_args = argparse.Namespace(
@@ -899,13 +898,10 @@ def deployments_promote(args: argparse.Namespace) -> None:
             sys.exit(1)
 
         # Step 2: Update deployment
-        deployment_id = (
-            args.live_deployment_resource_name.split("/deployments/")[-1]
-        )
+        deployment_id = args.live_deployment_resource_name.split(
+            "/deployments/"
+        )[-1]
 
-        from google.api_core.exceptions import NotFound  # noqa: PLC0415
-
-        from cxas_scrapi.core.deployments import Deployments  # noqa: PLC0415
         deployments_client = Deployments(app_name=args.app_resource_name)
 
         try:
@@ -972,9 +968,7 @@ def get_parser() -> argparse.ArgumentParser:
     )
 
     # Parser for 'migrate'
-    parser_migrate = subparsers.add_parser(
-        "migrate", help="Migration tools."
-    )
+    parser_migrate = subparsers.add_parser("migrate", help="Migration tools.")
     migrate_subparsers = parser_migrate.add_subparsers(
         title="Migration Commands", dest="migrate_command", required=True
     )
@@ -1342,7 +1336,6 @@ def get_parser() -> argparse.ArgumentParser:
             "hallucination) and only evaluate custom expectations."
         ),
     )
-
 
     parser_run.set_defaults(func=run_eval)
 

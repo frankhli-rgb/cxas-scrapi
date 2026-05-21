@@ -49,6 +49,30 @@ class Versions(Apps):
         self.resource_type = "versions"
         self.app_name = app_name
 
+    def create_version(
+        self,
+        display_name: str,
+        description: str = None,
+    ) -> types.AppVersion:
+        """Creates a new version for the app.
+
+        Args:
+            display_name: Human-readable display name for the version.
+            description: Optional description for the version.
+
+        Returns:
+            The created AppVersion resource object.
+        """
+        version = types.AppVersion(
+            display_name=display_name,
+            description=description,
+        )
+        request = types.CreateAppVersionRequest(
+            parent=self.app_name,
+            app_version=version,
+        )
+        return self.client.create_app_version(request=request)
+
     def list_versions(self) -> List[types.AppVersion]:
         """Lists versions within the app."""
         request = types.ListAppVersionsRequest(parent=self.app_name)

@@ -28,6 +28,7 @@ from typing import Any, Optional
 
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.common import Common
+from cxas_scrapi.core.versions import Versions
 
 logger = logging.getLogger(__name__)
 
@@ -243,24 +244,18 @@ def _app_push(
         )
 
         if args and getattr(args, "create_version", False) and app_name:
-            from google.auth.transport.requests import (  # noqa: PLC0415
-                AuthorizedSession,
-            )
-
             print(f"Creating version for {app_name}...")
-            url = f"https://ces.googleapis.com/v1/{app_name}/versions"
-            session = AuthorizedSession(apps_client.creds)
-
-            display_name = f'import-{time.strftime("%Y%m%d%H%M%S")}'
-            payload = {
-                "displayName": display_name,
-                "description": getattr(args, "version_description", None),
-            }
-
-            response = session.post(url, json=payload)
-            response.raise_for_status()
-            op_data = response.json()
-            version_name = op_data["name"]
+            versions_client = Versions(
+                app_name=app_name,
+                creds=apps_client.creds,
+            )
+            display_name = f"import-{time.strftime('%Y%m%d%H%M%S')}"
+            description = getattr(args, "version_description", None)
+            version = versions_client.create_version(
+                display_name=display_name,
+                description=description,
+            )
+            version_name = version.name
             print(
                 f"Created app version: {version_name} "
                 f"with display name {display_name}"
