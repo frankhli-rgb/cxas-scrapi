@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
 
 from InquirerPy import inquirer
@@ -172,12 +173,34 @@ def prompt_source_load_mode() -> str:
 
 def prompt_source_agent_id(default: str | None = None) -> str:
     _ensure_interactive("source_agent_id")
-    return inquirer.text(
-        message="Source DFCX agent ID:",
-        default=default or "",
-        validate=EmptyInputValidator("Agent ID cannot be empty"),
-        style=PROMPT_STYLE,
-    ).execute()
+    print(
+        "\n\033[96m💡 Hint:\033[0m Paste either the full raw Agent "
+        "Resource Name or the browser Console URL.\n"
+        "   - \033[1mFormat:\033[0m "
+        "projects/{project_id}/locations/{location}/"
+        "agents/{agent_uuid}\n"
+        "   - \033[1mExample:\033[0m "
+        "projects/my-project-123/locations/global/agents/"
+        "a4371f49-5982-4293-801b-551cf940ab65\n"
+    )
+    raw_input = (
+        inquirer.text(
+            message="Source DFCX agent ID:",
+            default=default or "",
+            validate=EmptyInputValidator("Agent ID cannot be empty"),
+            style=PROMPT_STYLE,
+        )
+        .execute()
+        .strip()
+    )
+
+    match = re.search(
+        r"projects/([^/]+)/locations/([^/]+)/agents/([a-zA-Z0-9-]+)",
+        raw_input,
+    )
+    if match:
+        return match.group(0)
+    return raw_input
 
 
 def prompt_zip_path(default: str | None = None) -> str:

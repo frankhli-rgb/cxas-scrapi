@@ -117,7 +117,7 @@ async def _run(args) -> None:
         "instruction state machines + tool mocks + redeploy",
     ):
         await service.run_stage2(
-            version_label="0.0.2",
+            version_label="0.0.3",
             generate_unit_tests=not args.no_unit_tests,
             unit_tests_path=unit_tests_path,
             run_lint=not args.no_lint,

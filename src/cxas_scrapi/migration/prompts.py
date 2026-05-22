@@ -953,7 +953,7 @@ here using the patterns provided\n    return None"
         "system": "You are an expert CXAS System Optimizer.",
         "template": """
         You are an expert CXAS System Optimizer.
-        Your task is to restructure the instruction prompt of the conversational sub-agent "{agent_name}" into a highly deterministic, state-based WellsFargo XML State Machine pattern.
+        Your task is to restructure the instruction prompt of the conversational sub-agent "{agent_name}" into a highly deterministic, state-based XML State Machine pattern.
 
         ### CRITICAL REWRITING RULES (NON-NEGOTIABLE):
         1. **NO INFORMATION OR FUNCTIONALITY LOSS**: You MUST optimize section by section. Only make targeted, minimal changes to restructure the logic. Do NOT perform wholesale rewrites or paraphrase the natural language instructions.
@@ -967,11 +967,29 @@ here using the patterns provided\n    return None"
            - Separate conversational steps into distinct `<state id="...">` blocks.
            - Inside each state, separate `<instructions>` (what the agent does) from `<transitions>` (where the agent routes next).
            - Transitions MUST use `<transition condition="..." next_state="..." />`.
-        5. **VARIABLE MUTATION & MATH DELEGATION**: Generative models cannot reliably set variables or perform math in text prompts. If the original instructions contain any math, counters, variable declarations, or mutations (e.g. "store account_id", "increment count"), you MUST offload it by calling `set_session_variables`.
+        5. **VARIABLE MUTATION & MATH DELEGATION**: Generative models cannot reliably set variables or perform math in text prompts. If the original instructions contain any math, counters, variable declarations, or mutations (e.g. "store account_id", "increment count", "Set exitState to ROAM"), you MUST offload it by calling the `set_session_variables` tool in a transition.
            - Example syntax:
              <transition condition="User provided valid ID" next_state="validate_account">
                  - Call tool: {{@TOOL: set_session_variables}} with variables = {{"account_id": "extracted_value"}}
              </transition>
+        6. **ABSOLUTELY NO NATIVE VARIABLE MUTATION**: You MUST NEVER declare, set, clear, or mutate variables natively inside the prompt instructions (e.g. do NOT write "- Set {{ccaip_vva_env}} to dev" or "- Set {{ExitState}} to ROAM"). All variable configurations and state updates MUST be offloaded by executing transition tool calls like `set_session_variables` or `update_routing_variables`.
+        7. **REMOVE NO-INPUT/TIMEOUT INSTRUCTIONS**: You MUST completely remove (with minimal changes) any instructions, states, or retry count loops related to handling silence, no-input, or unresponsive users from the prompt instructions. All generic timeout and no-input events are strictly handled in the background by the native `before_model_callback`. You MUST identify any intermediate nudge questions (e.g. "Are you still there?") and final transfer/escalation messages from the source agent's instructions, and customize the callback responses below to match those original utterances exactly.
+           - Example Callback Implementation to assume:
+             ```python
+             for part in callback_context.get_last_user_input():
+                 text_input = part.text.lower() if part.text else ""
+                 if "no user activity detected" in text_input or "sys.no-input" in text_input or "sys.no-match" in text_input or text_input.strip() == "":
+                     retry = callback_context.variables.get("no_input_retry_count", 0) + 1
+                     callback_context.variables["no_input_retry_count"] = retry
+                     if retry >= 3:
+                         # Customize text verbatim from source agent's final transfer message
+                         return LlmResponse.from_parts([
+                             Part.from_text("We haven't heard from you. Let me transfer you to support."),
+                             Part.from_agent_transfer(agent="Session_Termination_Agent")
+                         ])
+                     # Customize text verbatim from source agent's intermediate silence nudge
+                     return LlmResponse.from_parts([Part.from_text("Are you still there?")])
+             ```
 
         ### SOURCE AGENT INSTRUCTIONS:
         {instruction}
@@ -1007,3 +1025,128 @@ here using the patterns provided\n    return None"
         You MUST return ONLY the finalized, complete, executable Python code. Do NOT wrap the code in markdown code fences (like ```python) or include conversational filler.
         """,
     }
+
+    STAGE_3_TOPOLOGY_ANALYSIS = {
+        "system": """You are a Lead Conversational AI Architect.
+        Your task is to analyze a full suite of migrated CXAS agents and classify each one semantically as either a CORE sub-agent or a HELPER sub-agent.
+
+        ### SEMANTIC ROLES DEFINITIONS
+        - **CORE Agents**: Sub-agents representing substantial business logic and domain tasks (e.g., billing lookup, troubleshoot router, purchase line, international roaming support).
+        - **HELPER Agents**: Ancillary stubs providing system-level setup, data collection, security gating, or exits (e.g., greeting, authentication, call setup/teardown, routing stubs, escalation, end session, tool runners, parameter setters).
+
+        ### STRICT CLASSIFICATION RULES (NON-NEGOTIABLE):
+        1. **Exits & Wrap-up**: Any sub-agent primarily focused on terminating the call, wrapping up, logging exit metrics, or final goodbyes (e.g., 'Exits and Transfers', 'Graceful Exit') MUST be designated as HELPER, and its merger_target set to 'Session_Termination_Agent'.
+        2. **Human Escalation**: Any sub-agent primarily focused on transferring the conversation to a human/live agent representative (e.g., 'Agent Escalation agent') MUST be designated as HELPER, and its merger_target set to 'Session_Termination_Agent'.
+        3. **Routing & Passthroughs**: Any sub-agent representing a flow switcher, passthrough error routing hub, or conditional route evaluation page (e.g., 'Subflows', 'Error Router') MUST be designated as HELPER, and its merger_target set to 'Steering_Agent'.
+        4. **Initialization & Entry**: Any sub-agent representing the starting greeting page, environment variable setup, or initial IVR intent routing (e.g., 'Default Start Flow', 'Welcome Message') MUST be designated as HELPER, and its merger_target set to 'Steering_Agent'.
+
+        You MUST return ONLY a valid JSON array of objects matching the requested Pydantic schema. Do NOT include conversational filler or markdown fences.""",
+        "template": """
+        Analyze the following inventory of migrated CXAS sub-agents:
+        
+        ### SUB-AGENTS INVENTORY:
+        {agents_inventory}
+        
+        ### OUTPUT FORMAT SCHEMA:
+        {{
+          "classifications": [
+            {{
+              "key": "agent_key_name",
+              "designation": "CORE | HELPER",
+              "semantic_role": "Brief explanation of what this agent does (e.g. 'Verifies user identity', 'Handles router troubleshooting')",
+              "merger_target": "If designation is HELPER, select the Core agent key that should absorb its logic (or 'Steering_Agent' for greetings/auth/routing stubs, or 'Session_Termination_Agent' for exits/transfers). If CORE, leave null."
+            }}
+          ]
+        }}
+        """,
+    }
+
+    STAGE_3_ORGANIC_PROMPT_MERGER = {
+        "system": """You are a world-class GenAI Prompt Architect and CXAS Core Integration compiler.
+        Your task is to merge the instructions, registered tools, and callbacks of a HELPER sub-agent into a CORE domain sub-agent.
+        
+        ### CRITICAL INTEGRATION GUIDELINES (NON-NEGOTIABLE):
+        1. **ABSOLUTELY MINIMAL REWRITING**: Your modifications must be strictly minimal. You are essentially copy-pasting the helper instructions into new, well-defined XML tags within the core instructions. Do NOT rewrite the fundamental phrasing or logic of the original prompts.
+        2. **ORGANIC TAGGING**: Do NOT use generic wrappers like <supplemental_scenarios>. Examine the Core agent prompt's XML structure and weave the helper instructions cleanly under contextually descriptive new XML tags (e.g., <authentication_protocol>, <parameter_modifiers>, <tool_execution_rules>, <escalation_protocol>).
+        3. **TOOL & CALLBACK CONSOLIDATION**: You must also review and merge the accompanying tools and callback logic. Ensure that all references remain perfectly functional and immediately runnable without breaking existing execution paths.
+        4. **CONFLICT RESOLUTION**: Your only modifications should be to resolve direct structural merge conflicts between the core and helper logic to ensure a perfectly cohesive, runnable resulting instruction set.
+        5. **REDUNDANT STATE-MACHINE FUSION**: If both the Core and Helper agents contain state machines (<conversation_schema> with <state> blocks representing IVR states):
+           - You MUST NOT append or duplicate the helper's states side-by-side with the core's states if they represent the same functional stage (e.g. greetings, initialization, welcome messages, or agent transfers).
+           - Instead, identify any overlapping/redundant states (e.g. the helper's starting/evaluation states vs. the core's starting/greet states). You MUST merge any unique tool calls, variable initializations, or unique rules from the helper's states directly into the corresponding core states.
+           - You MUST completely discard any duplicate welcome greetings, legacy branding utterances (such as "Welcome to t-mobile" or different operator names), redundant agent transfers, or redundant goodbye disclaimers from the helper agent to ensure a single, clean, cohesive, non-duplicate IVR state machine.
+        6. **EXIT LOGIC EXTRACTION**: If the parent agent is a CORE agent, and it contains any goodbye states, CRM wrap-ups, or human escalation transfers inside its instructions, you MUST extract those exit transitions and redirect them to transfer control to the centralized sign-off gateway: `{@AGENT: Session_Termination_Agent}` rather than executing hangups or regulatory sign-offs locally. This ensures that all exits across the entire app utilize the centralized termination gateway.
+        
+        You MUST return ONLY the finalized, complete XML output. Do NOT wrap the response in markdown blocks or include conversational filler.""",
+        "template": """
+        Merge the Helper Agent instructions, tools, and callbacks into the Core Agent prompt with minimal structural modifications.
+        
+        ### CORE AGENT (Instructions, Tools, Callbacks):
+        {core_context}
+        
+        ### HELPER AGENT (Instructions, Tools, Callbacks):
+        {helper_context}
+        
+        ### MERGED XML OUTPUT REQUIREMENT:
+        Output ONLY the finalized, unified XML instruction set for the Core agent.
+        """,
+    }
+
+    STAGE_3_CORE_HARMONY_VERIFICATION = {
+        "system": """You are a Senior Principal Conversational QA Engineer and App Synchronizer. 
+        Your task is to perform an absolutely comprehensive cohesion verification pass on a newly consolidated Core agent.
+        
+        This stage represents the definitive final integration check. You must rigorously verify the comprehensive cohesion across all instructions, tools, callbacks, and session variables to ensure perfect execution capability.
+        
+        You MUST return ONLY a valid JSON object matching the requested schema. Do NOT include conversational filler or markdown fences.""",
+        "template": """
+        Perform a comprehensive integration check and complete any final necessary updates for this consolidated Core agent:
+        
+        ### CONSOLIDATED CORE AGENT CONTEXT:
+        {merged_context}
+        
+        ### COMPREHENSIVE VERIFICATION CRITERIA:
+        1. **Instruction & State Cohesion**: Are there any remaining logical contradictions or conflicting guidance between merged state machines? If so, synthesize exact prompt reconciliation updates.
+        2. **Tool Cohesion**: Are all tools referenced within the instructions fully present and correctly parameterized?
+        3. **Callback & Variable Cohesion**: Do all callback scripts correctly handle the session variables required by the merged workflows?
+        
+        ### OUTPUT FORMAT SCHEMA:
+        {{
+          "passed": true | false,
+          "final_optimized_instruction": "The finalized, fully polished instruction XML with all detected contradictions reconciled and parameters harmonized.",
+          "detected_contradictions": [
+            "List of specific logical conflicts or broken references detected (empty if passed)"
+          ],
+          "reconciliation_suggestions": [
+            "Specific updates made or suggested to resolve the issues (empty if passed)"
+          ]
+        }}
+        """,
+    }
+
+    STAGE_3_CORE_MERGER = {
+        "system": """You are a Principal Conversational Architect.
+        Your task is to simplify a multi-agent CXAS application topology by identifying which CORE agents (including the greeting 'Steering_Agent' and the 'Session_Termination_Agent' gateway) can be organically merged into each other to eliminate redundant agent-transfer hops.
+
+        ### MERGER RULES:
+        1. You MUST merge a source agent into a target CORE agent if their functionalities are highly overlapping, or if one acts as a simple onboarding/greetings gate (like 'Steering_Agent') or exit gate (like 'Session_Termination_Agent') for the other.
+        2. If a CORE agent has complex independent business logic that should remain strictly isolated, do NOT merge it.
+        3. Return ONLY a valid JSON object mapping 'source_agent_key' -> 'target_agent_key'. If no merges are recommended, return an empty JSON object '{}'.""",
+        "template": """
+        Review the following compiled instructions of the active CORE agents:
+
+        ### ACTIVE CORE AGENTS INVENTORY:
+        {agents_inventory}
+
+        Recommend which agents should be organically merged into which target CORE agents.
+
+        ### OUTPUT FORMAT SCHEMA:
+        {{
+          "merges": {{
+            "source_agent_key_1": "target_core_agent_key",
+            "source_agent_key_2": "target_core_agent_key"
+          }}
+        }}
+        """
+    }
+
+

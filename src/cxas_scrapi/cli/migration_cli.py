@@ -20,17 +20,19 @@ Two entry points:
   ``cxas migrate dfcx``. Walks the user through project + target,
   resource selection, dependency analysis, review, then
   :meth:`MigrationService.run_migration`.
-* :func:`register` — argparse subcommand tree for
-  ``cxas migrate dfcx-cxas {run, stage1, stage2, stage3, resume}``.
+* Non-interactive scriptable arguments for
+  ``cxas migrate dfcx {--run, --optimize --stage 1/2/3/resume}``.
   Non-interactive (scriptable) entry points around the same
   :class:`MigrationService` methods, plus stage-level resumability.
 """
 
 import argparse
 import asyncio
+import atexit
 import glob
 import logging
 import os
+import re
 import sys
 from typing import Any
 
@@ -54,6 +56,99 @@ from cxas_scrapi.migration.main_visualizer import MainVisualizer
 from cxas_scrapi.migration.service import MigrationService
 
 logger = logging.getLogger(__name__)
+
+
+class Tee:
+    """Duplicates stdout/stderr to a file, preserving all raw formatting
+    and ANSI escape colors.
+    """
+
+    def __init__(self, filepath: str):
+        self.file = open(filepath, "a", encoding="utf-8")
+        self.stdout = sys.stdout
+        self.stderr = sys.stderr
+        sys.stdout = self
+        sys.stderr = self
+
+    def write(self, data):
+        self.stdout.write(data)
+        self.file.write(data)
+        self.file.flush()
+
+    def flush(self):
+        self.stdout.flush()
+        self.file.flush()
+
+    def isatty(self) -> bool:
+        return self.stdout.isatty()
+
+    def __getattr__(self, name):
+        return getattr(self.stdout, name)
+
+    def close(self):
+        if sys.stdout is self:
+            sys.stdout = self.stdout
+        if sys.stderr is self:
+            sys.stderr = self.stderr
+        if hasattr(self, "file") and not self.file.closed:
+            self.file.close()
+
+
+_current_tee = None
+_current_log_handler = None
+
+
+def start_tee_logging(target_name: str):
+    """Starts duplicating standard stdout/stderr outputs to the target
+    log file.
+    """
+    global _current_tee, _current_log_handler  # noqa: PLW0603
+    close_tee_logging()
+
+    log_path = f"{target_name}_migration.log"
+    _current_tee = Tee(log_path)
+
+    # Dynamically bind a FileHandler to the root logger to capture all
+    # standard python logging (with timestamps)
+    try:
+        root_logger = logging.getLogger()
+        handler = logging.FileHandler(log_path, encoding="utf-8")
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        handler.setFormatter(formatter)
+        handler.setLevel(root_logger.level or logging.INFO)
+        root_logger.addHandler(handler)
+        _current_log_handler = handler
+    except Exception as e:
+        sys.stderr.write(f"[WARNING] Failed to bind dynamic file logger: {e}\n")
+
+    logging.getLogger(__name__).info(
+        f"Saving full console stdout/stderr locally to → {log_path}"
+    )
+
+
+def close_tee_logging():
+    """Stops duplicating stdout/stderr and closes the active Tee file
+    and dynamic logger handlers.
+    """
+    global _current_tee, _current_log_handler  # noqa: PLW0603
+
+    if _current_log_handler:
+        try:
+            root_logger = logging.getLogger()
+            root_logger.removeHandler(_current_log_handler)
+            _current_log_handler.close()
+        except Exception:
+            pass
+        _current_log_handler = None
+
+    if _current_tee:
+        _current_tee.close()
+        _current_tee = None
+
+
+atexit.register(close_tee_logging)
 
 
 class MigrationCLI:
@@ -121,21 +216,13 @@ class MigrationCLI:
 
         optimize_for_cxas = Confirm.ask("Optimize for CXAS?", default=True)
 
-        # Opt-in extras (all default OFF for back-compat). Consolidation +
-        # stage3 are nested under optimize_for_cxas because the consolidator
-        # operates on the optimized IR; stage3 wires the consolidated agents.
-        consolidate = optimize_for_cxas and Confirm.ask(
-            "Run structural consolidation (Gemini N→M agent grouping)?",
-            default=False,
-        )
-        run_stage3 = consolidate and Confirm.ask(
-            "Run Stage 3 topology wiring (parent-child links)?",
-            default=False,
-        )
-        persist_bundle = Confirm.ask(
-            "Persist IR bundle for stage-resume?",
-            default=False,
-        )
+        # TODO(deniscalin): Revisit granular wizard opt-in prompts if
+        # isolated stage-level execution is required. We keep
+        # consolidate = False since consolidation now happens strictly in
+        # Stage 3.
+        consolidate = False
+        run_stage3 = optimize_for_cxas
+        persist_bundle = optimize_for_cxas
 
         gen_report = Confirm.ask("Generate Migration Report?", default=True)
         gen_unit_tests = Confirm.ask(
@@ -366,7 +453,29 @@ class MigrationCLI:
         agent_data = None
         agent_id = "uploaded-agent"
         if choice == "ID":
-            agent_id = Prompt.ask("Enter Source Agent ID")
+            self.console.print(
+                "\n[cyan]💡 Hint:[/] Paste either the full raw Agent "
+                "Resource Name or the browser Console URL.\n"
+                "   - [bold]Format:[/] "
+                "projects/{project_id}/locations/{location}/"
+                "agents/{agent_uuid}\n"
+                "   - [bold]Example:[/] "
+                "projects/my-project-123/locations/global/agents/"
+                "a4371f49-5982-4293-801b-551cf940ab65\n"
+            )
+            raw_input = Prompt.ask("Enter Source Agent ID").strip()
+
+            # Auto-extract standard resource name path from a URL or raw
+            # copy-paste
+            match = re.search(
+                r"projects/([^/]+)/locations/([^/]+)/agents/([a-zA-Z0-9-]+)",
+                raw_input,
+            )
+            if match:
+                agent_id = match.group(0)
+            else:
+                agent_id = raw_input
+
             self.console.print(f"Loading Agent ID: {agent_id} ...")
             agent_data = cx_api.fetch_full_agent_details(
                 agent_id, use_export=True
@@ -391,6 +500,7 @@ class MigrationCLI:
         while True:
             # 2. Configure
             config = self.compose_config(default_agent_name)
+            start_tee_logging(config.target_name)
 
             # Initialize MigrationService with the provided project_id
 
@@ -495,41 +605,15 @@ class MigrationCLI:
             except Exception as exc:  # noqa: BLE001
                 logger.error("Bundle persist failed: %s", exc)
 
-        # 2. Structural consolidation (Gemini-driven N→M grouping).
-        #    MigrationCLI auto-accepts the proposed grouping
-        #    (grouping_callback=None); the skill provides an interactive
-        #    review TUI for the same flow.
-        if config.consolidate:
-            try:
-                await migration_service.run_stage1(
-                    consolidate=True,
-                    bundle=bundle,
-                    grouping_callback=None,
-                    # Post-consolidation Version — keeps the 0.0.1/0.0.2/0.0.3
-                    # sequence from the optimize_for_cxas branch intact and
-                    # adds 0.0.4 for the consolidation step.
-                    version_label="0.0.4",
-                    persist_bundle_path=(
-                        bundle_path if config.persist_bundle else None
-                    ),
-                )
-                self.console.print(
-                    "[green]Structural consolidation complete.[/]"
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.error("Consolidation failed: %s", exc)
-                self.console.print(f"[yellow]Consolidation failed: {exc}[/]")
-
-        # 3. Stage 3 topology wiring (requires consolidation to have run
-        #    successfully — bundle.grouping is set inside run_stage1 above).
+        # 2. Stage 3 Spoke-Hub Generative Topology Optimization pass.
         if config.run_stage3 and bundle is not None:
             try:
                 updated, skipped, failed = await migration_service.run_stage3(
                     bundle=bundle,
-                    mode="hub",
                     persist_bundle_path=(
                         bundle_path if config.persist_bundle else None
                     ),
+                    console=self.console,
                 )
                 self.console.print(
                     f"[green]Stage 3 wiring: updated={updated} "
@@ -541,12 +625,11 @@ class MigrationCLI:
 
 
 # ===========================================================================
-# `cxas migrate dfcx-cxas` subcommands
+# `cxas migrate dfcx` non-interactive subcommands
 #
 # Non-interactive (scriptable) entry points for the same MigrationService
 # methods the MigrationCLI dashboard calls. Each subcommand is a thin
-# argparse → method call wrapper. The `register()` function attaches
-# the whole subtree under `migrate` from `cli/main.py`.
+# argparse → method call wrapper.
 # ===========================================================================
 
 
@@ -629,7 +712,7 @@ def _add_bundle_args(parser: argparse.ArgumentParser) -> None:
 
 
 def run_end_to_end(args: argparse.Namespace) -> None:
-    """``cxas migrate dfcx-cxas run`` — non-interactive end-to-end."""
+    """``cxas migrate dfcx --run`` — non-interactive end-to-end run."""
     if not (args.source_agent_id or args.source_zip):
         _sub_console.print("[red]Pass --source-agent-id or --source-zip.[/]")
         sys.exit(1)
@@ -650,19 +733,23 @@ def run_end_to_end(args: argparse.Namespace) -> None:
         _sub_console.print("[red]Failed to load source agent.[/]")
         sys.exit(1)
 
+    optimize_for_cxas = not args.no_optimize
     config = MigrationConfig(
         project_id=args.project_id,
         target_name=args.target_name,
         env=args.env,
         model=args.model,
-        optimize_for_cxas=not args.no_optimize,
-        consolidate=args.consolidate,
-        run_stage3=args.stage3,
-        persist_bundle=args.persist_bundle,
+        optimize_for_cxas=optimize_for_cxas,
+        consolidate=False,
+        break_after_stage3=getattr(args, "break_after_stage3", False),
+        run_stage3=optimize_for_cxas or getattr(args, "stage3", False),
+        persist_bundle=optimize_for_cxas
+        or getattr(args, "persist_bundle", False),
         gen_report=True,
         gen_unit_tests=True,
         source_agent_data_override=agent_data,
     )
+    start_tee_logging(config.target_name)
 
     service = MigrationService(
         project_id=args.project_id,
@@ -688,18 +775,16 @@ def run_end_to_end(args: argparse.Namespace) -> None:
 
 
 def run_stage1(args: argparse.Namespace) -> None:
-    """``cxas migrate dfcx-cxas stage1`` — variable dedup + optional
-    Gemini consolidation against an existing bundle."""
+    """``cxas migrate dfcx --optimize --stage 1`` — variable dedup
+    against an existing bundle.
+    """
     service, bundle, bundle_path = _restore_service_and_bundle(args)
-    consolidate = not args.no_consolidate
+    start_tee_logging(bundle.config.target_name)
     persist_path = None if args.no_persist else bundle_path
 
     async def _main():
         return await service.run_stage1(
-            consolidate=consolidate,
-            bundle=bundle if consolidate else None,
-            grouping_json_path=args.grouping_json,
-            on_integrity_fail=args.on_integrity_fail,
+            bundle=bundle,
             version_label=args.version_label,
             persist_bundle_path=persist_path,
         )
@@ -709,9 +794,10 @@ def run_stage1(args: argparse.Namespace) -> None:
 
 
 def run_stage2(args: argparse.Namespace) -> None:
-    """``cxas migrate dfcx-cxas stage2`` — instruction state machines +
+    """``cxas migrate dfcx --optimize --stage 2`` — instruction state machines +
     tool mocks, with optional unit-test regen / lint / report."""
     service, bundle, bundle_path = _restore_service_and_bundle(args)
+    start_tee_logging(bundle.config.target_name)
     persist_path = None if args.no_persist else bundle_path
     target_name = bundle.config.target_name
 
@@ -739,17 +825,17 @@ def run_stage2(args: argparse.Namespace) -> None:
 
 
 def run_stage3(args: argparse.Namespace) -> None:
-    """``cxas migrate dfcx-cxas stage3`` — parent-child topology
+    """``cxas migrate dfcx --optimize --stage 3`` — parent-child topology
     wiring after consolidation."""
     service, bundle, bundle_path = _restore_service_and_bundle(args)
+    start_tee_logging(bundle.config.target_name)
     persist_path = None if (args.no_persist or args.dry_run) else bundle_path
 
     async def _main():
         return await service.run_stage3(
             bundle=bundle,
-            mode=args.mode,
-            set_root=not args.no_set_root,
             dry_run=args.dry_run,
+            version_label=getattr(args, "version_label", None),
             persist_bundle_path=persist_path,
         )
 
@@ -761,9 +847,11 @@ def run_stage3(args: argparse.Namespace) -> None:
 
 
 def run_resume(args: argparse.Namespace) -> None:
-    """``cxas migrate dfcx-cxas resume`` — interactive bundle picker and
-    stage menu. If ``--target-name`` or ``--ir-bundle`` is given, skips
-    the picker and goes straight to the stage menu."""
+    """``cxas migrate dfcx --optimize --stage resume`` — interactive
+    bundle picker and stage menu. If ``--target-name`` or
+    ``--ir-bundle`` is given, skips the picker and goes straight to
+    the stage menu.
+    """
     if args.target_name or args.ir_bundle:
         bundle_path = _resolve_bundle_path(args)
     else:
@@ -820,187 +908,8 @@ def run_resume(args: argparse.Namespace) -> None:
         run_stage3(
             argparse.Namespace(
                 **common,
-                mode="hub",
                 no_set_root=False,
                 dry_run=False,
                 no_persist=False,
             )
         )
-
-
-# ---------------------------------------------------------------------------
-# Argparse registration
-# ---------------------------------------------------------------------------
-
-
-def register(migrate_subparsers: argparse._SubParsersAction) -> None:
-    """Add the ``dfcx-cxas`` subcommand tree under the ``migrate``
-    subparser. Called from ``cli/main.py`` alongside the existing
-    ``dfcx`` registration."""
-    parser_dc = migrate_subparsers.add_parser(
-        "dfcx-cxas",
-        help=(
-            "Non-interactive DFCX→CXAS migration with stage-level resumability."
-        ),
-    )
-    dc_subs = parser_dc.add_subparsers(
-        title="dfcx-cxas commands",
-        dest="dfcx_cxas_command",
-        required=True,
-    )
-
-    # --- run -------------------------------------------------------------
-    p_run = dc_subs.add_parser(
-        "run",
-        help=(
-            "End-to-end migration (source → migrate → optional stages). "
-            "Non-interactive."
-        ),
-    )
-    src = p_run.add_mutually_exclusive_group(required=True)
-    src.add_argument(
-        "--source-agent-id", help="DFCX source agent resource name."
-    )
-    src.add_argument("--source-zip", help="Path to a DFCX agent export zip.")
-    p_run.add_argument("--project-id", required=True)
-    p_run.add_argument("--location", default="us")
-    p_run.add_argument("--target-name", required=True)
-    p_run.add_argument("--env", choices=["PROD", "AUTOPUSH"], default="PROD")
-    p_run.add_argument("--model", default=DEFAULT_MODEL)
-    p_run.add_argument(
-        "--no-optimize",
-        action="store_true",
-        help="Skip Stage 1 + Stage 2 optimization passes.",
-    )
-    p_run.add_argument(
-        "--consolidate",
-        action="store_true",
-        help="Run Gemini structural consolidation after migration.",
-    )
-    p_run.add_argument(
-        "--stage3",
-        action="store_true",
-        help="Run Stage 3 topology wiring (requires --consolidate).",
-    )
-    p_run.add_argument(
-        "--persist-bundle",
-        action="store_true",
-        help="Persist IR bundle (<target>_ir.json) for resume.",
-    )
-    p_run.add_argument(
-        "--yes",
-        "-y",
-        action="store_true",
-        help="Non-interactive (currently always non-interactive).",
-    )
-    p_run.set_defaults(func=run_end_to_end)
-
-    # --- stage1 ---------------------------------------------------------
-    p_s1 = dc_subs.add_parser(
-        "stage1", help="Variable dedup + optional Gemini consolidation."
-    )
-    _add_bundle_args(p_s1)
-    p_s1.add_argument(
-        "--no-consolidate",
-        action="store_true",
-        help="Variable dedup only — skip Gemini consolidation.",
-    )
-    p_s1.add_argument(
-        "--grouping-json",
-        help="Load groupings from this JSON file instead of asking Gemini.",
-    )
-    p_s1.add_argument(
-        "--on-integrity-fail",
-        choices=["abort", "warn", "ignore"],
-        default="abort",
-        help="What to do if pre-deploy integrity checks find blockers.",
-    )
-    p_s1.add_argument(
-        "--version-label",
-        default="0.0.1",
-        help="CXAS Version display_name to create after the stage.",
-    )
-    p_s1.add_argument(
-        "--no-persist",
-        action="store_true",
-        help="Skip writing the updated bundle back to disk.",
-    )
-    p_s1.set_defaults(func=run_stage1)
-
-    # --- stage2 ---------------------------------------------------------
-    p_s2 = dc_subs.add_parser(
-        "stage2",
-        help="Instruction state machines + tool mocks + lint + report.",
-    )
-    _add_bundle_args(p_s2)
-    p_s2.add_argument(
-        "--version-label",
-        default="0.0.2",
-        help="CXAS Version display_name to create after the stage.",
-    )
-    p_s2.add_argument(
-        "--no-unit-tests",
-        action="store_true",
-        help="Skip deterministic unit-test regeneration.",
-    )
-    p_s2.add_argument(
-        "--no-lint",
-        action="store_true",
-        help="Skip post-deploy `cxas pull` + `cxas lint`.",
-    )
-    p_s2.add_argument(
-        "--no-report",
-        action="store_true",
-        help="Skip OptimizationReporter audit markdown.",
-    )
-    p_s2.add_argument(
-        "--no-persist",
-        action="store_true",
-        help="Skip writing the updated bundle back to disk.",
-    )
-    p_s2.set_defaults(func=run_stage2)
-
-    # --- stage3 ---------------------------------------------------------
-    p_s3 = dc_subs.add_parser(
-        "stage3", help="Parent-child topology wiring after consolidation."
-    )
-    _add_bundle_args(p_s3)
-    mode = p_s3.add_mutually_exclusive_group()
-    mode.add_argument(
-        "--hub-and-spoke",
-        dest="mode",
-        action="store_const",
-        const="hub",
-        help="(default) Root has every non-root group as a direct child.",
-    )
-    mode.add_argument(
-        "--preserve-hierarchy",
-        dest="mode",
-        action="store_const",
-        const="hierarchy",
-        help="Derive children from the source DFCX dep graph.",
-    )
-    p_s3.set_defaults(mode="hub")
-    p_s3.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Compute and print the topology without applying.",
-    )
-    p_s3.add_argument(
-        "--no-set-root",
-        action="store_true",
-        help="Skip resetting the app's root_agent.",
-    )
-    p_s3.add_argument(
-        "--no-persist",
-        action="store_true",
-        help="Skip writing the updated bundle back to disk.",
-    )
-    p_s3.set_defaults(func=run_stage3)
-
-    # --- resume ---------------------------------------------------------
-    p_resume = dc_subs.add_parser(
-        "resume", help="Interactive bundle picker + stage menu."
-    )
-    _add_bundle_args(p_resume)
-    p_resume.set_defaults(func=run_resume)

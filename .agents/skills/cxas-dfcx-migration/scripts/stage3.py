@@ -63,31 +63,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--project-id", help="Override bundle project ID")
     p.add_argument("--location", help="Override bundle location")
-    mode = p.add_mutually_exclusive_group()
-    mode.add_argument(
-        "--hub-and-spoke",
-        dest="mode",
-        action="store_const",
-        const="hub",
-        help=("(default) Root has every non-root group as a direct child."),
-    )
-    mode.add_argument(
-        "--preserve-hierarchy",
-        dest="mode",
-        action="store_const",
-        const="hierarchy",
-        help="Derive children from the source DFCX dep graph.",
-    )
-    p.set_defaults(mode="hub")
     p.add_argument(
         "--dry-run",
         action="store_true",
         help="Print the proposed parent → children mapping without applying.",
-    )
-    p.add_argument(
-        "--no-set-root",
-        action="store_true",
-        help="Skip resetting the app's root_agent.",
     )
     p.add_argument("--yes", "-y", action="store_true", help="Non-interactive.")
     return p
@@ -133,16 +112,10 @@ async def _run(args) -> None:
         location=args.location,
     )
 
-    mode_label = (
-        "hub-and-spoke (root has all groups as direct children)"
-        if args.mode == "hub"
-        else "preserve-hierarchy (source dep graph, cycles broken)"
-    )
+    mode_label = "spoke-hub generative consolidation"
     with tracker.phase("Stage 3 — apply topology", mode_label):
         updated, skipped, failed = await service.run_stage3(
             bundle=bundle,
-            mode=args.mode,
-            set_root=not args.no_set_root,
             dry_run=args.dry_run,
             persist_bundle_path=(None if args.dry_run else bundle_path),
         )

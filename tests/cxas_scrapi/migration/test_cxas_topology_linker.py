@@ -65,10 +65,15 @@ def test_link_and_finalize_topology():
 
     linker.link_and_finalize_topology(ir, DFCXAgentIR(**source_agent_data))
 
-    # Verify that update_agent was called for Agent1 to link Agent2
-    mock_ps_agents.update_agent.assert_called_once_with(
+    # Verify that update_agent was called for Agent1 and Agent2
+    assert mock_ps_agents.update_agent.call_count == 2
+    mock_ps_agents.update_agent.assert_any_call(
         agent_name="projects/123/apps/456/agents/agent1",
         child_agents=["projects/123/apps/456/agents/agent2"],
+    )
+    mock_ps_agents.update_agent.assert_any_call(
+        agent_name="projects/123/apps/456/agents/agent2",
+        child_agents=[],
     )
     # And update_app was called to set root agent
     mock_ps_apps.update_app.assert_called_once_with(

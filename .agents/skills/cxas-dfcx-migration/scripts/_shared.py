@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import functools
 import os
+import re
 import sys
 from datetime import datetime
 from typing import Any
@@ -140,6 +141,13 @@ def load_source_agent_inquirer(
     cx_api = ConversationalAgentsAPI()
     zip_path = getattr(args, "zip_file", None)
     agent_id = getattr(args, "source_agent_id", None)
+    if agent_id:
+        match = re.search(
+            r"projects/([^/]+)/locations/([^/]+)/agents/([a-zA-Z0-9-]+)",
+            agent_id,
+        )
+        if match:
+            agent_id = match.group(0)
 
     if not zip_path and not agent_id:
         mode = _prompts.prompt_source_load_mode()

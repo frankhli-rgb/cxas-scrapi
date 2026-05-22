@@ -6,7 +6,15 @@
 #
 #     https://www.apache.org/licenses/LICENSE-2.0
 
-"""Gemini-driven structural consolidation of a 1:1 MigrationIR into a small
+"""
+# ==============================================================================
+# NOTE: This module (Gemini structural consolidator) is currently parked and
+# bypassed in the standard Stage 1 / 2 / 3 migration TUI/CLI pathways. We are
+# parking these assets for now and will consider how to integrate or consolidate
+# them in subsequent updates.
+# ==============================================================================
+
+Gemini-driven structural consolidation of a 1:1 MigrationIR into a small
 number of capability-rich CXAS agents.
 
 Distinct from `CXASOptimizer` (which deduplicates variables and restructures

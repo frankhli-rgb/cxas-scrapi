@@ -37,9 +37,7 @@ import _phase_tracker  # noqa: E402
 import _prompts  # noqa: E402
 import _shared  # noqa: E402
 
-from cxas_scrapi.migration import grouping_review
 from cxas_scrapi.migration.service import MigrationService
-from cxas_scrapi.utils.gemini import GeminiGenerate
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -64,30 +62,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--project-id", help="Override bundle project ID")
     p.add_argument("--location", help="Override bundle location")
-
-    p.add_argument(
-        "--no-consolidate",
-        action="store_true",
-        help="Skip Gemini consolidation; only run CXASOptimizer Stage 1.",
-    )
-    p.add_argument(
-        "--gemini-model",
-        default="gemini-3.1-pro-preview",
-        help=(
-            "Model for the grouping proposal (default: gemini-3.1-pro-preview)"
-        ),
-    )
-    p.add_argument(
-        "--grouping-json",
-        default=None,
-        help="Load a previously persisted grouping instead of asking Gemini.",
-    )
-    p.add_argument(
-        "--on-integrity-fail",
-        choices=["abort", "warn", "ignore"],
-        default="abort",
-        help="What to do if pre-deploy integrity checks find blockers.",
-    )
     p.add_argument("--yes", "-y", action="store_true", help="Non-interactive.")
     return p
 
@@ -103,30 +77,6 @@ def _resolve_bundle_path(args) -> str:
         )
         sys.exit(1)
     return path
-
-
-def _make_grouping_callback(yes: bool):
-    """Build the grouping_callback for `MigrationService.run_stage1`.
-
-    Non-interactive (``--yes``) callers get auto-accept — the proposed
-    groupings are returned unchanged. Interactive callers get the
-    accept/re-propose/merge/split/rename TUI from
-    :mod:`cxas_scrapi.migration.grouping_review`.
-    """
-    if yes:
-        return None  # service auto-accepts when callback is None
-
-    async def cb(*, ir, groupings, consolidator, root_key, dep_summary):
-        return await grouping_review.interactive_review(
-            ir,
-            groupings,
-            consolidator,
-            root_key=root_key,
-            dep_summary=dep_summary,
-            console=console,
-        )
-
-    return cb
 
 
 async def _run(args) -> None:
@@ -149,30 +99,13 @@ async def _run(args) -> None:
         location=args.location,
     )
 
-    consolidate = not args.no_consolidate
-    gemini = None
-    if consolidate and args.gemini_model:
-        # Honor --gemini-model by constructing a client up front; service
-        # would otherwise use its default model.
-        gemini = GeminiGenerate(
-            project_id=service.project_id,
-            location="global",
-            model_name=args.gemini_model,
-            max_concurrent_requests=10,
-        )
-
     with tracker.phase(
         "Stage 1",
-        "variable dedup" + (" + Gemini consolidation" if consolidate else ""),
+        "variable dedup",
     ):
         await service.run_stage1(
-            consolidate=consolidate,
-            bundle=bundle if consolidate else None,
-            gemini_client=gemini,
-            grouping_callback=_make_grouping_callback(args.yes),
-            grouping_json_path=args.grouping_json,
-            on_integrity_fail=args.on_integrity_fail,
-            version_label="0.0.1",
+            bundle=bundle,
+            version_label="0.0.2",
             persist_bundle_path=bundle_path,
             console=console,
         )

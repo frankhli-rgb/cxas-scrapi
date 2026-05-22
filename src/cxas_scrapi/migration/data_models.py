@@ -89,6 +89,9 @@ class IRMetadata(BaseModel):
         None  # The full resource name of the Polysynth app
     )
     default_model: str = "gemini-2.5-flash-001"
+    root_agent_key: Optional[str] = None
+    topology_rewrites: Dict[str, str] = Field(default_factory=dict)
+    tool_rewrites: Dict[str, str] = Field(default_factory=dict)
 
 
 class IRTool(BaseModel):
@@ -157,6 +160,6 @@ class MigrationConfig(BaseModel):
     run_stage3: bool = False
     # Opt-in: persist an IRBundle (<target>_ir.json) after migrate and after
     # each post-migration stage so the run is resumable via the stage
-    # subcommands (cxas migrate dfcx-cxas {stage1,stage2,stage3,resume}).
+    # subcommands (cxas migrate dfcx --optimize --stage {1,2,3,resume}).
     persist_bundle: bool = False
     source_agent_data_override: Optional[DFCXAgentIR] = None

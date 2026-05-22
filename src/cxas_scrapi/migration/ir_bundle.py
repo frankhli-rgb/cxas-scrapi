@@ -9,7 +9,7 @@
 """IR bundle persistence — single source of truth for cross-stage state.
 
 The IR bundle is the artifact that lets independent CLI invocations of
-``cxas migrate dfcx-cxas {run, stage1, stage2, stage3}`` (and the
+``cxas migrate dfcx {--run, --optimize --stage 1/2/3}`` (and the
 equivalent skill scripts) resume against the same migration without
 re-fetching the source DFCX agent or re-running the per-flow
 Step 2A/2B/2C compile pipeline. It contains:
@@ -26,7 +26,7 @@ import glob
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, List, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -55,9 +55,9 @@ class IRBundle(BaseModel):
     config: MigrationConfig
     source_agent_data: DFCXAgentIR
     ir: MigrationIR
-    stage_history: list[StageHistoryEntry] = Field(default_factory=list)
+    stage_history: List[StageHistoryEntry] = Field(default_factory=list)
     app_url: str | None = None
-    version_checkpoints: list[tuple[str, str]] = Field(default_factory=list)
+    version_checkpoints: List[Tuple[str, str]] = Field(default_factory=list)
     grouping: dict[str, Any] | None = (
         None  # populated when Stage 1 consolidates
     )

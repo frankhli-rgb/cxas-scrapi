@@ -29,13 +29,13 @@ This skill (InquirerPy prompts + HTML pre-flight preview + Gemini model picker) 
 
 ```bash
 # Same plumbing, scripted (no skill scripts needed):
-cxas migrate dfcx-cxas run --source-agent-id … --project-id … --target-name … --consolidate --persist-bundle
-cxas migrate dfcx-cxas stage1 --target-name my_app          # re-run stage 1 against the bundle
-cxas migrate dfcx-cxas stage2 --target-name my_app
-cxas migrate dfcx-cxas stage3 --target-name my_app
-cxas migrate dfcx-cxas resume --target-name my_app          # interactive bundle + stage picker
+cxas migrate dfcx --run --source-agent-id … --project-id … --target-name … --persist-bundle
+cxas migrate dfcx --optimize --stage 1 --target-name my_app          # re-run stage 1 against the bundle
+cxas migrate dfcx --optimize --stage 2 --target-name my_app
+cxas migrate dfcx --optimize --stage 3 --target-name my_app
+cxas migrate dfcx --optimize --stage resume --target-name my_app          # interactive bundle + stage picker
 
-# Or the existing interactive dashboard (now with opt-in consolidation / stage3 / persist-bundle):
+# Or the existing interactive dashboard:
 cxas migrate dfcx
 ```
 
@@ -110,7 +110,7 @@ python .agents/skills/cxas-dfcx-migration/scripts/stage3.py --target-name my_cxa
 
 ## What lives in the skill vs. in `cxas_scrapi`
 
-The skill is a thin orchestrator. **Every migration / optimization step lives in `src/cxas_scrapi/migration/` and is reachable via `MigrationService.run_stage*` methods**, so the same logic powers all three entry points: this skill, `cxas migrate dfcx` (interactive dashboard), and `cxas migrate dfcx-cxas {stage1,stage2,stage3,resume,run}` (non-interactive subcommands).
+The skill is a thin orchestrator. **Every migration / optimization step lives in `src/cxas_scrapi/migration/` and is reachable via `MigrationService.run_stage*` methods**, so the same logic powers all three entry points: this skill, `cxas migrate dfcx` (interactive dashboard), and `cxas migrate dfcx {--run, --optimize --stage 1/2/3/resume}` (non-interactive command arguments).
 
 | Operation | src/ entry point |
 |---|---|

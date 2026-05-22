@@ -6,7 +6,16 @@
 #
 #     https://www.apache.org/licenses/LICENSE-2.0
 
-"""Pre-deploy integrity checks for a consolidated :class:`MigrationIR`.
+"""
+# ==============================================================================
+# NOTE: This module (Pre-deploy integrity checks for consolidated IR)
+# is currently parked and bypassed in the standard Stage 1 / 2 / 3
+# migration TUI/CLI pathways. We are parking these assets for now and
+# will consider how to integrate or consolidate them in subsequent
+# updates.
+# ==============================================================================
+
+Pre-deploy integrity checks for a consolidated :class:`MigrationIR`.
 
 After :class:`StructuralConsolidator` has collapsed N source agents into M
 groups and synthesized per-group PIF XML, the new agents may reference

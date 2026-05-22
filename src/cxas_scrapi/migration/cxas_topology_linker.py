@@ -12,6 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+# ==============================================================================
+# NOTE: This module (standard child-parent topology linker) is the default
+# connection builder used at the end of basic 1:1 migrations to resolve standard
+# Playbook child agents arrays.
+# It is separate and independent from the Generative Spoke-Hub Stage 3 fusions.
+# ==============================================================================
+"""
+
 import logging
 import re
 from typing import Any, Dict, Set
@@ -61,6 +70,18 @@ class CXASTopologyLinker:
         child_resources_to_add = set()
         children_to_recurse = set()
 
+        rewrites = getattr(ir.metadata, "topology_rewrites", {}) or {}
+
+        def normalize_name(name):
+            return re.sub(r"[_\\-]+", " ", name).strip().lower()
+
+        def resolve_rewritten_name(name: str) -> str:
+            norm_name = normalize_name(name)
+            for src, tgt in rewrites.items():
+                if normalize_name(src) == norm_name:
+                    return tgt
+            return name
+
         # --- 1. RESOLVE EXPLICIT DEPENDENCIES ---
         if agent_data.type == "PLAYBOOK":
             pb_raw = agent_data.raw_data or {}
@@ -100,30 +121,31 @@ class CXASTopologyLinker:
                     )
                     continue
 
-                if child_display_name in current_path_ancestors:
+                rewritten_name = resolve_rewritten_name(child_display_name)
+                if (
+                    rewritten_name == ir_key
+                    or rewritten_name in current_path_ancestors
+                ):
                     logger.info(
                         f"  INFO: Skipping circular reference from '{ir_key}' "
-                        f"back to ancestor '{child_display_name}'."
+                        f"back to ancestor/self '{rewritten_name}'."
                     )
                     continue
 
-                if child_display_name in deployed_agent_map:
+                if rewritten_name in deployed_agent_map:
                     child_resources_to_add.add(
-                        deployed_agent_map[child_display_name]
+                        deployed_agent_map[rewritten_name]
                     )
-                    children_to_recurse.add(child_display_name)
+                    children_to_recurse.add(rewritten_name)
                 else:
                     logger.warning(
                         f"  ⚠️ Warning: Explicit child '{child_display_name}' "
-                        f"was not deployed."
+                        f"(rewritten to '{rewritten_name}') was not deployed."
                     )
 
         # --- 2. RESOLVE GENERATIVE DEPENDENCIES ---
         instruction = agent_data.instruction
         gen_refs = re.findall(r"{@AGENT:\s*([^}]+)}", instruction)
-
-        def normalize_name(name):
-            return re.sub(r"[_\\-]+", " ", name).strip().lower()
 
         for child_name in gen_refs:
             child_clean = child_name.strip()
@@ -148,24 +170,30 @@ class CXASTopologyLinker:
                 )
                 continue
 
-            if matched_ir_key in current_path_ancestors:
+            rewritten_key = resolve_rewritten_name(matched_ir_key)
+            if (
+                rewritten_key == ir_key
+                or rewritten_key in current_path_ancestors
+            ):
                 logger.info(
-                    f"  INFO: Skipping circular reference from '{ir_key}' "
-                    f"back to ancestor '{matched_ir_key}'."
+                    f"  INFO: Skipping circular/self reference from '{ir_key}' "
+                    f"back to '{rewritten_key}'."
                 )
                 continue
 
-            if matched_ir_key in deployed_agent_map:
-                child_resources_to_add.add(deployed_agent_map[matched_ir_key])
-                children_to_recurse.add(matched_ir_key)
+            if rewritten_key in deployed_agent_map:
+                child_resources_to_add.add(deployed_agent_map[rewritten_key])
+                children_to_recurse.add(rewritten_key)
             else:
                 logger.warning(
                     f"  ⚠️ Warning: '{ir_key}' references '{child_clean}' "
-                    f"(mapped to '{matched_ir_key}'), but it wasn't deployed."
+                    f"(mapped to '{matched_ir_key}' -> "
+                    f"rewritten to '{rewritten_key}'), "
+                    "but it wasn't deployed."
                 )
 
         # --- EXECUTE LINKING ---
-        if child_resources_to_add:
+        if agent_data.type == "PLAYBOOK":
             logger.info(
                 f"  Updating agent '{ir_key}' with "
                 f"{len(child_resources_to_add)} child(ren)..."
@@ -174,10 +202,12 @@ class CXASTopologyLinker:
                 agent_name=parent_resource,
                 child_agents=list(child_resources_to_add),
             )
-            reporter.log_action(
-                "Linking",
-                f"Linked {len(child_resources_to_add)} children to {ir_key}",
-            )
+            if child_resources_to_add:
+                reporter.log_action(
+                    "Linking",
+                    f"Linked {len(child_resources_to_add)} "
+                    f"children to {ir_key}",
+                )
 
         processed_nodes.add(ir_key)
 

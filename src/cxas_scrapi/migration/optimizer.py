@@ -353,14 +353,14 @@ class CXASOptimizer:
         playbook_agents = [
             agent
             for agent in self.ir.agents.values()
-            if agent.type == "PLAYBOOK"
+            if agent.type in ("PLAYBOOK", "FLOW")
         ]
 
         if not playbook_agents:
             self.log_action(
                 "Stage 2 Instructions",
                 "Complete",
-                "No Playbook sub-agents found. Skipping Stage 2 Instructions.",
+                "No Playbook or Flow sub-agents found. Skipping Stage 2 Instructions.",
             )
             return
 
@@ -369,12 +369,17 @@ class CXASOptimizer:
                 f"  Optimizing instructions for sub-agent: "
                 f"'{agent.display_name}'..."
             )
+            all_tools = list(agent.tools)
+            for gt in ["set_session_variables"]:
+                if gt not in all_tools:
+                    all_tools.append(gt)
+
             prompt = Prompts.STAGE_2_INSTRUCTION_OPTIMIZATION[
                 "template"
             ].format(
                 agent_name=agent.display_name,
                 instruction=agent.instruction,
-                tools=", ".join(agent.tools),
+                tools=", ".join(all_tools),
             )
             system_prompt = Prompts.STAGE_2_INSTRUCTION_OPTIMIZATION["system"]
             try:
@@ -388,10 +393,9 @@ class CXASOptimizer:
 
                 # Strip conversational fluff if LLM ignored constraints
                 response_clean = response.strip()
-                if response_clean.startswith("```xml"):
-                    response_clean = response_clean[6:]
-                if response_clean.endswith("```"):
-                    response_clean = response_clean[:-3]
+                # Harmonization clean-up pass for malformed markdown formatting
+                response_clean = re.sub(r"^```(?:xml)?", "", response_clean, flags=re.MULTILINE)
+                response_clean = re.sub(r"```$", "", response_clean, flags=re.MULTILINE)
                 response_clean = response_clean.strip()
 
                 if "set_session_variables" in response_clean:

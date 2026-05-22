@@ -35,25 +35,26 @@ Before migrating, it is helpful to understand how core DFCX concepts translate t
 
 ## Prerequisites
 
-Before starting the migration, ensure you have:
+Before starting the migration, ensure you have set up your environment by completing the steps in the [CLI Quickstart Prerequisites](../../getting-started/quickstart-cli.md#prerequisites) (including installing SCRAPI and configuring [GCP Authentication](../../getting-started/authentication.md)). 
 
-1.  **GCP Authentication:** Configured active credentials with access to the target GCP project (`gcloud auth application-default login`).
-2.  **Source Agent Data:** Either the live **Agent ID** of the DFCX agent (e.g., `projects/<proj>/locations/<loc>/agents/<uuid>`) or an exported agent bundle (`.zip` or `.json`).
-3.  **Target GCP Project:** A GCP project with the CX Agent Studio API enabled.
+In addition, you will need:
+
+1.  **Source Agent Data:** Either the live **Agent ID** of the DFCX agent (e.g., `projects/<proj>/locations/<loc>/agents/<uuid>`) or an exported agent package bundle (`.zip` or `.json`).
+2.  **Target GCP Project:** A GCP project with the CX Agent Studio API enabled (where the new CXAS app will be deployed).
 
 ---
 
 ## Entry points
 
-| Command | When to use |
+| Command / Flags | When to use |
 |---|---|
-| `cxas migrate dfcx` | Interactive dashboard. Walks you through configuration, resource selection, dependency analysis, then runs the full migration. Best for first-time use and exploration. |
-| `cxas migrate dfcx-cxas run` | Non-interactive end-to-end migration with flags. Best for scripted runs and CI. |
-| `cxas migrate dfcx-cxas stage1` / `stage2` / `stage3` | Run a single post-migration stage against an existing IR bundle. Best for resuming after a failure or iterating on one stage. |
-| `cxas migrate dfcx-cxas resume` | Interactive bundle picker + stage menu. |
+| `cxas migrate dfcx` | Interactive TUI dashboard. Walks you through configuration, resource selection, dependency analysis, then runs the full migration. Best for first-time use and exploration. |
+| `cxas migrate dfcx --run` | Non-interactive end-to-end migration with CLI flags. Best for scripted runs, automated tests, and CI/CD pipelines. |
+| `cxas migrate dfcx --optimize --stage {1/2/3}` | Run a single post-migration stage against an existing IR bundle. Best for resuming after a failure, iterating on prompt parameters, or targeted debugging. |
+| `cxas migrate dfcx --optimize --stage resume` | Interactive CLI bundle picker + stage menu. |
 | Skill at `.agents/skills/cxas-dfcx-migration/` | InquirerPy prompts + HTML pre-flight preview + Gemini model picker. See the skill's `SKILL.md`. |
 
-All entry points call the same `MigrationService.run_migration` / `run_stage1` / `run_stage2` / `run_stage3` methods — pick whichever matches your workflow.
+All entry points call the same standard `MigrationService.run_migration` / `run_stage1` / `run_stage2` / `run_stage3` methods — pick whichever matches your workflow.
 
 ## Step-by-Step Walkthrough (interactive dashboard)
 
@@ -76,9 +77,6 @@ When launching the interactive migration dashboard, you will configure global pa
 *   **Environment:** Select `PROD` for direct deployment or `AUTOPUSH` for automated continuous integration environments.
 *   **Global App Model:** Select the primary foundational model for the migrated agents (e.g., `gemini-3.1-flash-live`).
 *   **Optimize for CXAS:** Set to `[y]` (Recommended, default `[y]`) to execute the multi-stage Hybrid Optimization Module passes (deduplicating variables, restructuring instructions to State Machines, and injecting tool mocks).
-*   **Run structural consolidation (Gemini N→M agent grouping)?:** *(Opt-in, default `[n]`)* Runs `StructuralConsolidator` after Stage 2 to collapse N source agents into M capability-focused groups. The dashboard auto-accepts the Gemini proposal; use the skill at `.agents/skills/cxas-dfcx-migration/` for the interactive review TUI (accept / re-propose / merge / split / rename).
-*   **Run Stage 3 topology wiring?:** *(Opt-in, default `[n]`; requires consolidation)* Wires consolidated-agent parent-child topology so root reaches every group as a direct child. Idempotent.
-*   **Persist IR bundle for stage-resume?:** *(Opt-in, default `[n]`)* Writes `<target>_ir.json` after migrate and after each post-migration stage so you can re-run any single stage with `cxas migrate dfcx-cxas stage1` / `stage2` / `stage3`.
 *   **Generate Migration Report:** Ensure this is checked to generate a comprehensive markdown audit report (`migration_report.md`) upon completion.
 *   **Generate Unit Tests (Auto-Fix):** *(Feature coming)* Automatically generates unit tests and evaluation cases for migrated tools and callbacks.
 *   **Generate Hillclimbing Evals:** *(Feature coming)* Enable to automatically generate advanced hillclimbing turn evaluations.
@@ -172,27 +170,28 @@ if Part.has_function_call('agent_transfer'):
 For deterministic greetings or intermediate UI payloads (e.g., sending a client-side view while an async tool runs), SCRAPI generates callbacks with `response.partial = True`, allowing the agent to emit deterministic JSON payloads without terminating the LLM generation loop.
 
 ### 8. The Hybrid Optimization Module (Track 3)
-When `Optimize for CXAS` is enabled, SCRAPI creates a baseline version backup (`0.0.1`) and executes an advanced 2-stage LLM and algorithmic optimization pipeline:
+When `Optimize for CXAS` is enabled, SCRAPI creates a baseline version backup (`0.0.1`) and executes a highly advanced 3-stage LLM and algorithmic optimization pipeline:
 *   **Stage 1: Global Variable Deduplication (Version `0.0.2`):** Scans all agent instructions, tools, and callbacks for variable references (e.g., `{var}`, `$var`, `get_variable()`), builds a global dependency map, and uses an LLM pass to deduplicate variables, keeping the app under the 95-variable limit. It automatically updates parameter declarations and rewrites text/code references globally.
 *   **Stage 2: State Machines & Tool Mocks (Version `0.0.3`):** Concurrently restructures natural language instructions into robust XML State Machines (states, transitions, tool rules), dynamically attaching `set_session_variables` if needed. Simultaneously, it ingests calling agent context and injects highly realistic happy-path `mock_mode` return branches into Python tools.
+*   **Stage 3: Generative Spoke-Hub Topology & Consolidation (Version `0.0.4`):** Runs the LLM functional topology classifier to designate migrated sub-agents as Core spokes vs. Helper stubs. It concurrently dispatches Gemini organic prompt-mergers to weave helper instructions, tools list, and callbacks in-line into their referencing parent Core playbooks (safely collapsing redundant stubs to guarantee the active spoke count stays below the strict cap of 7). Simultaneously, it spins up a centralized `Session_Termination_Agent` gateway spoke for conversational wrap-ups, rewrites active transition reference target pointers, and automatically purges consumed/orphaned stubs from the live cloud console for a clean, cohesive spoke-hub deployment.
 
 ### 9. Topology Linking & Root Agent Configuration
 The topology linker automatically traverses explicit (`referencedPlaybooks`) and generative (`{@AGENT: name}`) routing dependencies, establishes parent/child relationships in CXAS, protects against circular references, and configures the canonical Root Agent for the full application.
 
 ---
 
-## Non-Interactive: `cxas migrate dfcx-cxas`
+## Non-Interactive CLI: `cxas migrate dfcx --run | --optimize`
 
-For scripted / CI use, the `dfcx-cxas` subcommand tree exposes the same `MigrationService` methods the interactive dashboard calls — no skill scripts required.
+For scripted / CI use, standard non-interactive options can be passed directly to the `cxas migrate dfcx` command — no skill scripts or prompt confirmation required.
 
-### `cxas migrate dfcx-cxas run` — end-to-end
+### `cxas migrate dfcx --run` — end-to-end
 
 ```bash
-cxas migrate dfcx-cxas run \
+cxas migrate dfcx --run \
   --source-agent-id projects/<src_proj>/locations/us/agents/<uuid> \
   --project-id <target_proj> --location us \
   --target-name my_app \
-  --consolidate --stage3 --persist-bundle
+  --persist-bundle --yes
 ```
 
 Flags:
@@ -200,43 +199,46 @@ Flags:
 | Flag | Default | Effect |
 |---|---|---|
 | `--source-agent-id` / `--source-zip` | required (one of) | Live DFCX agent or local export zip. |
-| `--project-id` | required | Target GCP project. |
+| `--project-id` | required | Target GCP project ID. |
 | `--location` | `us` | Target CXAS location. Avoid `global` — most projects don't support it. |
-| `--target-name` | required | Display name for the new CXAS app. |
-| `--env` | `PROD` | `PROD` or `AUTOPUSH`. |
-| `--model` | repo default | Foundation model for the migrated agents. |
-| `--no-optimize` | optimize on | Skip the Stage 1 + Stage 2 optimization passes. |
-| `--consolidate` | off | Run Gemini structural consolidation after Stage 2 (auto-accepts proposed grouping). |
-| `--stage3` | off | Run Stage 3 topology wiring (requires `--consolidate`). |
-| `--persist-bundle` | off | Write `<target>_ir.json` for stage-level resume. |
+| `--target-name` | required | Display name prefix for the new CXAS app. |
+| `--env` | `PROD` | Target deployment environment (`PROD` or `AUTOPUSH`). |
+| `--model` | repo default | Foundation model for the migrated agents (e.g. `gemini-3.1-flash-live`). |
+| `--no-optimize` | optimize on | Skip the Stage 1 + Stage 2 optimization passes (Fast-deploy only). |
+| `--persist-bundle` | off | Write the intermediate `<target>_ir.json` bundle to disk for subsequent stage checkpoints. |
+| `--yes` / `-y` | off | Non-interactive: automatically accept confirmations. |
 
-### `cxas migrate dfcx-cxas stage1 | stage2 | stage3` — single stage
+### `cxas migrate dfcx --optimize --stage {1|2|3}` — single stage
 
-Each loads `<target>_ir.json` (produced by an earlier `run` or by the skill), restores a `MigrationService`, and runs one stage. Useful for re-running a single stage after a fix without paying the full migration cost.
+Each loads `<target>_ir.json` (produced by a previous `--run` or by the TUI/skill), restores the in-memory state of the intermediate representation, and executes one specific optimizer stage. Perfect for target debugging or re-running a single step without paying the full E2E migration cost.
 
 ```bash
-# Re-run Stage 1 (variable dedup; --no-consolidate skips the Gemini grouping)
-cxas migrate dfcx-cxas stage1 --target-name my_app --no-consolidate
+# Re-run Stage 1 (variable deduplication; pushes version 0.0.2)
+cxas migrate dfcx --optimize --stage 1 --target-name my_app
 
-# Stage 2 with optional unit-test regen + lint + report (defaults: all enabled)
-cxas migrate dfcx-cxas stage2 --target-name my_app
+# Stage 2 (state machine XML + tool mocks; pushes version 0.0.3)
+cxas migrate dfcx --optimize --stage 2 --target-name my_app
 
-# Stage 3 in dry-run mode — print the proposed parent → children mapping
-cxas migrate dfcx-cxas stage3 --target-name my_app --dry-run
+# Stage 3 in dry-run mode — compute and print the Spoke-Hub topology graph without applying
+cxas migrate dfcx --optimize --stage 3 --target-name my_app --dry-run
+
+# Stage 3 apply (parent-child spoke topology; pushes version 0.0.4)
+cxas migrate dfcx --optimize --stage 3 --target-name my_app
 ```
 
-Common flags across `stage1` / `stage2` / `stage3`:
+Common flags across the optimization stages:
 
 | Flag | Effect |
 |---|---|
-| `--target-name TARGET` / `--ir-bundle PATH` | Resolve the IR bundle. |
-| `--project-id` / `--location` | Override the bundle's project / location. |
-| `--no-persist` | Skip writing the updated bundle back to disk. |
-| `--yes` / `-y` | Non-interactive. |
+| `--target-name TARGET` / `--ir-bundle PATH` | Resolve the target IR bundle file. |
+| `--project-id` / `--location` | Override the bundle's default project / location targets. |
+| `--version-label` | Custom version display name to register in Dialogflow CX (Default: `0.0.2` for Stage 1, `0.0.3` for Stage 2, `0.0.4` for Stage 3). |
+| `--no-persist` | Skip writing the updated bundle state back to disk. |
+| `--yes` / `-y` | Non-interactive mode (automatically enabled for optimization stages). |
 
-### `cxas migrate dfcx-cxas resume` — interactive picker
+### `cxas migrate dfcx --optimize --stage resume` — interactive picker
 
-Lists every `*_ir.json` in the cwd, prompts you to pick one, then prompts for which stage (1/2/3) to run. The right entry point when you've stepped away and aren't sure which target you were last working on.
+Lists every active `*_ir.json` bundle found in the current working directory, prompts you to select one, and opens the stage selection menu (1/2/3) to trigger any step. Useful when resuming a migration after stepping away!
 
 ---
 

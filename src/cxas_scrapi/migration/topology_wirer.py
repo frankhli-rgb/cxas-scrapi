@@ -6,7 +6,16 @@
 #
 #     https://www.apache.org/licenses/LICENSE-2.0
 
-"""Parent-child topology wiring for consolidated CXAS agents.
+"""
+# ==============================================================================
+# NOTE: The custom topology computation methods in this module are
+# currently parked and bypassed by the standard Spoke-Hub Stage 3
+# fusions. We ONLY use the `delete_orphan_agents` method to execute
+# standard transaction database cleanups and delete consumed stubs from
+# the Spanner console.
+# ==============================================================================
+
+Parent-child topology wiring for consolidated CXAS agents.
 
 After :class:`StructuralConsolidator` collapses N source agents into M
 groups, the parent-child topology of the deployed CXAS app is only as

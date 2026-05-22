@@ -28,9 +28,11 @@ from cxas_scrapi.migration.data_models import (
     IRMetadata,
     MigrationConfig,
     MigrationIR,
+    MigrationStatus,
 )
 from cxas_scrapi.migration.ir_bundle import IRBundle
 from cxas_scrapi.migration.service import MigrationService
+from cxas_scrapi.migration.topology_optimizer import AppTopologyGraph
 
 # ---------------------------------------------------------------------------
 # Shared fixtures for stage-method tests
@@ -111,6 +113,7 @@ def _make_service(ir: MigrationIR | None = None) -> MigrationService:
     service._deploy_base_resources = AsyncMock()
     service._deploy_pending_agents = AsyncMock()
     service.topology_linker = MagicMock()
+    service.deployment_state = {"app_created": True, "vars_deployed": True}
     return service
 
 
@@ -229,16 +232,8 @@ def test_persist_bundle_without_phase_skips_history():
 
 
 @pytest.mark.asyncio
-async def test_run_stage1_consolidate_requires_bundle():
-    service = _make_service()
-    with pytest.raises(ValueError, match="requires bundle"):
-        await service.run_stage1(consolidate=True)
-
-
-@pytest.mark.asyncio
 async def test_run_stage1_dedup_only_no_version_no_consolidation():
-    """Variable dedup runs; no Version created when version_label=None;
-    no consolidation when consolidate=False (the default)."""
+    """Variable dedup runs; no Version created when version_label=None."""
     service = _make_service()
 
     with (
@@ -248,9 +243,8 @@ async def test_run_stage1_dedup_only_no_version_no_consolidation():
         ) as mock_run,
         patch("cxas_scrapi.migration.service.Versions") as mock_versions_cls,
     ):
-        result = await service.run_stage1(version_label=None)
+        await service.run_stage1(version_label=None)
 
-    assert result is None
     mock_run.assert_awaited_once()
     mock_versions_cls.assert_not_called()
 
@@ -276,191 +270,6 @@ async def test_run_stage1_creates_version_when_label_set():
     call_kwargs = fake_versions_client.create_version.call_args.kwargs
     assert call_kwargs["display_name"] == "0.0.2"
     assert "variable dedup" in call_kwargs["description"]
-    assert "consolidation" not in call_kwargs["description"]
-
-
-@pytest.mark.asyncio
-async def test_run_stage1_consolidate_runs_consolidator_and_persists_grouping():
-    """End-to-end consolidation path with mocked consolidator + grouping
-    callback returning the proposed groupings unchanged."""
-    service = _make_service()
-    bundle = _make_bundle()
-    fake_groupings = {
-        "RootGroup": {
-            "agents": ["Root Agent"],
-            "journey": "main",
-            "is_root": True,
-        }
-    }
-
-    consolidated_ir = _make_ir()
-
-    fake_consolidator = MagicMock()
-    fake_consolidator.propose_groupings = AsyncMock(return_value=fake_groupings)
-    fake_consolidator.consolidate = MagicMock(return_value=consolidated_ir)
-    fake_consolidator.synthesize_instructions = AsyncMock(
-        return_value={"RootGroup": "ok"}
-    )
-
-    with (
-        patch(
-            "cxas_scrapi.migration.stage_runner.run_stage_with_redeploy",
-            new=AsyncMock(return_value=MagicMock(optimization_logs=[])),
-        ),
-        patch(
-            "cxas_scrapi.migration.service.StructuralConsolidator",
-            return_value=fake_consolidator,
-        ),
-        patch(
-            "cxas_scrapi.migration.service.structural_consolidator."
-            "detect_root_key",
-            return_value="RootAgent",
-        ),
-        patch(
-            "cxas_scrapi.migration.service.structural_consolidator."
-            "validate_groupings"
-        ) as mock_validate,
-        patch(
-            "cxas_scrapi.migration.service.structural_consolidator."
-            "persist_grouping"
-        ) as mock_persist_grouping,
-        patch(
-            "cxas_scrapi.migration.service.integrity_checks."
-            "check_consolidation_integrity",
-            return_value=([], []),
-        ),
-        patch(
-            "cxas_scrapi.migration.service.topology_wirer.set_app_root_agent",
-            return_value=(True, "set"),
-        ),
-        patch(
-            "cxas_scrapi.migration.service.topology_wirer.delete_orphan_agents",
-            return_value=(0, 0),
-        ),
-        patch("cxas_scrapi.migration.service.Versions"),
-    ):
-        returned = await service.run_stage1(
-            consolidate=True,
-            bundle=bundle,
-            version_label=None,
-        )
-
-    # persist_grouping was patched, so no file was written to disk.
-    mock_persist_grouping.assert_called_once()
-
-    assert returned == fake_groupings
-    fake_consolidator.propose_groupings.assert_awaited_once()
-    mock_validate.assert_called_once()
-    fake_consolidator.consolidate.assert_called_once_with(fake_groupings)
-    fake_consolidator.synthesize_instructions.assert_awaited_once()
-    # Bundle mutated.
-    assert bundle.grouping == fake_groupings
-    assert bundle.pre_consolidation_ir is not None
-    # Service IR replaced with consolidated output.
-    assert service.ir is consolidated_ir
-    # Update-pass deploys were called.
-    service._deploy_base_resources.assert_awaited_once_with(is_update_pass=True)
-    service._deploy_pending_agents.assert_awaited_once_with(is_update_pass=True)
-
-
-@pytest.mark.asyncio
-async def test_run_stage1_consolidate_aborts_on_integrity_blocking():
-    """When integrity_checks returns blocking errors and
-    on_integrity_fail='abort', run_stage1 raises RuntimeError."""
-    service = _make_service()
-    bundle = _make_bundle()
-    fake_groupings = {"RootGroup": {"agents": ["Root Agent"], "is_root": True}}
-
-    fake_consolidator = MagicMock()
-    fake_consolidator.propose_groupings = AsyncMock(return_value=fake_groupings)
-    fake_consolidator.consolidate = MagicMock(return_value=_make_ir())
-    fake_consolidator.synthesize_instructions = AsyncMock(return_value={})
-
-    with (
-        patch(
-            "cxas_scrapi.migration.stage_runner.run_stage_with_redeploy",
-            new=AsyncMock(return_value=MagicMock(optimization_logs=[])),
-        ),
-        patch(
-            "cxas_scrapi.migration.service.StructuralConsolidator",
-            return_value=fake_consolidator,
-        ),
-        patch(
-            "cxas_scrapi.migration.service.structural_consolidator."
-            "detect_root_key",
-            return_value="RootAgent",
-        ),
-        patch(
-            "cxas_scrapi.migration.service.structural_consolidator."
-            "validate_groupings"
-        ),
-        patch(
-            "cxas_scrapi.migration.service.structural_consolidator."
-            "persist_grouping"
-        ),
-        patch(
-            "cxas_scrapi.migration.service.integrity_checks."
-            "check_consolidation_integrity",
-            return_value=(["BLOCKING: unknown tool foo"], []),
-        ),
-    ):
-        with pytest.raises(RuntimeError, match="blocking"):
-            await service.run_stage1(
-                consolidate=True,
-                bundle=bundle,
-                on_integrity_fail="abort",
-                version_label=None,
-            )
-
-    # Deploy should NOT have run when we abort.
-    service._deploy_base_resources.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_run_stage1_callback_returning_none_skips_consolidation():
-    """When the grouping_callback returns None, the consolidation block
-    is skipped but Stage 1 variable dedup still applies."""
-    service = _make_service()
-    bundle = _make_bundle()
-
-    fake_consolidator = MagicMock()
-    fake_consolidator.propose_groupings = AsyncMock(
-        return_value={"G": {"agents": ["Root Agent"], "is_root": True}}
-    )
-
-    # Callback receives kwargs (ir, groupings, consolidator, root_key,
-    # dep_summary) — accept **_ so the test doesn't have to mirror the
-    # full contract.
-    async def reject_callback(**_):
-        return None
-
-    with (
-        patch(
-            "cxas_scrapi.migration.stage_runner.run_stage_with_redeploy",
-            new=AsyncMock(return_value=MagicMock(optimization_logs=[])),
-        ),
-        patch(
-            "cxas_scrapi.migration.service.StructuralConsolidator",
-            return_value=fake_consolidator,
-        ),
-        patch(
-            "cxas_scrapi.migration.service.structural_consolidator."
-            "detect_root_key",
-            return_value="RootAgent",
-        ),
-    ):
-        result = await service.run_stage1(
-            consolidate=True,
-            bundle=bundle,
-            grouping_callback=reject_callback,
-            version_label=None,
-        )
-
-    assert result is None
-    fake_consolidator.consolidate.assert_not_called()
-    service._deploy_base_resources.assert_not_awaited()
-    assert bundle.grouping is None
-    assert bundle.pre_consolidation_ir is None
 
 
 # ---------------------------------------------------------------------------
@@ -547,76 +356,86 @@ async def test_run_stage2_run_lint_invokes_post_deploy_lint():
     fake_lint.assert_awaited_once()
 
 
+@pytest.mark.asyncio
+async def test_run_stage2_write_report_to_writes_markdown(tmp_path):
+    service = _make_service()
+    report_path = str(tmp_path / "opt_report.md")
+    bundle = _make_bundle()
+
+    fake_reporter = MagicMock()
+
+    with (
+        patch(
+            "cxas_scrapi.migration.stage_runner.run_stage_with_redeploy",
+            new=AsyncMock(return_value=MagicMock(optimization_logs=[])),
+        ),
+        patch(
+            "cxas_scrapi.migration.service.OptimizationReporter",
+            return_value=fake_reporter,
+        ),
+        patch("cxas_scrapi.migration.service.Versions"),
+    ):
+        await service.run_stage2(
+            version_label=None,
+            write_report_to=report_path,
+            bundle=bundle,
+        )
+
+    # Verify that standard OptimizationReporter export was correctly invoked
+    # with target report path!
+    fake_reporter.export.assert_called_once_with(report_path)
+
+
 # ---------------------------------------------------------------------------
 # run_stage3
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_run_stage3_requires_grouping_on_bundle():
-    service = _make_service()
-    bundle = _make_bundle()  # bundle.grouping is None
-    with pytest.raises(RuntimeError, match="bundle.grouping"):
-        await service.run_stage3(bundle=bundle)
-
-
-@pytest.mark.asyncio
-async def test_run_stage3_dry_run_skips_apply():
+async def test_run_stage3_dry_run_returns_zero():
     service = _make_service()
     bundle = _make_bundle()
-    bundle.grouping = {"RootGroup": {"agents": ["Root Agent"], "is_root": True}}
 
-    with (
-        patch(
-            "cxas_scrapi.migration.service.topology_wirer."
-            "compute_group_children",
-            return_value={"RootGroup": set()},
-        ),
-        patch(
-            "cxas_scrapi.migration.service.topology_wirer.apply_topology",
-            return_value=(0, 0, 0),
-        ) as mock_apply,
-        patch(
-            "cxas_scrapi.migration.service.topology_wirer.set_app_root_agent",
-            return_value=(True, "ok"),
-        ) as mock_set_root,
+    # Mock designations mapping
+    fake_graph = AppTopologyGraph(classifications=[])
+    with patch(
+        "cxas_scrapi.migration.topology_optimizer.TopologyOptimizer.analyze_app_topology",
+        AsyncMock(return_value=fake_graph),
     ):
         result = await service.run_stage3(bundle=bundle, dry_run=True)
 
     assert result == (0, 0, 0)
-    mock_apply.assert_called_once()
-    assert mock_apply.call_args.kwargs.get("dry_run") is True
-    # set_root and bundle persistence are skipped in dry-run mode.
-    mock_set_root.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_run_stage3_persists_bundle_on_success(tmp_path):
     service = _make_service()
     bundle = _make_bundle()
-    bundle.grouping = {"RootGroup": {"agents": ["Root Agent"], "is_root": True}}
     bundle_path = str(tmp_path / "bundle.json")
+
+    fake_graph = AppTopologyGraph(classifications=[])
+    mock_optimize = patch(
+        "cxas_scrapi.migration.topology_optimizer.TopologyOptimizer.optimize_stage3_topology",
+        AsyncMock(return_value=service.ir),
+    )
+    mock_cloud_check = patch(
+        "cxas_scrapi.migration.service.MigrationService.verify_final_ces_compilation",
+        AsyncMock(return_value=True),
+    )
 
     with (
         patch(
-            "cxas_scrapi.migration.service.topology_wirer."
-            "compute_group_children",
-            return_value={"RootGroup": set()},
+            "cxas_scrapi.migration.topology_optimizer.TopologyOptimizer.analyze_app_topology",
+            AsyncMock(return_value=fake_graph),
         ),
-        patch(
-            "cxas_scrapi.migration.service.topology_wirer.apply_topology",
-            return_value=(1, 0, 0),
-        ),
-        patch(
-            "cxas_scrapi.migration.service.topology_wirer.set_app_root_agent",
-            return_value=(True, "ok"),
-        ),
+        mock_optimize,
+        mock_cloud_check,
     ):
         updated, skipped, failed = await service.run_stage3(
-            bundle=bundle, persist_bundle_path=bundle_path
+            bundle=bundle, persist_bundle_path=bundle_path, dry_run=False
         )
 
-    assert (updated, skipped, failed) == (1, 0, 0)
+    assert (updated, skipped, failed) == (0, 0, 0)
     assert os.path.exists(bundle_path)
     assert bundle.stage_history[-1].phase == "stage3"
     assert bundle.stage_history[-1].status == "ok"
@@ -680,3 +499,54 @@ async def test_run_migration_optimize_for_cxas_calls_new_stage_methods():
     service.run_stage1.assert_awaited_once_with(version_label="0.0.2")
     # run_stage2 was called with version_label="0.0.3".
     service.run_stage2.assert_awaited_once_with(version_label="0.0.3")
+
+
+# ---------------------------------------------------------------------------
+# _safe_dereference_tool_from_console
+# ---------------------------------------------------------------------------
+
+
+def test_safe_dereference_tool_from_console_matches_and_strips():
+    service = _make_service()
+    service.ir.agents["RootAgent"].status = MigrationStatus.DEPLOYED
+
+    # Setup mocked console agent
+    mock_agent = MagicMock()
+    mock_agent.name = "projects/p/locations/us/apps/X/agents/A"
+    mock_agent.display_name = "Root Agent"
+    mock_agent.tools = ["projects/p/locations/us/apps/X/tools/target_tool"]
+
+    service.ps_agents.list_agents.return_value = [mock_agent]
+
+    service._safe_dereference_tool_from_console(
+        "projects/p/locations/us/apps/X/tools/target_tool"
+    )
+
+    # Verify update call with stripped tools list
+    service.ps_agents.update_agent.assert_called_once_with(
+        agent_name="projects/p/locations/us/apps/X/agents/A", tools=[]
+    )
+    # Verify local status was marked back to COMPILED for compulsory
+    # re-attachment
+    assert service.ir.agents["RootAgent"].status == MigrationStatus.COMPILED
+
+
+def test_safe_dereference_tool_from_console_no_match_does_nothing():
+    service = _make_service()
+    service.ir.agents["RootAgent"].status = MigrationStatus.DEPLOYED
+
+    # Setup mocked console agent that does not have the target tool
+    mock_agent = MagicMock()
+    mock_agent.name = "projects/p/locations/us/apps/X/agents/A"
+    mock_agent.display_name = "Root Agent"
+    mock_agent.tools = ["projects/p/locations/us/apps/X/tools/some_other_tool"]
+
+    service.ps_agents.list_agents.return_value = [mock_agent]
+
+    service._safe_dereference_tool_from_console(
+        "projects/p/locations/us/apps/X/tools/target_tool"
+    )
+
+    # Verify update call was NOT made and status remained DEPLOYED
+    service.ps_agents.update_agent.assert_not_called()
+    assert service.ir.agents["RootAgent"].status == MigrationStatus.DEPLOYED

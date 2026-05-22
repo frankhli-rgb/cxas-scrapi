@@ -9,7 +9,7 @@
 """Skill-local re-export of the promoted IR bundle module.
 
 The implementation lives in :mod:`cxas_scrapi.migration.ir_bundle` so the
-same logic is reachable from the CLI (``cxas migrate dfcx-cxas stage*``)
+same logic is reachable from the CLI (``cxas migrate dfcx --optimize --stage*``)
 and any other caller. Skill scripts continue to ``import _bundle`` so
 callsites don't need to change."""
 

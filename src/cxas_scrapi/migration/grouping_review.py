@@ -6,7 +6,15 @@
 #
 #     https://www.apache.org/licenses/LICENSE-2.0
 
-"""Interactive review TUI for Gemini-proposed agent groupings.
+"""
+# ==============================================================================
+# NOTE: This module (Interactive review TUI for agent groupings) is
+# currently parked and bypassed in the standard Stage 1 / 2 / 3 migration
+# TUI/CLI pathways. We are parking these assets for now and will consider
+# how to integrate or consolidate them in subsequent updates.
+# ==============================================================================
+
+Interactive review TUI for Gemini-proposed agent groupings.
 
 Used by:
 
