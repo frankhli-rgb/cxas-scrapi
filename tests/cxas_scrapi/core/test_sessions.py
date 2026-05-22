@@ -641,7 +641,6 @@ def test_check_audio_requirements_no_project_id_raises_error():
 @patch("cxas_scrapi.core.sessions.SessionServiceClient")
 def test_sessions_rate_limiting(mock_client_cls):
     """Test Sessions.run with rate limiting."""
-    mock_client = mock_client_cls.return_value
     mock_rate_limiter = MagicMock()
 
     sessions = Sessions(
@@ -658,7 +657,6 @@ def test_sessions_rate_limiting(mock_client_cls):
 @patch("cxas_scrapi.core.sessions.SessionServiceClient")
 def test_sessions_rate_limiting_multi_turn(mock_client_cls):
     """Test Sessions.run with rate limiting for multiple turns."""
-    mock_client = mock_client_cls.return_value
     mock_rate_limiter = MagicMock()
 
     sessions = Sessions(

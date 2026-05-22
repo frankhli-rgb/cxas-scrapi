@@ -22,7 +22,6 @@ from cxas_scrapi.utils.rate_limiter import RateLimiter
 
 
 class TestRateLimiter(unittest.TestCase):
-
     def test_consume_immediate(self):
         # 60 RPM = 1 RPS. Default capacity = 1.0
         limiter = RateLimiter(requests_per_minute=60)
