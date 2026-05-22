@@ -453,3 +453,18 @@ def test_run_turn_tests_multi_turn_with_event(mock_turn_evals):
     args, kwargs = mock_turn_evals.sessions_client.run.call_args_list[1]
     assert kwargs["text"] == "regular text"
     assert kwargs["event"] is None
+
+
+@patch("cxas_scrapi.evals.turn_evals.Variables")
+@patch("cxas_scrapi.evals.turn_evals.Sessions")
+def test_turn_evals_init_with_rate_limiter(mock_sessions, mock_variables):
+    mock_rate_limiter = MagicMock()
+    _ = TurnEvals(
+        app_name="projects/p/locations/l/apps/a",
+        rate_limiter=mock_rate_limiter,
+    )
+    mock_sessions.assert_called_once_with(
+        app_name="projects/p/locations/l/apps/a",
+        creds=None,
+        rate_limiter=mock_rate_limiter,
+    )

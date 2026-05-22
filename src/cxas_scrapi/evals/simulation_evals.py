@@ -46,6 +46,7 @@ from cxas_scrapi.utils.eval_utils import (
     evaluate_expectations,
 )
 from cxas_scrapi.utils.gemini import GeminiGenerate
+from cxas_scrapi.utils.rate_limiter import RateLimiter
 
 _FIRST_UTTERANCE = "event: welcome"
 _MAX_TURNS = 30
@@ -333,12 +334,19 @@ class SimulationEvals(Apps):
     max_retries: int = 3
     retry_delay_base: int = 2
 
-    def __init__(self, app_name: str, **kwargs):
+    def __init__(
+        self,
+        app_name: str,
+        rate_limiter: Optional[RateLimiter] = None,
+        **kwargs,
+    ):
         self.app_name = app_name
         project_id = app_name.split("/")[1]
         location = app_name.split("/")[3]
         super().__init__(project_id=project_id, location=location, **kwargs)
-        self.sessions_client = Sessions(app_name, **kwargs)
+        self.sessions_client = Sessions(
+            app_name, rate_limiter=rate_limiter, **kwargs
+        )
         self.tools_map = Tools(app_name=app_name, **kwargs).get_tools_map()
 
         # Vertex AI requires a specific region (e.g. global), whereas CXAS

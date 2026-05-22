@@ -26,6 +26,7 @@ from cxas_scrapi.evals.callback_evals import CallbackEvals
 from cxas_scrapi.evals.simulation_evals import SimulationEvals
 from cxas_scrapi.evals.tool_evals import ToolEvals
 from cxas_scrapi.utils.eval_utils import EvalUtils
+from cxas_scrapi.utils.rate_limiter import RateLimiter
 
 
 def run_all_evals(
@@ -42,6 +43,7 @@ def run_all_evals(
     parallel: int = 1,
     golden_timeout: int = 600,
     include: list[str] = None,
+    rate_limiter: RateLimiter | None = None,
 ):
     """Runs all 4 types of evaluations and returns aggregated results.
 
@@ -202,7 +204,9 @@ def run_all_evals(
                 ]
 
             if sim_files:
-                sim_evals = SimulationEvals(app_name=app_name)
+                sim_evals = SimulationEvals(
+                    app_name=app_name, rate_limiter=rate_limiter
+                )
                 test_cases = []
                 for sf in sim_files:
                     cases = _load_sim_test_cases(sf)

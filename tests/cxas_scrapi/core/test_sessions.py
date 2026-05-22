@@ -636,3 +636,37 @@ def test_check_audio_requirements_no_project_id_raises_error():
     with pytest.raises(ValueError) as exc_info:
         sessions._check_audio_requirements()
     assert "Project ID could not be determined" in str(exc_info.value)
+
+
+@patch("cxas_scrapi.core.sessions.SessionServiceClient")
+def test_sessions_rate_limiting(mock_client_cls):
+    """Test Sessions.run with rate limiting."""
+    mock_client = mock_client_cls.return_value
+    mock_rate_limiter = MagicMock()
+
+    sessions = Sessions(
+        app_name="projects/p/locations/l/apps/a",
+        rate_limiter=mock_rate_limiter,
+    )
+
+    sessions.run(session_id="s1", text="hello")
+
+    # Verify rate limiter was called
+    mock_rate_limiter.wait_and_consume.assert_called_once()
+
+
+@patch("cxas_scrapi.core.sessions.SessionServiceClient")
+def test_sessions_rate_limiting_multi_turn(mock_client_cls):
+    """Test Sessions.run with rate limiting for multiple turns."""
+    mock_client = mock_client_cls.return_value
+    mock_rate_limiter = MagicMock()
+
+    sessions = Sessions(
+        app_name="projects/p/locations/l/apps/a",
+        rate_limiter=mock_rate_limiter,
+    )
+
+    sessions.run(session_id="s1", text=["hello", "world"])
+
+    # Verify rate limiter was called twice
+    assert mock_rate_limiter.wait_and_consume.call_count == 2
