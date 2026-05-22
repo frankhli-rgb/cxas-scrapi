@@ -39,6 +39,7 @@ from cxas_scrapi.utils.eval_utils import (
     evaluate_expectations,
 )
 from cxas_scrapi.utils.gemini import GeminiGenerate
+from cxas_scrapi.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -124,17 +125,25 @@ class DependencyResolutionError(Exception):
 class TurnEvals:
     """Class to manage and execute single-turn assertions on CXAS Agents."""
 
-    def __init__(self, app_name: str, creds=None):
+    def __init__(
+        self,
+        app_name: str,
+        creds=None,
+        rate_limiter: Optional[RateLimiter] = None,
+    ):
         """Initializes the TurnEvals class.
 
         Args:
             app_name: CXAS App Name
             creds: Optional Google Cloud credentials
+            rate_limiter: Optional RateLimiter for API calls
         """
         self.app_name = app_name
         self.creds = creds
         self.sessions_client = Sessions(
-            app_name=self.app_name, creds=self.creds
+            app_name=self.app_name,
+            creds=self.creds,
+            rate_limiter=rate_limiter,
         )
         self.var_client = Variables(app_name=self.app_name, creds=self.creds)
 

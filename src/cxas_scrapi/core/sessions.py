@@ -31,6 +31,8 @@ from google.auth.transport.requests import Request
 from google.cloud.ces_v1beta import SessionServiceClient, types
 from google.protobuf import json_format
 
+from cxas_scrapi.utils.rate_limiter import RateLimiter
+
 try:
     from IPython.display import HTML, display  # noqa: F401
 
@@ -356,6 +358,7 @@ class Sessions(Common):
         self,
         app_name: str,
         deployment_id: str = None,
+        rate_limiter: Optional[RateLimiter] = None,
         **kwargs,
     ):
         """Initializes the Sessions client."""
@@ -369,6 +372,7 @@ class Sessions(Common):
 
         self.app_name = app_name
         self.deployment_id = deployment_id
+        self.rate_limiter = rate_limiter
 
     def _check_audio_requirements(self):
         """Checks if the necessary APIs are enabled and user has permissions."""
@@ -750,6 +754,8 @@ class Sessions(Common):
     def async_bidi_run_session(
         self, config: dict, inputs: list[dict[str, Any]]
     ):
+        if self.rate_limiter:
+            self.rate_limiter.wait_and_consume()
         try:
             if hasattr(self.creds, "refresh"):
                 self.creds.refresh(Request())
@@ -768,6 +774,8 @@ class Sessions(Common):
         return handler.run()
 
     def make_text_request(self, config: dict, inputs: list[dict[str, Any]]):
+        if self.rate_limiter:
+            self.rate_limiter.wait_and_consume()
         request = types.RunSessionRequest(config=config, inputs=inputs)
         return self.client.run_session(request=request)
 
@@ -1031,6 +1039,8 @@ class Sessions(Common):
     def send_event(
         self, unique_id: str, event_name: str, event_vars: Dict[str, Any]
     ):
+        if self.rate_limiter:
+            self.rate_limiter.wait_and_consume()
         config = {"session": f"{self.app_name}/sessions/{unique_id}"}
         inputs = [{"variables": event_vars}, {"event": {"event": event_name}}]
 
