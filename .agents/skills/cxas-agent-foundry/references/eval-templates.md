@@ -229,9 +229,67 @@ cb = CallbackEvals()
 results_df = cb.test_all_callbacks_in_app_dir(app_dir="evals/callback_tests")
 ```
 
-### Test pattern — mock injection
+### Test Pattern — CallbackTestCase Framework (RECOMMENDED)
 
-The mock pattern has three parts and the order matters. **Do NOT replace `sys.modules['python_code']` with a MagicMock — that swaps in a mock module and the function under test never runs.** Instead, add the python_code directory to `sys.path`, import the real module, attach mocks to its globals, then import the function under test.
+To simplify GECX Python callbacks unit testing, eliminate mock boilerplate, and prevent common builtin name errors (like `NameError: name 'LlmResponse' is not defined` on imports), use the standard `CallbackTestCase` base class utility.
+
+It automatically handles builtins mock injection (`CallbackContext`, `LlmResponse`, `Part`, etc.) and provides semantic assertion helpers (`assert_agent_reply`, `assert_transferred_to_agent`, `assert_end_session`, `assert_state_variable`) to keep tests clean and type-safe.
+
+```python
+import sys
+import os
+from unittest.mock import MagicMock, patch
+from cxas_scrapi.testing import CallbackTestCase
+
+# 1. Point sys.path at the target python_code.py folder relative to this test.py
+sys.path.insert(0, os.path.join(
+    os.path.dirname(__file__),
+    "..", "..", "..", "..", "agents", "<agent>",
+    "<callback_type>", "<base>",
+))
+
+# 2. Subclass CallbackTestCase for auto-mocked builtins
+class TestMyBillingCallback(CallbackTestCase):
+
+    def test_database_timeout_safety(self):
+        """Verify database timeout is caught, status is delinquent, and triggers are hygiene-cleared."""
+        # Setup mock context state & user content easily in 1 line
+        ctx = self.create_mock_context(
+            state={"_action_trigger": "lookup_billing"},
+            user_text="I want to check my account balance"
+        )
+
+        with patch("requests.get") as mock_get:
+            from requests.exceptions import Timeout
+            mock_get.side_effect = Timeout("Database connection timed out")
+
+            # Import module under test inside test cases safely
+            import python_code
+            
+            # Act
+            result = python_code.before_model_callback(ctx, llm_request=MagicMock())
+
+            # Assert state variables cleanly
+            self.assert_state_variable(ctx, "api_failed", "true")
+            self.assert_state_variable(ctx, "_action_trigger", "")
+            self.assert_state_variable(ctx, "error_message", "Our database is undergoing quick maintenance. Please try again later.")
+            self.assertIsNone(result)
+
+    def test_authenticated_handover(self):
+        """Verify that a successful verified state returns standard welcoming responses."""
+        ctx = self.create_mock_context(state={"auth_status": "VERIFIED"})
+        
+        import python_code
+        result = python_code.before_model_callback(ctx, llm_request=MagicMock())
+
+        # Assert agent dialogue response or transfers tools semantic checks
+        self.assert_agent_reply(result, "Welcome back")
+        self.assert_transferred_to_agent(result, "BillingSpecialist")
+```
+
+### Alternative Test Pattern — Manual Mock Injection (Fallback only)
+
+If you cannot subclass `CallbackTestCase` due to custom external dependencies or special multi-process testing environments, you must manually perform system modules paths path-inserting and mock GECX global references before importing the function under test:
 
 ```python
 import sys
