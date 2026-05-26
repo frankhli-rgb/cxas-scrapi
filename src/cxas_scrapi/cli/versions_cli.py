@@ -89,160 +89,19 @@ CONSOLE_SUMMARY_TEMPLATE = """
 [dim]* Use --verbose to print detailed line-by-line diffs to terminal[/]
 [dim]* Use --web to force open/view the full interactive HTML diff report[/]
 """
+TEMPLATE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "utils"
+)
 
-HTML_DIFF_BLOCK_TEMPLATE = """
-<details class="diff-block" open>
-    <summary class="diff-summary">
-        📂 {{ title }} <span class="diff-path">({{ path }})</span>
-    </summary>
-    <pre class="diff-content">{{ content | safe }}</pre>
-</details>
-"""
 
-HTML_REPORT_TEMPLATE = """<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>App Version Diff</title>
-<style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont,
-      'Segoe UI', Roboto, sans-serif;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 40px 20px;
-    background: #f8f9fa;
-    color: #212529;
-  }
-  .card {
-    background: #fff;
-    padding: 24px 32px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    margin-bottom: 24px;
-    border: 1px solid #e9ecef;
-  }
-  .header-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #dee2e6;
-    padding-bottom: 16px;
-    margin-bottom: 20px;
-  }
-  h1 {
-    margin: 0;
-    color: #1e293b;
-  }
-  .version-badge {
-    font-family: monospace;
-    background: #e2e8f0;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.9em;
-  }
-  .diff-block {
-    margin: 12px 0;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    background: #fff;
-    overflow: hidden;
-  }
-  .diff-summary {
-    cursor: pointer;
-    font-weight: bold;
-    padding: 12px 16px;
-    background: #f6f8fa;
-    border-bottom: 1px solid #ddd;
-    outline: none;
-    user-select: none;
-  }
-  .diff-path {
-    color: #666;
-    font-weight: normal;
-    font-size: 0.85em;
-    margin-left: 8px;
-  }
-  .diff-content {
-    margin: 0;
-    padding: 16px;
-    font-family: 'SFMono-Regular', Consolas, monospace;
-    font-size: 12px;
-    line-height: 1.6;
-    background: #fafafa;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    word-break: break-all;
-  }
-  .line-addition {
-    color: #155724;
-    background: #d4edda;
-    display: block;
-  }
-  .line-deletion {
-    color: #721c24;
-    background: #f8d7da;
-    display: block;
-  }
-  .line-header {
-    color: #0366d6;
-    background: #e1f5fe;
-    display: block;
-    font-weight: bold;
-  }
-  .line-context {
-    color: #444;
-    display: block;
-  }
-</style>
-</head>
-<body>
+def _load_template(filename: str) -> str:
+  template_path = os.path.join(TEMPLATE_DIR, filename)
+  with open(template_path, "r", encoding="utf-8") as f:
+    return f.read()
 
-<div class="card">
-  <div class="header-meta">
-    <h1>🔄 App Version Diff</h1>
-    <span style="font-size:0.9em;color:#64748b;">
-      Generated: {{ timestamp }}
-    </span>
-  </div>
 
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
-    <tr>
-      <td style="padding: 8px 0; color:#64748b; width:120px;">
-        <b>App Name:</b>
-      </td>
-      <td style="padding: 8px 0;"><b>{{ display_name }}</b></td>
-    </tr>
-    <tr>
-      <td style="padding: 8px 0; color:#64748b;">
-        <b>Source Version (a):</b>
-      </td>
-      <td style="padding: 8px 0;">
-        <span class="version-badge">{{ source }}</span>
-        <span style="color:#64748b;margin-left:8px;">
-          ({{ source_display }})
-        </span>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding: 8px 0; color:#64748b;">
-        <b>Target Version (b):</b>
-      </td>
-      <td style="padding: 8px 0;">
-        <span class="version-badge">{{ target }}</span>
-        <span style="color:#64748b;margin-left:8px;">
-          ({{ target_display }})
-        </span>
-      </td>
-    </tr>
-  </table>
-</div>
-
-{{ diff_blocks | safe }}
-
-</body>
-</html>
-"""
+HTML_DIFF_BLOCK_TEMPLATE = _load_template("versions_diff_block_template.html")
+HTML_REPORT_TEMPLATE = _load_template("versions_compare_report_template.html")
 
 
 
