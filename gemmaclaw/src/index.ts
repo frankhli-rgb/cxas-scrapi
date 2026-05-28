@@ -150,15 +150,12 @@ program
       const project = options.vertexProject || "ces-deployment-dev";
       const region = options.vertexRegion || "us-west1";
       const model = options.vertexModel || "gemma-4-31b-it";
-      const dedicatedUrl = options.vertexDedicatedUrl || "https://us-west1-aiplatform.googleapis.com/v1/projects/555355609568/locations/us-west1/endpoints/8754771176212922368";
-
       setupArgs.push(
         "--vertex",
         "--vertex-project", project,
         "--vertex-region", region,
         "--vertex-model", model,
-        "--vertex-api-format", "openai",
-        "--vertex-dedicated-url", dedicatedUrl
+        "--vertex-api-format", "native"
       );
     }
 

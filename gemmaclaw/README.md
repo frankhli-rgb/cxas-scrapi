@@ -77,17 +77,10 @@ cgem remove helper
 *   Node.js version: `v20` or newer (blessed Node `v24.15.0`)
 *   TypeScript `tsc` compiler installed
 
-### Build from Source
+### Automated Installation
+You can automatically install dependencies, build, compile, and globally link the CLI binary from **any directory** using the automated installer script at the repository root:
 ```bash
-cd gemmaclaw
-npm install
-npm run build
-```
-
-### Global Symlink Registration
-To register the commands globally in your terminal shell PATH:
-```bash
-npm link
+bash scripts/install-cli.sh
 ```
 
 ### Troubleshooting: `env: 'node': No such file or directory`
