@@ -1,11 +1,11 @@
 {
-  "name": "cesgemmaclaw",
+  "name": "cxasgemmaclaw",
   "version": "1.0.0",
-  "description": "CES Gemmaclaw CLI interface for forward deployed engineering",
+  "description": "CXAS Gemmaclaw CLI interface for forward deployed engineering",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "cesgemmaclaw": "./dist/index.js",
+    "cxasgemmaclaw": "./dist/index.js",
     "cgem": "./dist/index.js"
   },
   "scripts": {

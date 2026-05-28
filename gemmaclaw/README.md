@@ -1,6 +1,6 @@
-# CES Gemmaclaw CLI (`cesgemmaclaw` / `cgem`)
+# CXAS Gemmaclaw CLI (`cxasgemmaclaw` / `cgem`)
 
-The `cesgemmaclaw` CLI provides an out-of-the-box TypeScript-based command line interface matching the FDE CLI (`fde gem`) functionality for configuring, sandboxing, linking, and auto-synchronizing active developer directories for Gemma 4 AI agentic workloads.
+The `cxasgemmaclaw` CLI provides an out-of-the-box TypeScript-based command line interface matching the FDE CLI (`fde gem`) functionality for configuring, sandboxing, linking, and auto-synchronizing active developer directories for Gemma 4 AI agentic workloads.
 
 ## Features
 
@@ -22,7 +22,7 @@ Every command invocation automatically outputs a helpful tip showing the shortcu
 
 Use the command directly or via the `cgem` alias:
 ```bash
-cesgemmaclaw --help
+cxasgemmaclaw --help
 cgem --help
 ```
 

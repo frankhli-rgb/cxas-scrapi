@@ -35,8 +35,8 @@ if (execName !== "cgem" && execName !== "cgem.js") {
 const program = new Command();
 
 program
-  .name("cesgemmaclaw")
-  .description("CES Gemmaclaw CLI - forward deployed engineering task automation");
+  .name("cxasgemmaclaw")
+  .description("CXAS Gemmaclaw CLI - forward deployed engineering task automation");
 
 program
   .command("setup")
@@ -428,7 +428,7 @@ program
     
     const agents = JSON.parse(listRes.stdout.slice(listRes.stdout.indexOf("[")));
     if (agents.length === 0) {
-      console.error("No agents found. Please create one first using 'cesgemmaclaw create <name>'.");
+      console.error("No agents found. Please create one first using 'cxasgemmaclaw create <name>'.");
       process.exit(1);
     }
 

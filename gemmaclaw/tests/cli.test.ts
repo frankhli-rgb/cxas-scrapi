@@ -8,7 +8,7 @@ import {
   OPENCLAW_JSON_PATH,
 } from "../src/utils.js";
 
-describe("cesgemmaclaw CLI Utilities", () => {
+describe("cxasgemmaclaw CLI Utilities", () => {
   it("fileExists returns true for existing files", async () => {
     const existing = await fileExists(process.cwd());
     expect(existing).toBe(true);

@@ -170,3 +170,6 @@ temp_sims/
 node_modules/
 gemmaclaw/node_modules/
 gemmaclaw/dist/
+
+# Python uv package manager lock file
+uv.lock
