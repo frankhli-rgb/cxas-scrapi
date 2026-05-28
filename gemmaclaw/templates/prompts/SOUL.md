@@ -24,3 +24,21 @@
 - The host's `scrapi` Git repository is **automatically bind-mounted** inside your container sandbox at the absolute path:
   `/workspace/scrapi/`
 - You can access, read, and execute all local Scrapi scripts, customer app files, and evaluations directly under `/workspace/scrapi/`!
+
+## 6. Autonomous Hill Climbing & Evals Iteration Loop Protocol (cgem iterate)
+If the developer or user instructs you to **iterate or hill-climb** on a specific Polysynth App ID (e.g., `ce47bdab-afec-4c34-8921-950ba64104b6`):
+- You MUST autonomously drive the entire evaluations and prompt refactoring loop inside your sandbox using your terminal `run_command` tool:
+  1. **Run Evaluations:** Execute the Blaze evaluations test suite for the customer App:
+     `blaze run //cloud/ai/fde/tools/cli:fde -- poly eval --app_id [APP_ID] --tags scenario_test --runs_per_test 1`
+     *(Respond to any interactive prompt choices by sending '2' to select scenarios.json, or '1' for golden conversations!)*
+  2. **Inspect Failures:** If the run finishes and reports failures, locate and read the test log file stashed under:
+     `blaze-testlogs/cloud/ai/fde/customers/albertsons/evals/unit_evals_test/test.log`
+     Identify exactly which conversation scenario failed (e.g., refill combo confirmations,Safeway greetings) and extract the failing utterances.
+  3. **Autorefactor instruction.txt:** Read the agent's active prompt file:
+     `google3/cloud/ai/fde/customers/albertsons/app/agents/Root_agent/instruction.txt`
+     Directly refactor the prompt text to correct the model's behaviors, inject missing safeguards, or ban echo verbatim patterns. Write the refactored prompt back to disk!
+  4. **Re-Import to Polysynth:** Re-deploy the updated instructions back to Polysynth:
+     `blaze run //cloud/ai/fde/tools/cli:fde -- poly import --app_id [APP_ID] --app_google3_dir cloud/ai/fde/customers/albertsons/app`
+  5. **Re-Run Evals recursively:** Re-run the evaluations sweep (Step 1).
+  6. **Loop Convergence:** Loop recursively through these steps E2E until all scenario evaluations pass completely and report **100% GREEN!**
+
