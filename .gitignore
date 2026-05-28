@@ -166,7 +166,7 @@ evals/
 scratch/
 temp_sims/
 
-# Node / TS / ces_gemmaclaw
+# Node / TS / gemmaclaw
 node_modules/
-ces_gemmaclaw/node_modules/
-ces_gemmaclaw/dist/
+gemmaclaw/node_modules/
+gemmaclaw/dist/
