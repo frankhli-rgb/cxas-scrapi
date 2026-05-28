@@ -83,6 +83,13 @@ You can automatically install dependencies, build, compile, and globally link th
 bash scripts/install-cli.sh
 ```
 
+### Automated Local Hill Climbing Loop
+You can execute the exact local equivalent of `/iterate_poly` entirely inside your local tracking workspace and container sandbox environment using our automated hill-climbing script:
+```bash
+bash gemmaclaw/scripts/iterate-gemmaclaw.sh
+```
+This script automatically syncs local agent prompts, runs the hermetic Blaze evaluations suite, parses Sponge logs for failures, feeds errors to the Gemma container agent, autonomously refactors `instruction.txt` inside your workspace, and loops recursively E2E until the entire suite converges to **100% green!**
+
 ### Troubleshooting: `env: 'node': No such file or directory`
 If running `cgem` in a fresh terminal window returns `env: 'node': No such file or directory`, it means NVM (Node Version Manager) has not yet been loaded in your current terminal session.
 
