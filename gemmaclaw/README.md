@@ -79,7 +79,7 @@ cgem remove helper
 
 ### Build from Source
 ```bash
-cd ces_gemmaclaw
+cd gemmaclaw
 npm install
 npm run build
 ```
